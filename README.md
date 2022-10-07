@@ -1,2 +1,8 @@
 # spydcmtk
-A simple dicom toolkit based off pydicom
+
+A simple python based dicom toolkit
+
+Primary dependency: pydicom
+
+
+
