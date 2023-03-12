@@ -2,6 +2,7 @@
 
 """Some simple, customisable defaults
 """
+#TODO extract to config to allow user defined
 
 DEFAULT_SERIES_OVERVIEW_TAG_LIST = ('SeriesNumber',
                                     'SeriesDescription',

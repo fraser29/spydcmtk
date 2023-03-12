@@ -8,6 +8,13 @@ import pydicom as dicom
 import tarfile
 from tqdm import tqdm 
 import numpy as np
+VTK_AVAILABLE = True
+try:
+    import vtk
+    from vtk.util import numpy_support
+except ImportError:
+    VTK_AVAILABLE = False
+
 
 import spydcm.dcmTools as dcmTools
 
@@ -104,21 +111,23 @@ def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True):
     return destFile
 
 
-def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=True):
+def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
     dsDict = {}
     successReadDirs = set()
-    nFiles = dcmTools.__countFilesInDir(rootDir)
+    nFiles = dcmTools.countFilesInDir(rootDir)
     for thisFile in tqdm(dcmTools.walkdir(rootDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
             continue
         if thisFile.endswith('json'):
             continue
-        thisDir, ff = os.path.split(thisFile)
         if ONE_FILE_PER_DIR:
+            thisDir, ff = os.path.split(thisFile)
             if thisDir in successReadDirs:
                 continue
         try:
-            dataset = dicom.read_file(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
+            # Reading specific tags is actually slower. 
+            # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
+            dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
             studyUID = str(dataset.StudyInstanceUID)
             seriesUID = str(dataset.SeriesInstanceUID)
             if studyUID not in dsDict:
@@ -126,9 +135,11 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
             if seriesUID not in dsDict[studyUID]:
                 dsDict[studyUID][seriesUID] = []
             dsDict[studyUID][seriesUID].append(dataset)
-            successReadDirs.add(thisDir)
+            if ONE_FILE_PER_DIR:
+                successReadDirs.add(thisDir)
         except dicom.filereader.InvalidDicomError:
-            # print('Error reading %s'%(thisFile))
+            if DEBUG:
+                print('Error reading %s'%(thisFile))
             continue
     return dsDict
 
@@ -136,7 +147,7 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
 
 def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
     fullDirsWithDicoms = []
-    for root, dirs, files in os.walk(rootDir):
+    for root, _, files in os.walk(rootDir):
         for iFile in files:
             thisFile = os.path.join(root, iFile)
             try:
@@ -230,4 +241,43 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False):
                 continue
     return None
 
+def writeVTI(arr, meta, filePrefix, outputPath):
+    """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
 
+    Args:
+        arr (np.array): Array of pixel data, shape: nR,nC,nSlice,nTime
+        meta (dict): dictionary containing meta to be added as Field data
+            meta = {'Spacing': list_3 -> resolution, 
+                    'Origin': list_3 -> origin, 
+                    'ImageOrientationPatient': list_6 -> ImageOrientationPatient, 
+                    'Times': list_nTime -> times (can be missing if nTime=1)}
+        filePrefix (str): File name prefix (if nTime>1 then named '{fileprefix}_{timeID:05d}.vti)
+        outputPath (str): Output path (if nTIme > 1 then '{fileprefix}.pvd written to outputPath and sub-directory holds *.vti files)
+
+    Raises:
+        ValueError: If VTK import not available
+    """
+    if not VTK_AVAILABLE:
+        raise ValueError('# Error VTK not available')
+    dims = arr.shape
+    for k1 in range(dims[-1]):
+        newImg = vtk.vtkImageData()
+        newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
+        newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
+        newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
+        A3 = arr[:,:,:,k1]
+
+        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int)
+        aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
+        aArray.SetName('PixelData')
+        newImg.GetPointData().SetScalars(aArray)
+        if dims[-1] > 1:
+                fOut = os.path.join(outputPath, f'{filePrefix}_{k1:05d}.vti')
+        else:
+            fOut = os.path.join(outputPath, f'{filePrefix}.vti')
+        writer = vtk.vtkXMLImageDataWriter()
+        writer.SetDataModeToBinary()
+        writer.SetFileName(fOut)
+        writer.SetInputData(newImg)
+        writer.Write()
+        

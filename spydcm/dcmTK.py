@@ -5,6 +5,7 @@
 
 import os
 import pydicom as dicom
+from pydicom.uid import generate_uid
 from tqdm import tqdm
 import glob
 import json
@@ -12,8 +13,8 @@ import numpy as np
 
 # Local imports 
 import spydcm.dcmUtils as dcmUtils
-from defaults import DEFAULT_SERIES_OVERVIEW_TAG_LIST, DEFAULT_STUDY_OVERVIEW_TAG_LIST, DEFAULT_SUBJECT_OVERVIEW_TAG_LIST
 import spydcm.dcmTools as dcmTools
+from spydcm.defaults import DEFAULT_SERIES_OVERVIEW_TAG_LIST, DEFAULT_STUDY_OVERVIEW_TAG_LIST, DEFAULT_SUBJECT_OVERVIEW_TAG_LIST
 
 
 
@@ -25,7 +26,7 @@ class DicomSeries(list):
     """
     Extends a list of ds (pydicom dataset) objects.
     """
-    def __init__(self, dsList=None, OVERVIEW=True, HIDE_PROGRESSBAR=False):
+    def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """
@@ -39,7 +40,7 @@ class DicomSeries(list):
         return ' '.join([str(i) for i in self.getSeriesOverview()[1]])
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE=FORCE_READ)
         if len(dStudyList) > 1:
@@ -50,7 +51,7 @@ class DicomSeries(list):
         return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
 
     @classmethod
-    def setFromFileList(cls, fileList, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE=False):
+    def setFromFileList(cls, fileList, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE=False):
         dsList = [dicom.read_file(i, stop_before_pixels=OVERVIEW, force=FORCE) for i in fileList]
         return cls(dsList, OVERVIEW, HIDE_PROGRESSBAR)
 
@@ -60,12 +61,19 @@ class DicomSeries(list):
     def sortByInstanceNumber(self):
         self.sort(key=dcmTools.instanceNumberSortKey)
 
+    def sortBySlice_InstanceNumber(self):
+        self.sort(key=dcmTools.sliceLoc_InstanceNumberSortKey)
+
     def getTag(self, tag, dsID=0, ifNotFound='Unknown'):
         try:
             tt = self.getTagObj(tag, dsID)
             return tt.value
         except KeyError:
             return ifNotFound
+
+    def setTag(self, tag, value):
+        for ds in self:
+            ds.data_element(tag).value = value
 
     def getTagObj(self, tag, dsID=0):
         try:
@@ -104,6 +112,14 @@ class DicomSeries(list):
                 vals.append('Unknown')
         return names, vals
 
+    def tagsToJson(self, jsonFileOut):
+        dOut = {}
+        for ds in self:
+            dd = ds.to_json_dict()
+            dd.pop('7FE00010') # Remove actual PixelData
+            dOut[ds.InstanceNumber] = dd
+        dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
+
     def getSeriesOverview(self, tagList=DEFAULT_SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
@@ -130,10 +146,24 @@ class DicomSeries(list):
         return dcmTools.cleanString('SE%s_%s'%(self.getTag('SeriesNumber', ifNotFound='#'),
                                                     self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown')))
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}):
+    def resetUIDs(self, studyUID=None):
+        """
+            Reset UIDs - helpful for case of anon for analysis - but going back into PACS 
+        """
+        if studyUID is None:
+            studyUID = str(generate_uid())
+        seriesUID = str(generate_uid())
+        for k1 in range(len(self)):
+            self[k1].SOPInstanceUID = str(generate_uid())
+            self[k1].SeriesInstanceUID = seriesUID
+            self[k1].StudyInstanceUID = studyUID
+
+
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}, LIKE_ORIG=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
+            LIKE_ORIG - set to False if updated some tags
         """
         ADD_TRANSFERSYNTAX = False
         LIKE_ORIG = True
@@ -152,41 +182,62 @@ class DicomSeries(list):
             destFile = dcmUtils.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG)
         return destFile
 
+    def __generateFileName(self, tagsToUse, extn):
+        fileName = '_'.join([str(self.getTag(i)) for i in tagsToUse])
+        fileName = dcmTools.cleanString(fileName)
+        if (len(extn) > 0) and (not extn.startswith('.')):
+            extn = '.'+extn
+        return fileName+extn
+
     def writeToNII(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, self.getRootDir())
         print('RUNNING: %s'%(dcm2niiCmd))
         os.system(dcm2niiCmd)
         list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz'))  # * means all if need specific format then *.csv
         latest_file = max(list_of_files, key=os.path.getctime)
-        fileName = '_'.join([str(self.getTag(i)) for i in outputNaming])
-        fileName = dcmTools.cleanString(fileName)
-        newFileName = os.path.join(outputPath, '%s.nii.gz'%(fileName))
+        fileName = self.__generateFileName(outputNaming, '.nii.gz')
+        newFileName = os.path.join(outputPath, fileName)
         os.rename(latest_file, newFileName)
         print('Made %s --> as %s'%(latest_file, newFileName))
 
-    def writeToPVD(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        pass        
+    def writeToVTI(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
+        fileName = self.__generateFileName(outputNaming, '')
+        A, meta = self.getPixelDataAsNumpy()
+        print(outputPath, fileName)
+        dcmUtils.writeVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath)
 
-    def getSliceLocations(self):
-        return [self.getTag('SliceLocation', i) for i in range(len(self))]
+    @property
+    def sliceLocations(self):
+        return sorted([float(self.getTag('SliceLocation', i)) for i in range(len(self))])
 
     def getNumberOfSlicesPerVolume(self):
-        sliceLoc = self.getSliceLocations()
+        sliceLoc = self.sliceLocations
         return len(set(sliceLoc))
 
     def getNumberOfTimeSteps(self):
-        sliceLoc = self.getSliceLocations()
+        sliceLoc = self.sliceLocations
         sliceLocS = set(sliceLoc)
         return sliceLoc.count(sliceLocS.pop())
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
-            Also return dictionary of meta ('spacing', 'origin', 'imagepositionpatient cosines')
+            Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
         """
         I,J,K = int(self.getTag('Columns')), int(self.getTag('Rows')), int(self.getNumberOfSlicesPerVolume())
+        self.sortBySlice_InstanceNumber()
         N = self.getNumberOfTimeSteps()
         A = np.zeros((I, J, K, N))
-        
+        c0 = 0
+        for k1 in range(K):
+            for k2 in range(N):
+                A[:, :, k1, k2] = self[c0].pixel_array.T
+                c0 += 1
+        dt = self.getTemporalResolution()
+        meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, float(self.getTag('SpacingBetweenSlices')*0.001)], 
+                'Origin': [i*0.001 for i in self.getTag('ImagePositionPatient')], 
+                'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
+                'Times': [dt*n*0.001 for n in range(N)]}
+        return A, meta
 
     def getScanDuration_secs(self):
         try:
@@ -194,11 +245,14 @@ class DicomSeries(list):
         except AttributeError:
             return 0.0
 
+    def _getPixelSpacing(self):
+        return [float(i) for i in self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])]
+
     def getDeltaRow(self):
-        return float(self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])[0])
+        return self._getPixelSpacing()[0]
 
     def getDeltaCol(self):
-        return float(self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])[1])
+        return self._getPixelSpacing()[1]
 
     def getTemporalResolution(self):
         try:
@@ -206,17 +260,21 @@ class DicomSeries(list):
         except ZeroDivisionError:
             return 0       
 
+    def getManufacturer(self):
+        return self.getTag(0x00080070, ifNotFound='Unknown')
+    def IS_GE(self):
+        return self.getManufacturer().lower().startswith('ge')
+    def IS_SIEMENS(self):
+        return self.getManufacturer().lower().startswith('siemens')
+
     def getPulseSequenceName(self):
-        try:
+        if self.IS_GE():
             return self.getTag(0x0019109c)
-        except AttributeError:
-            return ''
+        else:
+            return self.getTag(0x00180024)
 
     def getInternalPulseSequenceName(self):
-        try:
-            return self.getTag(0x0019109e)
-        except AttributeError:
-            return ''
+        return self.getTag(0x0019109e)
 
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
@@ -250,7 +308,7 @@ class DicomStudy(list):
     """
     Extends list of DicomSeries objects (creating list of list of pydicom.dataset)
     """
-    def __init__(self, dSeriesList, OVERVIEW=True, HIDE_PROGRESSBAR=False):
+    def __init__(self, dSeriesList, OVERVIEW=False, HIDE_PROGRESSBAR=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """
@@ -259,7 +317,7 @@ class DicomStudy(list):
         list.__init__(self, dSeriesList)
 
     @classmethod
-    def setFromDictionary(cls, dicomDict, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE_READ=False):
+    def setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
@@ -270,7 +328,7 @@ class DicomStudy(list):
         return cls(dStudyList[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
 
@@ -334,8 +392,11 @@ class DicomStudy(list):
 
     def getSeriesByID(self, ID):
         for iSeries in self:
-            if int(iSeries.getTag('SeriesNumber')) == ID:
-                return iSeries
+            try:
+                if int(iSeries.getTag('SeriesNumber')) == ID:
+                    return iSeries
+            except TypeError: # If SE# == None (report of Sec Capture etc)
+                pass
 
     def getSeriesBySeriesNumber(self, seNum):
         return self.getSeriesByID(seNum)
@@ -392,8 +453,8 @@ class DicomStudy(list):
                                             self.getTag('StudyID', ifNotFound='StudyID-unknown'),
                                             self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}):
-        studyOutputDir = os.path.join(patientOutputDir, self.__getStudyOutputDir(anonName))
+    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}, studyPrefix=''):
+        studyOutputDir = os.path.join(patientOutputDir, studyPrefix+self.__getStudyOutputDir(anonName))
         for iSeries in self:
             iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, FORCED_READ=FORCED_READ, SE_RENAME=SE_RENAME)
         return studyOutputDir
@@ -402,7 +463,7 @@ class ListOfDicomStudies(list):
     """
     Extends list of DicomStudies objects (creating list of list of list of pydicom.dataset)
     """
-    def __init__(self, dStudiesList, OVERVIEW=True, HIDE_PROGRESSBAR=False):
+    def __init__(self, dStudiesList, OVERVIEW=False, HIDE_PROGRESSBAR=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """
@@ -411,30 +472,48 @@ class ListOfDicomStudies(list):
         list.__init__(self, dStudiesList)
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE=FORCE)
+    def setFromInput(cls, input, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
+        if os.path.isdir(input):
+            return ListOfDicomStudies.setFromDirectory(input, OVERVIEW=OVERVIEW, 
+                                                                HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                                FORCE_READ=FORCE_READ, 
+                                                                ONE_FILE_PER_DIR=ONE_FILE_PER_DIR)
+        if os.path.isfile(input):
+            if input.endswith('tar'):
+                return ListOfDicomStudies.setFromTar(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                            FORCE_READ=FORCE_READ)
+            elif input.endswith('tar.gz'):
+                return ListOfDicomStudies.setFromTar(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                            FORCE_READ=FORCE_READ)
+            # elif input.endswith('zip'): # TODO
+            #     return ListOfDicomStudies.setFromZip(input, OVERVIEW=OVERVIEW, 
+            #                                                         HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+            #                                                         FORCE_READ=FORCE_READ, 
+            #                                                         ONE_FILE_PER_DIR=ONE_FILE_PER_DIR)
+            else:
+                raise IOError("SPDCMTK only capable to read from directory, tar or tar.gz\n")
 
     @classmethod
-    def setFromDcmDict(cls, dicomDict, OVERVIEW=True, HIDE_PROGRESSBAR=False, FORCE=False):
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
+        dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR)
+
+    @classmethod
+    def setFromDcmDict(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False):
         dStudiesList = []
         for studyUID in dicomDict.keys():
             dSeriesList = []
             for seriesUID in dicomDict[studyUID].keys():
-                if dicomDict[studyUID][seriesUID][0].filename.endswith('.tar') or dicomDict[studyUID][seriesUID][0].filename.endswith('.tar.gz'):
-                    dSeriesList.append(DicomSeries(dicomDict[studyUID][seriesUID], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR))
-                else:
-                    fileList = [i.filename for i in dicomDict[studyUID][seriesUID]]
-                    dSeriesList.append(DicomSeries.setFromFileList(fileList, OVERVIEW, HIDE_PROGRESSBAR, FORCE=FORCE))
+                dSeriesList.append(DicomSeries(dicomDict[studyUID][seriesUID], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR))
             dStudiesList.append(DicomStudy(dSeriesList, OVERVIEW, HIDE_PROGRESSBAR))
         return cls(dStudiesList, OVERVIEW, HIDE_PROGRESSBAR)
 
     @classmethod
-    def setFromTar(cls, tarFileName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
+    def setFromTar(cls, tarFileName, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
         # Note need OVERVIEW = False as only get access to file (and pixels) on untaring (maybe only if tar.gz) 
-        dicomDict = dcmUtils.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=OVERVIEW,
+        dicomDict = dcmUtils.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
                                     matchingTagValuePair=matchTagPair, QUIET=True)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE=FORCE_READ)
+        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
 
 
     def __str__(self):
@@ -555,6 +634,11 @@ class BIDS_Directory(object):
         subjIDs = [i for i in os.listdir(self.rootDir) if i.startswith('sub-')]
         return sorted([BIDS_Subject(i, self) for i in subjIDs])
 
+def walkdir(folder):
+    """Walk through each files in a directory"""
+    for dirpath, _, files in os.walk(folder):
+        for filename in files:
+            yield os.path.abspath(os.path.join(dirpath, filename))
 
 
 def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, FORCE_READ=False, HIDE_PROGRESSBAR=False):

@@ -12,7 +12,7 @@ import datetime
 import numpy as np
 
 
-def __countFilesInDir(dirName):
+def countFilesInDir(dirName):
     files = []
     if os.path.isdir(dirName):
         for path, dirs, filenames in os.walk(dirName):  # @UnusedVariable
@@ -96,6 +96,12 @@ def instanceNumberSortKey(val):
         return int(__getTags(val, ['InstanceNumber'])['InstanceNumber'])
     except (ValueError, IOError, AttributeError):
         return 99e99
+
+def sliceLoc_InstanceNumberSortKey(val):
+    try:
+        return (float(__getTags(val, ['SliceLocation'])['SliceLocation']), float(__getTags(val, ['InstanceNumber'])['InstanceNumber']))
+    except (ValueError, IOError, AttributeError):
+        return (99e9, 99e9)
 
 def __getTags(dataset, tagsList):
     tagsDict = {}
