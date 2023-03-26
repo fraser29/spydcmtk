@@ -15,6 +15,7 @@ dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
 class TestDicomSeries(unittest.TestCase):
     def runTest(self):
         dcmSeries = dcmTK.DicomSeries.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmSeries.writeToVTI
         self.assertEqual(len(dcmSeries), 25, "Incorrect dicoms in dcmSeries")
         # ---
         self.assertEqual(dcmSeries.getNumberOfTimeSteps(), 25, msg="Incorrect read time steps")
@@ -37,6 +38,16 @@ class TestDicomStudy(unittest.TestCase):
     def runTest(self):
         dcmStudy = dcmTK.DicomStudy.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
         self.assertEqual(len(dcmStudy), 1, "Incorrect number series in dcmStudy")
+
+
+class TestDicom2VT2Dicom(unittest.TestCase):
+    def runTest(self):
+        dcmStudy = dcmTK.DicomStudy.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
+        vtiDict = dcmSeries.buildVTIDict()
+        print(vtiDict.keys())
+        print(dcmSeries.writeToVTI('/home/fraser/temp'))
+        # self.assertEqual(len(dcmStudy), 1, "Incorrect number series in dcmStudy")
 
 
 

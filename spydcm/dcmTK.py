@@ -14,6 +14,7 @@ import numpy as np
 # Local imports 
 import spydcm.dcmUtils as dcmUtils
 import spydcm.dcmTools as dcmTools
+import spydcm.dcmVTKTK as dcmVTKTK
 from spydcm.defaults import DEFAULT_SERIES_OVERVIEW_TAG_LIST, DEFAULT_STUDY_OVERVIEW_TAG_LIST, DEFAULT_SUBJECT_OVERVIEW_TAG_LIST
 
 
@@ -203,8 +204,12 @@ class DicomSeries(list):
     def writeToVTI(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNaming, '')
         A, meta = self.getPixelDataAsNumpy()
-        print(outputPath, fileName)
-        dcmUtils.writeVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath)
+        print('DEBUG',outputPath, fileName)
+        dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath)
+
+    def buildVTIDict(self):
+        A, meta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTI(A, meta, self[0])
 
     @property
     def sliceLocations(self):

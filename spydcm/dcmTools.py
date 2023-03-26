@@ -57,7 +57,6 @@ def cleanString(ss):
             ss = ss[:-1]
     except IndexError:
         pass
-    # return ss
     return fixPath(ss)
 
 
@@ -112,6 +111,6 @@ def __getTags(dataset, tagsList):
 
 def walkdir(folder):
     """Walk through each files in a directory"""
-    for dirpath, dirs, files in os.walk(folder):
+    for dirpath, _, files in os.walk(folder):
         for filename in files:
             yield os.path.abspath(os.path.join(dirpath, filename))
