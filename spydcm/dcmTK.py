@@ -360,16 +360,6 @@ class DicomStudy(list):
 
     def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
         return self[seriesID].getTagListAndNames(tagList, dsID=instanceID)
-        # names, vals = [], []
-        # for i in tagList:
-        #     try:
-        #         dataEle = self[seriesID].getTagObj(i, dsID=instanceID)
-        #         names.append(str(dataEle.name).replace('[','').replace(']',''))
-        #         vals.append(str(dataEle.value))
-        #     except KeyError:
-        #         names.append(str(i))
-        #         vals.append('Unknown')
-        # return names, vals
 
     def isCompressed(self):
         return self[0].isCompressed()
@@ -686,7 +676,6 @@ def studySummary(pathToDicoms):
     :param pathToDicoms: path to dicoms - anywhere in the tree above - will search down tree till find a dicom
     :return: a formatted string
     """
-    print('READING...')
     dStudies = ListOfDicomStudies.setFromDirectory(pathToDicoms)
     return dStudies.getSummaryString()
 

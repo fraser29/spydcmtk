@@ -1,38 +1,38 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+from collections import OrderedDict
 import os
-import sys
 
-config = configparser.ConfigParser()
+thisConfFileName = 'spydcmtk.conf'
+rootDir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-all_config_files = [os.path.join(os.curdir, '..','spydcmtk.conf'), 
-                    os.path.join(os.path.expanduser("~"),'spydcmtk.conf'),
-                    os.path.join(os.path.expanduser("~"),'.spydcmtk.conf'), 
-                    os.path.join(os.path.expanduser("~"), '.config','spydcmtk.conf'),
-                    os.path.join(os.environ.get("SPYDCMTK_CONF", ''),'spydcmtk.conf')]
+def group_items_to_list(config, default_items, groupName):
+    path_items = config.items( groupName )
+    myList = []
+    for __, tagName in path_items:
+        if tagName in default_items:
+            continue
+        if tagName not in myList: # Avoid doubles
+            myList.append(tagName)
+    return myList
+
+config = configparser.ConfigParser(dict_type=OrderedDict)
+
+all_config_files = [os.path.join(rootDir,thisConfFileName), 
+                    os.path.join(os.path.expanduser("~"),thisConfFileName),
+                    os.path.join(os.path.expanduser("~"),'.'+thisConfFileName), 
+                    os.path.join(os.path.expanduser("~"), '.config',thisConfFileName),
+                    os.environ.get("SPYDCMTK_CONF", '')]
 
 config.read(all_config_files)
 
 environment = config.get("app", "environment")
 DEBUG = config.get("app", "debug")
 
-path_items = config.items( "series_overview_tags" )
-SERIES_OVERVIEW_TAG_LIST = []
-for key, tagName in path_items:
-    SERIES_OVERVIEW_TAG_LIST.append(tagName)
-SERIES_OVERVIEW_TAG_LIST = list(set(SERIES_OVERVIEW_TAG_LIST))
+default_items = [vv for _,vv in config.items('DEFAULT')]
 
 
-path_items = config.items( "study_overview_tags" )
-STUDY_OVERVIEW_TAG_LIST = []
-for key, tagName in path_items:
-    STUDY_OVERVIEW_TAG_LIST.append(tagName)
-STUDY_OVERVIEW_TAG_LIST = list(set(STUDY_OVERVIEW_TAG_LIST))
-
-
-path_items = config.items( "patient_overview_tags" )
-SUBJECT_OVERVIEW_TAG_LIST = []
-for key, tagName in path_items:
-    SUBJECT_OVERVIEW_TAG_LIST.append(tagName)
-SUBJECT_OVERVIEW_TAG_LIST = list(set(SUBJECT_OVERVIEW_TAG_LIST))
+SERIES_OVERVIEW_TAG_LIST = group_items_to_list(config, default_items, "series_overview_tags")
+STUDY_OVERVIEW_TAG_LIST = group_items_to_list(config, default_items, "study_overview_tags")
+SUBJECT_OVERVIEW_TAG_LIST = group_items_to_list(config, default_items, "patient_overview_tags")

@@ -37,6 +37,15 @@ class TestDicomStudy(unittest.TestCase):
     def runTest(self):
         dcmStudy = dcmTK.DicomStudy.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
         self.assertEqual(len(dcmStudy), 1, "Incorrect number series in dcmStudy")
+        patOverview = dcmStudy.getPatientOverview()
+        self.assertEqual(patOverview[0][4], "PatientAge", "Patient overview incorrect")
+        self.assertEqual(patOverview[1][4], "033Y", "Patient overview incorrect")
+        studyOverview = dcmStudy.getStudyOverview()
+        self.assertEqual(studyOverview[0][4], "StudyDate", "Study overview incorrect")
+        self.assertEqual(studyOverview[1][4], "20140409", "Study overview incorrect")
+        seriesOverview = dcmStudy[0].getSeriesOverview()
+        self.assertEqual(seriesOverview[0][1], "SeriesDescription", "Series overview incorrect")
+        self.assertEqual(seriesOverview[1][1], "Cine_TruFisp_RVLA", "Series overview incorrect")
 
 
 class TestDicom2VT2Dicom(unittest.TestCase):
