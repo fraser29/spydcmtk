@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
-"""This module has high level dicom operations accessed by classes in dcmTK.py
+"""
+This module has high level dicom operations accessed by classes in dcmTK.py
 """
 
 import os
 import pydicom as dicom
 import tarfile
+import glob
 from tqdm import tqdm 
 import numpy as np
 
@@ -82,19 +84,20 @@ def getSaveFileNameFor_ds_UID(ds, outputRootDir):
     destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.SOPInstanceUID)
     return destFile
 
-def __getDSSaveFileName(ds):
+def __getDSSaveFileName_Safe(ds):
+    return 'IM-%s.dcm'%(ds.SOPInstanceUID)
+
+def __getDSSaveFileName(ds, SAFE_NAMING):
+    if SAFE_NAMING:
+        return __getDSSaveFileName_Safe(ds)
     try:
         return 'IM-%05d-%05d.dcm'%(int(ds.SeriesNumber),
                                         int(ds.InstanceNumber))
     except (TypeError, KeyError, AttributeError):
-        return 'IM-%s.dcm'%(ds.SOPInstanceUID)
-        # try:
-        #     return 'IM-%s.dcm'%(ds.SOPInstanceUID)
-        # except AttributeError:
-        #     return 'IM-%s.dcm'%(str(uuid.uuid1()))
+        return __getDSSaveFileName_Safe(ds)
 
-def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True):
-    destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds))
+def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
+    destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
     os.makedirs(outputRootDir, exist_ok=True)
     if anonName is not None:
         try:
@@ -234,3 +237,14 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False):
             except dicom.filereader.InvalidDicomError:
                 continue
     return None
+
+
+def writeDirectoryToNII(dcmDir, outputPath, fileName):
+    dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, dcmDir)
+    print('RUNNING: %s'%(dcm2niiCmd))
+    os.system(dcm2niiCmd)
+    list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz'))  # * means all if need specific format then *.csv
+    latest_file = max(list_of_files, key=os.path.getctime)
+    newFileName = os.path.join(outputPath, fileName)
+    os.rename(latest_file, newFileName)
+    print('Made %s --> as %s'%(latest_file, newFileName))

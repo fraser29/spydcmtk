@@ -7,7 +7,6 @@ import os
 import pydicom as dicom
 from pydicom.uid import generate_uid
 from tqdm import tqdm
-import glob
 import json
 import numpy as np
 
@@ -27,7 +26,7 @@ class DicomSeries(list):
     """
     Extends a list of ds (pydicom dataset) objects.
     """
-    def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
+    def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, SAFE_NAME_MODE=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """
@@ -36,6 +35,7 @@ class DicomSeries(list):
         self.OVERVIEW = OVERVIEW
         self.HIDE_PROGRESSBAR = HIDE_PROGRESSBAR
         self.FORCE_READ = FORCE_READ
+        self.SAFE_NAME_MODE = SAFE_NAME_MODE
         list.__init__(self, dsList)
 
     def __str__(self):
@@ -161,12 +161,14 @@ class DicomSeries(list):
             self[k1].StudyInstanceUID = studyUID
 
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, SE_RENAME={}, LIKE_ORIG=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
             LIKE_ORIG - set to False if updated some tags
         """
+        if SAFE_NAMING_CHECK:
+            self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
         LIKE_ORIG = True
         destFile = None
@@ -181,7 +183,7 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmUtils.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG)
+            destFile = dcmUtils.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
@@ -192,15 +194,8 @@ class DicomSeries(list):
         return fileName+extn
 
     def writeToNII(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, self.getRootDir())
-        print('RUNNING: %s'%(dcm2niiCmd))
-        os.system(dcm2niiCmd)
-        list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz'))  # * means all if need specific format then *.csv
-        latest_file = max(list_of_files, key=os.path.getctime)
         fileName = self.__generateFileName(outputNaming, '.nii.gz')
-        newFileName = os.path.join(outputPath, fileName)
-        os.rename(latest_file, newFileName)
-        print('Made %s --> as %s'%(latest_file, newFileName))
+        return dcmUtils.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNaming, '')
@@ -313,6 +308,16 @@ class DicomSeries(list):
         outDict['nSlice'] = len(self)
         return outDict
 
+    def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
+        if se_instance_set is None:
+            se_instance_set = set()
+        for k1 in range(len(self)):
+            se = self.getTag('SeriesNumber', instanceID=k1, ifNotFound='unknown')
+            instance = self.getTag('InstanceNumber', instanceID=k1, ifNotFound='unknown')
+            if [se,instance] in se_instance_set:
+                self.SAFE_NAMING = True
+                break
+            se_instance_set.add([se, instance])
 
 
 class DicomStudy(list):
@@ -465,10 +470,17 @@ class DicomStudy(list):
                                             self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
 
     def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix=''):
+        self.checkIfShouldUse_SAFE_NAMING()
         studyOutputDir = os.path.join(patientOutputDir, studyPrefix+self.__getStudyOutputDir(anonName))
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME)
+            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
         return studyOutputDir
+
+    def checkIfShouldUse_SAFE_NAMING(self):
+        se_instance_set = set()
+        for i in self:
+            i.checkIfShouldUse_SAFE_NAMING(se_instance_set)
+
 
 class ListOfDicomStudies(list):
     """

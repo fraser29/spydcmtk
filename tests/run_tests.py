@@ -45,7 +45,16 @@ class TestDicom2VT2Dicom(unittest.TestCase):
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         vtiDict = dcmSeries.buildVTIDict()
         self.assertAlmostEqual(list(vtiDict.keys())[1], 0.05192, places=7, msg='time key in vti dict incorrect')
-        print(dcmSeries.writeToVTI('/home/fraser/temp'))
+        fOut = dcmSeries.writeToVTI('/tmp')
+        self.assertTrue(os.path.isfile(fOut), msg='Written pvd file does not exist')
+        dd = dcmTK.dcmVTKTK.readPVD(fOut)
+        dTimes = sorted(dd.keys())
+        self.assertAlmostEqual(dTimes[1], 0.05192, places=7, msg='time key in vti dict incorrect')
+        vti0 = dd[dTimes[0]]
+        oo = vti0.GetOrigin()
+        self.assertAlmostEqual(oo[1], 0.1166883275304, places=7, msg='origin in vti dict incorrect')
+        dcmTK.dcmVTKTK.deleteFilesByPVD(fOut)
+
 
 
 

@@ -5,11 +5,69 @@
 
 import os
 import datetime
-import tarfile
 import glob
 import json
 import datetime
 import numpy as np
+
+# =========================================================================
+## CONSTANTS
+# =========================================================================
+class DicomTags(object):
+    # these are based on keyword value
+    Modality = 0x0008, 0x0060
+    Manufacturer = 0x0008, 0x0070
+    ManufacturerModelName = 0x0008, 0x1090
+    SoftwareVersions = 0x0018, 0x1020
+    StudyDescription = 0x0008, 0x1030
+    SeriesDescription = 0x0008, 0x103e
+    BodyPartExamined = 0x0018, 0x0015
+    SliceThickness = 0x0018, 0x0050
+    RepetitionTime = 0x0018, 0x0080
+    EchoTime = 0x0018, 0x0081
+    NumberOfAverages = 0x0018, 0x0083
+    MagneticFieldStrength = 0x0018, 0x0087
+    SpacingBetweenSlices = 0x0018, 0x0088
+    TriggerTime = 0x0018, 0x1060
+    NominalInterval = 0x0018, 0x1062
+    HeartRate = 0x0018, 0x1088
+    CardiacNumberOfImages = 0x0018, 0x1090
+    TriggerWindow = 0x0018, 0x1094
+    ReceiveCoilName = 0x0018, 0x1250
+    AcquisitionMatrix = 0x0018, 0x1310
+    FlipAngle = 0x0018, 0x1314
+    PatientPosition = 0x0018, 0x5100
+    ImagePositionPatient = 0x0020, 0x0032
+    ImageOrientationPatient = 0x0020, 0x0037
+    StudyInstanceUID = 0x0020, 0x000d
+    SeriesInstanceUID = 0x0020, 0x000e
+    SeriesNumber = 0x0020, 0x0011
+    PixelSpacing = 0x0028, 0x0030
+    StudyDate = 0x0008, 0x0020
+    PatientName = 0x0010, 0x0010
+    PatientID = 0x0010, 0x0020
+    PatientDateOfBirth = 0x0010, 0x0030
+    PatientSex = 0x0010, 0x0040
+
+
+def getTagCode(tagName):
+    return eval("DicomTags.%s" % (tagName))
+
+
+def getStdDicomTags():
+    allVar = vars(DicomTags)
+    res = []
+    for iVar in allVar:
+        val = getTagCode(iVar)
+        if type(val) == tuple:
+            if len(val) == 2:
+                res.append(iVar)
+    return res
+
+
+def getDicomTagsDict():
+    tt = getStdDicomTags()
+    return dict(zip([i for i in tt], [eval("DicomTags.%s" % (i)) for i in tt]))
 
 
 def countFilesInDir(dirName):
