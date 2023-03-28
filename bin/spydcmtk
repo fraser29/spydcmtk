@@ -69,7 +69,7 @@ def runActions(args):
                     for iSeries in iDS:
                         iSeries.writeToVTI(outputPath=args.outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])
             elif args.outputFolder is not None:
-                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName, FORCED_READ=args.FORCE)
+                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
                 res = 0 if allDirsPresent else 1
                 ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
@@ -98,11 +98,11 @@ if __name__ == '__main__':
     ap.add_argument('-dcmdump', dest='dcmdump',
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
     ap.add_argument('-nii', dest='nii',
-        help='Will convert each series to nii.gz. Naming: {PName}_{#}_{SEDesc}.nii.gz', action='store_true')
+        help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
-        help='Will convert each series to vti. Naming: {PName}_{#}_{SEDesc}.vti', action='store_true')
+        help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
     # -- program behaviour guidence -- #
-    ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dcm files missing header meta)',
+    ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dicom files missing header meta)',
                             action='store_true')
     ap.add_argument('-QUIET', dest='QUIET', help='Suppress progress bars and information output to terminal',
                             action='store_true')

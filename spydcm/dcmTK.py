@@ -27,7 +27,7 @@ class DicomSeries(list):
     """
     Extends a list of ds (pydicom dataset) objects.
     """
-    def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False):
+    def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """
@@ -35,6 +35,7 @@ class DicomSeries(list):
             dsList = []
         self.OVERVIEW = OVERVIEW
         self.HIDE_PROGRESSBAR = HIDE_PROGRESSBAR
+        self.FORCE_READ = FORCE_READ
         list.__init__(self, dsList)
 
     def __str__(self):
@@ -43,18 +44,18 @@ class DicomSeries(list):
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE=FORCE_READ)
+        dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
         dStudy = dStudyList[0]
         if len(dStudy) > 1:
             raise ValueError('More than one series found - use DicomStudy class')
-        return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
+        return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
-    def setFromFileList(cls, fileList, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE=False):
-        dsList = [dicom.read_file(i, stop_before_pixels=OVERVIEW, force=FORCE) for i in fileList]
-        return cls(dsList, OVERVIEW, HIDE_PROGRESSBAR)
+    def setFromFileList(cls, fileList, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
+        dsList = [dicom.read_file(i, stop_before_pixels=OVERVIEW, force=FORCE_READ) for i in fileList]
+        return cls(dsList, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     def getRootDir(self):
         return os.path.split(self[0].filename)[0]
@@ -160,7 +161,7 @@ class DicomSeries(list):
             self[k1].StudyInstanceUID = studyUID
 
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}, LIKE_ORIG=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, SE_RENAME={}, LIKE_ORIG=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
@@ -171,7 +172,7 @@ class DicomSeries(list):
         destFile = None
         seriesOutDirName = self.getSeriesOutDirName(SE_RENAME)
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
-        if FORCED_READ:
+        if self.FORCE_READ:
             ADD_TRANSFERSYNTAX = True ## THIS IS A BESPOKE CHANGE
         TO_DECOMPRESS = self.isCompressed()
         for ds in tqdm(self.yieldDataset(), total=len(self), disable=self.HIDE_PROGRESSBAR):
@@ -204,8 +205,7 @@ class DicomSeries(list):
     def writeToVTI(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNaming, '')
         A, meta = self.getPixelDataAsNumpy()
-        print('DEBUG',outputPath, fileName)
-        dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath)
+        return dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath, ds=self[0])
 
     def buildVTIDict(self):
         A, meta = self.getPixelDataAsNumpy()
@@ -235,10 +235,11 @@ class DicomSeries(list):
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
-                A[:, :, k1, k2] = self[c0].pixel_array.T
+                iA = self[c0].pixel_array.T
+                A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()
-        meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, float(self.getTag('SpacingBetweenSlices')*0.001)], 
+        meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
                 'Origin': [i*0.001 for i in self.getTag('ImagePositionPatient')], 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
                 'Times': [dt*n*0.001 for n in range(N)]}
@@ -258,6 +259,11 @@ class DicomSeries(list):
 
     def getDeltaCol(self):
         return self._getPixelSpacing()[1]
+
+    def getDeltaSlice(self):
+        if len(set(self.sliceLocations)) == 1: # May be CINE at same location
+            return float(self.getTag('SliceThickness'))
+        return np.mean(np.diff(self.sliceLocations))
 
     def getTemporalResolution(self):
         try:
@@ -323,7 +329,7 @@ class DicomStudy(list):
 
     @classmethod
     def setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
-        dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE=FORCE_READ)
+        dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
         # dicomDirs = getAllDirsUnderRootWithDicoms(dirName) # this was meant to work as a quick shortcut - but potential problems if used incorrectly
@@ -335,7 +341,7 @@ class DicomStudy(list):
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
+        return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
     def __str__(self):
@@ -458,10 +464,10 @@ class DicomStudy(list):
                                             self.getTag('StudyID', ifNotFound='StudyID-unknown'),
                                             self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, FORCED_READ=False, SE_RENAME={}, studyPrefix=''):
+    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix=''):
         studyOutputDir = os.path.join(patientOutputDir, studyPrefix+self.__getStudyOutputDir(anonName))
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, FORCED_READ=FORCED_READ, SE_RENAME=SE_RENAME)
+            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME)
         return studyOutputDir
 
 class ListOfDicomStudies(list):
@@ -501,15 +507,15 @@ class ListOfDicomStudies(list):
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR)
+        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
-    def setFromDcmDict(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False):
+    def setFromDcmDict(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         dStudiesList = []
         for studyUID in dicomDict.keys():
             dSeriesList = []
             for seriesUID in dicomDict[studyUID].keys():
-                dSeriesList.append(DicomSeries(dicomDict[studyUID][seriesUID], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR))
+                dSeriesList.append(DicomSeries(dicomDict[studyUID][seriesUID], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ))
             dStudiesList.append(DicomStudy(dSeriesList, OVERVIEW, HIDE_PROGRESSBAR))
         return cls(dStudiesList, OVERVIEW, HIDE_PROGRESSBAR)
 
@@ -518,7 +524,7 @@ class ListOfDicomStudies(list):
         # Note need OVERVIEW = False as only get access to file (and pixels) on untaring (maybe only if tar.gz) 
         dicomDict = dcmUtils.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
                                     matchingTagValuePair=matchTagPair, QUIET=True)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
+        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
     def __str__(self):
@@ -530,10 +536,10 @@ class ListOfDicomStudies(list):
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
 
-    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, FORCED_READ=False, SE_RENAME={}):
+    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, SE_RENAME={}):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, FORCED_READ=FORCED_READ, SE_RENAME=SE_RENAME)
+            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, SE_RENAME=SE_RENAME)
             outDirs.append(ooD)
         return outDirs
 
@@ -655,10 +661,10 @@ def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, FORCE_READ=Fals
     if os.path.isfile(dcmDirectory):
         studies = ListOfDicomStudies.setFromTar(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
     else:      
-       studies = ListOfDicomStudies.setFromDirectory(dcmDirectory, FORCE=FORCE_READ, OVERVIEW=False, ONE_FILE_PER_DIR=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
+       studies = ListOfDicomStudies.setFromDirectory(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, ONE_FILE_PER_DIR=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
     if not HIDE_PROGRESSBAR:
         print('WRITTING...')
-    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, FORCED_READ=FORCE_READ)
+    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName)
     if res is None:
         print('    ## WARNING - No valid dicoms found')
 

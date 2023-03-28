@@ -9,6 +9,7 @@ Dicom to VTK conversion toolkit
 
 import os
 import numpy as np
+import pydicom as dicom
 try:
     import xml.etree.cElementTree as ET
 except ImportError:
@@ -54,7 +55,7 @@ def arrToVTI(arr, meta, ds=None):
         newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
         newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
         A3 = arr[:,:,:,k1]
-        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int)
+        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(int)
         aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
         aArray.SetName('PixelData')
         newImg.GetPointData().SetScalars(aArray)
@@ -67,7 +68,7 @@ def arrToVTI(arr, meta, ds=None):
         vtkDict[thisTime] = newImg
     return vtkDict
 
-def writeArrToVTI(arr, meta, filePrefix, outputPath):
+def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
 
     Args:
@@ -79,17 +80,18 @@ def writeArrToVTI(arr, meta, filePrefix, outputPath):
                     'Times': list_nTime -> times (can be missing if nTime=1)}
         filePrefix (str): File name prefix (if nTime>1 then named '{fileprefix}_{timeID:05d}.vti)
         outputPath (str): Output path (if nTime > 1 then '{fileprefix}.pvd written to outputPath and sub-directory holds *.vti files)
+        ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
 
     Raises:
         ValueError: If VTK import not available
     """
-    vtkDict = arrToVTI(arr, meta)
+    vtkDict = arrToVTI(arr, meta, ds=ds)
     times = sorted(vtkDict.keys())
     if len(times) > 1:
-        writeVtkPvdDict(vtkDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
+        return writeVtkPvdDict(vtkDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
-        writeVTI(vtkDict[times[0]], fOut)
+        return writeVTI(vtkDict[times[0]], fOut)
 
 
 
@@ -447,7 +449,6 @@ def getStdDicomTags():
         if type(val) == tuple:
             if len(val) == 2:
                 res.append(iVar)
-            # print(iVar, val)
     return res
 
 
@@ -489,14 +490,22 @@ def getFieldData(vtkObj, fieldName):
 def addFieldDataFromDcmDataSet(vtkObj, ds):
     tagsDict = getDicomTagsDict()
     for iTag in tagsDict.keys():
-        val = ds[iTag].value
         try:
-            valSList = [float(i) for i in val.AsString().split("\\")]
-            tagArray = numpy_support.numpy_to_vtk(np.array(valSList))
-        except (TypeError, ValueError):
-            tagArray = vtk.vtkStringArray()
-            tagArray.SetNumberOfValues(1)
-            tagArray.SetValue(0, val.AsString())
-        tagArray.SetName(iTag)
-        vtkObj.GetFieldData().AddArray(tagArray)
-    vtkObj.GetFieldData().AddArray(tagArray)
+            val = ds[iTag].value
+            if type(val) in [dicom.multival.MultiValue, dicom.valuerep.DSfloat, dicom.valuerep.IS]:
+                try:
+                    tagArray = numpy_support.numpy_to_vtk(np.array(val))
+                except TypeError: # multivalue - but prob strings
+                    tagArray = vtk.vtkStringArray()
+                    tagArray.SetNumberOfValues(len(val))
+                    for k1 in range(len(val)):
+                        tagArray.SetValue(k1, str(val[k1]))
+            else:
+                tagArray = vtk.vtkStringArray()
+                tagArray.SetNumberOfValues(1)
+                tagArray.SetValue(0, str(val))
+            tagArray.SetName(iTag)
+            vtkObj.GetFieldData().AddArray(tagArray)
+        except KeyError:
+            continue # tag not found
+
