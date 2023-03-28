@@ -14,7 +14,7 @@ import numpy as np
 import spydcm.dcmUtils as dcmUtils
 import spydcm.dcmTools as dcmTools
 import spydcm.dcmVTKTK as dcmVTKTK
-from spydcm.defaults import DEFAULT_SERIES_OVERVIEW_TAG_LIST, DEFAULT_STUDY_OVERVIEW_TAG_LIST, DEFAULT_SUBJECT_OVERVIEW_TAG_LIST
+from spydcm.defaults import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
 
 
 
@@ -122,7 +122,7 @@ class DicomSeries(list):
             dOut[ds.InstanceNumber] = dd
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
 
-    def getSeriesOverview(self, tagList=DEFAULT_SERIES_OVERVIEW_TAG_LIST):
+    def getSeriesOverview(self, tagList=SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
         vals.append(len(self))
@@ -400,10 +400,10 @@ class DicomStudy(list):
             return possibles[minID]
         return 'SE%d_%s' % (int(possibles[minID].getTag('SeriesNumber')), possibles[minID].getTag('SeriesDescription'))
 
-    def getStudyOverview(self, tagList=DEFAULT_STUDY_OVERVIEW_TAG_LIST):
+    def getStudyOverview(self, tagList=STUDY_OVERVIEW_TAG_LIST):
         return self.getTagListAndNames(tagList)
 
-    def getPatientOverview(self, tagList=DEFAULT_SUBJECT_OVERVIEW_TAG_LIST):
+    def getPatientOverview(self, tagList=SUBJECT_OVERVIEW_TAG_LIST):
         return self.getTagListAndNames(tagList)
 
     def getSeriesByID(self, ID):
@@ -567,7 +567,7 @@ class ListOfDicomStudies(list):
             return dcmTools._tagValuesListToString(DICOM_TAGS, output)
         return output
 
-    def buildMSTable(self, DICOM_TAGS=DEFAULT_SERIES_OVERVIEW_TAG_LIST):
+    def buildMSTable(self, DICOM_TAGS=SERIES_OVERVIEW_TAG_LIST):
         pass
         #TODO - need to pass series name or something to query and then calc mean / stdev etc
 
