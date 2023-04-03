@@ -5,7 +5,7 @@ from collections import OrderedDict
 import os
 
 thisConfFileName = 'spydcmtk.conf'
-rootDir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+rootDir = os.path.abspath(os.path.dirname(__file__))
 
 def group_items_to_list(config, default_items, groupName):
     path_items = config.items( groupName )

@@ -12,7 +12,7 @@ from tqdm import tqdm
 import numpy as np
 
 
-import spydcm.dcmTools as dcmTools
+import spydcmtk.dcmTools as dcmTools
 
 
 def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=True,

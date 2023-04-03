@@ -11,10 +11,10 @@ import json
 import numpy as np
 
 # Local imports 
-import spydcm.dcmUtils as dcmUtils
-import spydcm.dcmTools as dcmTools
-import spydcm.dcmVTKTK as dcmVTKTK
-from spydcm.defaults import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
+import spydcmtk.dcmUtils as dcmUtils
+import spydcmtk.dcmTools as dcmTools
+import spydcmtk.dcmVTKTK as dcmVTKTK
+from spydcmtk.defaults import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
 
 
 

@@ -22,7 +22,7 @@ try:
 except ImportError:
     VTK_AVAILABLE = False
 
-import spydcm.dcmTools as dcmTools
+import spydcmtk.dcmTools as dcmTools
 
 
 # ===================================================================================================

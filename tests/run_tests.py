@@ -1,10 +1,10 @@
 
-from context import spydcm
+from context import spydcmtk
 
 import os
 import unittest
 
-from spydcm import dcmTK
+from spydcmtk import dcmTK
 
 
 this_dir = os.path.split(os.path.realpath(__file__))[0]
