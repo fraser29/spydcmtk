@@ -1,6 +1,6 @@
 # *spydcmtk*
 
-__ Simple PYthon DiCoM Tool Kit __
+*Simple PYthon DiCoM Tool Kit*
 
 *spydcmtk* is a pure Python package built on top of [*pydicom*](https://github.com/pydicom/pydicom).
 
