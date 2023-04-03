@@ -312,12 +312,13 @@ class DicomSeries(list):
         if se_instance_set is None:
             se_instance_set = set()
         for k1 in range(len(self)):
-            se = self.getTag('SeriesNumber', instanceID=k1, ifNotFound='unknown')
-            instance = self.getTag('InstanceNumber', instanceID=k1, ifNotFound='unknown')
-            if [se,instance] in se_instance_set:
+            se = self.getTag('SeriesNumber', dsID=k1, ifNotFound='unknown')
+            instance = self.getTag('InstanceNumber', dsID=k1, ifNotFound='unknown')
+            se_instance_str = f"{se}_{instance}"
+            if se_instance_str in se_instance_set:
                 self.SAFE_NAMING = True
                 break
-            se_instance_set.add([se, instance])
+            se_instance_set.add(se_instance_str)
 
 
 class DicomStudy(list):

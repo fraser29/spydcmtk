@@ -48,7 +48,7 @@ def arrToVTI(arr, meta, ds=None):
         ValueError: If VTK import not available
     """
     if not VTK_AVAILABLE:
-        raise ValueError('# Error VTK not available')
+        raise NoVtkError()
     dims = arr.shape
     vtkDict = {}
     for k1 in range(dims[-1]):
@@ -453,3 +453,15 @@ def addFieldDataFromDcmDataSet(vtkObj, ds):
         except KeyError:
             continue # tag not found
 
+def testVTK():
+    if not VTK_AVAILABLE:
+        raise NoVtkError()
+
+class NoVtkError(Exception):
+    ''' NoVtkError
+            If VTK import fails '''
+    def __init__(self):
+        pass
+    def __str__(self):
+        return 'NoVtkError: VTK not found. Run: "pip install vtk"'
+    

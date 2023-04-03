@@ -11,12 +11,11 @@ Dicom organisation and anonymising script.
 """
 
 
-from context import spydcm
 import os
 import argparse
 
-from spydcm import dcmTK
-from spydcm import dcmUtils
+from spydcmtk import dcmTK
+from spydcmtk import dcmUtils
     
 
 ### ====================================================================================================================
@@ -37,7 +36,7 @@ def checkArgs(args):
 ### ====================================================================================================================
 ##          RUN
 ### ====================================================================================================================
-def runActions(args):
+def runActions(args, ap):
 
     ####
     if args.dcmdump:
@@ -65,6 +64,7 @@ def runActions(args):
                     for iSeries in iDS:
                         iSeries.writeToNII(outputPath=args.outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])
             elif args.vti:
+                dcmTK.dcmVTKTK.testVTK()
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
                         iSeries.writeToVTI(outputPath=args.outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])
@@ -79,8 +79,7 @@ def runActions(args):
 ### ====================================================================================================================
 # S T A R T
 #
-if __name__ == '__main__':
-
+def main():
     # --------------------------------------------------------------------------
     #  ARGUMENT PARSING
     # --------------------------------------------------------------------------
@@ -115,4 +114,9 @@ if __name__ == '__main__':
             print(f'Running SPYDCMTK with input {arguments.inputPath}')
     ## -------------
 
-    runActions(arguments)
+    runActions(arguments, ap)
+
+
+if __name__ == '__main__':
+
+    main()

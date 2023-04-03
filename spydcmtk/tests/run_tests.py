@@ -1,9 +1,9 @@
 
-from context import spydcmtk
+from context import spydcmtk # This is useful for testing outside of environment
 
 import os
 import unittest
-
+import shutil
 from spydcmtk import dcmTK
 
 
@@ -30,6 +30,11 @@ class TestDicomSeries(unittest.TestCase):
         self.assertAlmostEqual(dcmSeries.getTemporalResolution(), 51.92, places=7, msg='deltaTime incorrect')
         self.assertEqual(dcmSeries.IS_SIEMENS(), True, msg="Incorrect manufactuer")
         self.assertEqual(dcmSeries.getPulseSequenceName(), '*tfi2d1_12', msg="Incorrect sequence name")
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp1')
+        os.makedirs(tmpDir)
+        dcmSeries.writeToOrganisedFileStructure(tmpDir)
+        dcmSeries.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
+        shutil.rmtree(tmpDir)
         
 
 
@@ -46,6 +51,11 @@ class TestDicomStudy(unittest.TestCase):
         seriesOverview = dcmStudy[0].getSeriesOverview()
         self.assertEqual(seriesOverview[0][1], "SeriesDescription", "Series overview incorrect")
         self.assertEqual(seriesOverview[1][1], "Cine_TruFisp_RVLA", "Series overview incorrect")
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp2')
+        os.makedirs(tmpDir)
+        dcmStudy.writeToOrganisedFileStructure(tmpDir)
+        dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
+        shutil.rmtree(tmpDir)
 
 
 class TestDicom2VT2Dicom(unittest.TestCase):
