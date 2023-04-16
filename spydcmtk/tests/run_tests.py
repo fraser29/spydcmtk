@@ -5,6 +5,7 @@ import os
 import unittest
 import shutil
 from spydcmtk import dcmTK
+from spydcmtk import spydcm
 
 
 this_dir = os.path.split(os.path.realpath(__file__))[0]
@@ -75,6 +76,13 @@ class TestDicom2VT2Dicom(unittest.TestCase):
         dcmTK.dcmVTKTK.deleteFilesByPVD(fOut)
 
 
+class TestDicom2MSTable(unittest.TestCase):
+    def runTest(self):
+        msTable = spydcm.buildTableOfDicomParamsForManuscript([this_dir], 'a')
+        topDir = '/Volume/MRI_DATA'
+        if os.path.isdir(topDir):
+            msTable = spydcm.buildTableOfDicomParamsForManuscript([os.path.join(topDir, i) for i in os.listdir(topDir)], '4CH')
+        
 
 
 if __name__ == '__main__':

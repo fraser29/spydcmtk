@@ -11,7 +11,6 @@ import json
 import numpy as np
 
 # Local imports 
-import spydcmtk.dcmUtils as dcmUtils
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
 from spydcmtk.defaults import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
@@ -43,7 +42,7 @@ class DicomSeries(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
@@ -183,7 +182,7 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmUtils.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
@@ -195,7 +194,7 @@ class DicomSeries(list):
 
     def writeToNII(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNaming, '.nii.gz')
-        return dcmUtils.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
+        return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNaming=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNaming, '')
@@ -346,7 +345,7 @@ class DicomStudy(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
@@ -371,25 +370,27 @@ class DicomStudy(list):
     def getTopDir(self):
         return os.path.split(os.path.split(self[0][0].filename)[0])[0]
 
-    def getSeriesName(self, matchingStrList, RETURN_SERIES_OBJ=False):
+    def getSeriesMatchingDescription(self, matchingStrList, RETURN_SERIES_OBJ=False, REDUCE_MULTIPLE=False):
         matchStrList_lower = [i.lower() for i in matchingStrList]
         possibles = []
         for i in self:
             sDesc = i.getTag('SeriesDescription').lower()
             if any([j in sDesc  for j in matchStrList_lower ]):
                 possibles.append(i)
-        minID = 0
+        minID = None
         if len(possibles) == 0:
             return None
-        elif len(possibles) > 1:
+        elif (len(possibles) > 1) and REDUCE_MULTIPLE:
             seNums = [int(i.getTag('SeriesNumber')) for i in possibles]
             seNums = [i for i in seNums if i!=0]
             for k1 in range(1, len(seNums)):
                 if seNums[k1] < seNums[minID]:
                     minID = k1
+        if minID is not None:
+            possibles = possibles[minID]
         if RETURN_SERIES_OBJ:
-            return possibles[minID]
-        return 'SE%d_%s' % (int(possibles[minID].getTag('SeriesNumber')), possibles[minID].getTag('SeriesDescription'))
+            return possibles
+        return [f'SE{possibles[i].getTag("SeriesnNumber")}:{possibles[i].getTag("SeriesDescription")}' for i in range(len(possibles))]
 
     def getStudyOverview(self, tagList=STUDY_OVERVIEW_TAG_LIST):
         return self.getTagListAndNames(tagList)
@@ -509,7 +510,7 @@ class ListOfDicomStudies(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmUtils.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
@@ -525,7 +526,7 @@ class ListOfDicomStudies(list):
     @classmethod
     def setFromTar(cls, tarFileName, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
         # Note need OVERVIEW = False as only get access to file (and pixels) on untaring (maybe only if tar.gz) 
-        dicomDict = dcmUtils.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
+        dicomDict = dcmTools.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
                                     matchingTagValuePair=matchTagPair, QUIET=True)
         return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 

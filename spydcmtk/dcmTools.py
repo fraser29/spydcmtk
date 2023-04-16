@@ -5,10 +5,12 @@
 
 import os
 import datetime
-import glob
 import json
 import datetime
 import numpy as np
+import tarfile
+import pydicom as dicom
+from tqdm import tqdm
 
 # =========================================================================
 ## CONSTANTS
@@ -172,3 +174,131 @@ def walkdir(folder):
     for dirpath, _, files in os.walk(folder):
         for filename in files:
             yield os.path.abspath(os.path.join(dirpath, filename))
+
+
+def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=True,
+                        matchingTagValuePair=None):
+    # for sub dir in tar get first dicom - return list of ds
+    dsDict = {}
+    if tarFileToRead.endswith('gz'):
+        tar = tarfile.open(tarFileToRead, "r:gz")
+    else:
+        tar = tarfile.open(tarFileToRead)
+    successReadDirs = set()
+    for member in tar:
+        if member.isfile():
+            root = os.path.split(member.name)[0]
+            if FIRST_ONLY and (root in successReadDirs):
+                continue
+            thisFile=tar.extractfile(member)
+            try:
+                dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)#, specific_tags=['StudyInstanceUID','SeriesInstanceUID'])
+                if matchingTagValuePair is not None:
+                    if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
+                        continue
+                studyUID = str(dataset.StudyInstanceUID)
+                seriesUID = str(dataset.SeriesInstanceUID)
+                if studyUID not in dsDict:
+                    dsDict[studyUID] =  {}
+                if seriesUID not in dsDict[studyUID]:
+                    dsDict[studyUID][seriesUID] = []
+                dsDict[studyUID][seriesUID].append(dataset)
+
+                if FIRST_ONLY:
+                    successReadDirs.add(root)
+            except dicom.filereader.InvalidDicomError:
+                if not QUIET:
+                    print('FAIL: %s'%(thisFile))
+    tar.close()
+    return dsDict
+
+def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, anonName=None):
+    # Define call-back functions for the dataset.walk() function
+    def PN_callback(ds, data_element):
+        """Called from the dataset "walk" recursive function for all data elements."""
+        if data_element.VR == "PN":
+            data_element.value = 'anonymous'
+        if data_element.name == "Institution Name":
+            data_element.value = 'anonymous'
+        if (anonName is not None) & (data_element.name == "Patient's Name"):
+            data_element.value = anonName
+    # Remove patient name and any other person names
+    dataset.walk(PN_callback)
+    # Change ID
+    dataset.PatientID = ''
+    # Remove data elements (should only do so if DICOM type 3 optional)
+    # Use general loop so easy to add more later
+    # Could also have done: del ds.OtherPatientIDs, etc.
+    for name in ['OtherPatientIDs', 'OtherPatientIDsSequence']:
+        if name in dataset:
+            delattr(dataset, name)
+    if anon_birthdate:
+        for name in ['PatientBirthDate']:
+            if name in dataset:
+                dataset.data_element(name).value = ''
+    # Remove private tags if function argument says to do so.
+    if remove_private_tags:
+        dataset.remove_private_tags()
+    return dataset
+
+def getSaveFileNameFor_ds_UID(ds, outputRootDir):
+    destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.SOPInstanceUID)
+    return destFile
+
+def __getDSSaveFileName_Safe(ds):
+    return 'IM-%s.dcm'%(ds.SOPInstanceUID)
+
+def __getDSSaveFileName(ds, SAFE_NAMING):
+    if SAFE_NAMING:
+        return __getDSSaveFileName_Safe(ds)
+    try:
+        return 'IM-%05d-%05d.dcm'%(int(ds.SeriesNumber),
+                                        int(ds.InstanceNumber))
+    except (TypeError, KeyError, AttributeError):
+        return __getDSSaveFileName_Safe(ds)
+
+def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
+    destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
+    os.makedirs(outputRootDir, exist_ok=True)
+    if anonName is not None:
+        try:
+            ds = anonymiseDicomDS(ds, anonName=anonName)
+        except NotImplementedError:
+            pass
+    ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
+    return destFile
+
+
+def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
+    dsDict = {}
+    successReadDirs = set()
+    nFiles = countFilesInDir(rootDir)
+    for thisFile in tqdm(walkdir(rootDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
+        if 'dicomdir' in os.path.split(thisFile)[1].lower():
+            continue
+        if thisFile.endswith('json'):
+            continue
+        if ONE_FILE_PER_DIR:
+            thisDir, ff = os.path.split(thisFile)
+            if thisDir in successReadDirs:
+                continue
+        try:
+            # Reading specific tags is actually slower. 
+            # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
+            dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
+            studyUID = str(dataset.StudyInstanceUID)
+            seriesUID = str(dataset.SeriesInstanceUID)
+            if studyUID not in dsDict:
+                dsDict[studyUID] =  {}
+            if seriesUID not in dsDict[studyUID]:
+                dsDict[studyUID][seriesUID] = []
+            dsDict[studyUID][seriesUID].append(dataset)
+            if ONE_FILE_PER_DIR:
+                successReadDirs.add(thisDir)
+        except dicom.filereader.InvalidDicomError:
+            if DEBUG:
+                print('Error reading %s'%(thisFile))
+            continue
+    return dsDict
+
+
