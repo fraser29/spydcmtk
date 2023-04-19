@@ -96,6 +96,45 @@ def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
         return writeVTI(vtkDict[times[0]], fOut)
 
 
+def getTransFormMatrixFromFieldData(vtkObj, CONVERT_TO_M=True):
+    iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
+    c = [iop[1]*iop[5]-iop[2]*iop[4],
+         iop[2]*iop[3]-iop[0]*iop[5],
+         iop[0]*iop[4]-iop[1]*iop[3]]
+    iop += c
+    ipp = [vtkObj.GetFieldData().GetArray('ImagePositionPatient').GetTuple(i)[0] for i in range(3)]
+    if CONVERT_TO_M:
+        ipp = [i*0.001 for i in ipp]
+        # ipp = [i*1000.0 for i in ipp]
+    matrix = [iop[0], iop[3], iop[6], ipp[0],
+              iop[1], iop[4], iop[7], ipp[1],
+              iop[2], iop[5], iop[8], ipp[2],
+              0,0,0,1]
+    transFormMatrix = vtk.vtkTransform()
+    transFormMatrix.SetMatrix(matrix)
+    return transFormMatrix
+
+def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
+    """
+    Uses field data: ImageOrientationPatient, ImagePositionPatient
+    :param vtiObj:
+    :param CONVERT_TO_M:
+    :param transMatrix: can pass or grab from field data
+    :return:
+    """
+    if transMatrix is None:
+        transMatrix = getTransFormMatrixFromFieldData(vtiObj, CONVERT_TO_M=CONVERT_TO_M)
+        if CONVERT_TO_M:
+            res = vtiObj.GetSpacing()
+            vtiObj.SetSpacing(res[0] * 0.001, res[1] * 0.001, res[2] * 0.001)
+        # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
+        vtiObj.SetOrigin(0.0,0.0,0.0)
+    ##
+    tfilterMatrix = vtk.vtkTransformFilter()
+    tfilterMatrix.SetTransform(transMatrix)
+    tfilterMatrix.SetInputData(vtiObj)
+    tfilterMatrix.Update()
+    return tfilterMatrix.GetOutput()
 
 # ===================================================================================================
 def getRootDirWithSEdirs(startDir):
@@ -413,6 +452,12 @@ def vtkfilterFlipImageData(vtiObj, axis):
     return flipper.GetOutput()
 
 
+def getScalarsAsNumpy(data):
+    aS = data.GetPointData().GetScalars()
+    aName = aS.GetName()
+    return getArrayAsNumpy(data, aName)
+
+
 def getArrayAsNumpy(data, arrayName):
     return numpy_support.vtk_to_numpy(data.GetPointData().GetArray(arrayName)).copy()
 
@@ -428,8 +473,10 @@ def addFieldData(vtkObj, fieldVal, fieldName):
     tagArray.SetName(fieldName)
     vtkObj.GetFieldData().AddArray(tagArray)
 
+
 def getFieldData(vtkObj, fieldName):
     return numpy_support.vtk_to_numpy(vtkObj.GetFieldData().GetArray(fieldName)).copy()
+
 
 def addFieldDataFromDcmDataSet(vtkObj, ds):
     tagsDict = dcmTools.getDicomTagsDict()
@@ -452,6 +499,15 @@ def addFieldDataFromDcmDataSet(vtkObj, ds):
             vtkObj.GetFieldData().AddArray(tagArray)
         except KeyError:
             continue # tag not found
+
+
+def getPatientMatrixDict(data):
+    patientMatrixDict = {'PixelSpacing': getFieldData(data, 'PixelSpacing'), 
+                         'ImagePositionPatient': getFieldData(data, 'ImagePositionPatient'), 
+                         'ImageOrientationPatient': getFieldData(data, 'ImageOrientationPatient'), 
+                         'SliceThickness': getFieldData(data, 'SliceThickness')}
+    return patientMatrixDict
+
 
 def testVTK():
     if not VTK_AVAILABLE:

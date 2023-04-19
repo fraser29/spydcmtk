@@ -13,7 +13,7 @@ import numpy as np
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
-from spydcmtk.defaults import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
+from spydcmtk.helpers import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
 
 
 
@@ -229,7 +229,7 @@ class DicomSeries(list):
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
-                iA = self[c0].pixel_array.T
+                iA = self[c0].pixel_array
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()
@@ -303,6 +303,7 @@ class DicomSeries(list):
             'EchoTime':self.getTag('EchoTime'),
             'RepetitionTime':self.getTag('RepetitionTime'),
             'PulseSequenceName':self.getPulseSequenceName(),
+            'MagneticFieldStrength': self.getTag('MagneticFieldStrength'),
             'InternalPulseSequenceName':self.getInternalPulseSequenceName()}
         outDict['nSlice'] = len(self)
         return outDict

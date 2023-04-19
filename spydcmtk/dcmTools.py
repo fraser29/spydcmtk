@@ -50,6 +50,7 @@ class DicomTags(object):
     PatientID = 0x0010, 0x0020
     PatientDateOfBirth = 0x0010, 0x0030
     PatientSex = 0x0010, 0x0040
+    InstanceNumber = 0x0020, 0x0013
 
 
 def getTagCode(tagName):
@@ -256,6 +257,11 @@ def __getDSSaveFileName(ds, SAFE_NAMING):
                                         int(ds.InstanceNumber))
     except (TypeError, KeyError, AttributeError):
         return __getDSSaveFileName_Safe(ds)
+
+def getDicomFileIdentifierStr(ds):
+    strOut = f'{ds[DicomTags.PatientName].value}_{ds[DicomTags.PatientID].value}_' +\
+            f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.InstanceNumber].value}'
+    return cleanString(strOut)
 
 def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
     destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
