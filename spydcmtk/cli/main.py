@@ -14,8 +14,7 @@ Dicom organisation and anonymising script.
 import os
 import argparse
 
-from spydcmtk import dcmTK
-from spydcmtk import dcmUtils
+from spydcmtk import spydcm
     
 
 ### ====================================================================================================================
@@ -40,7 +39,7 @@ def runActions(args, ap):
 
     ####
     if args.dcmdump:
-        ds = dcmUtils.returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
+        ds = spydcm.returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
         print(ds)
     else:
         # check arguments to avoid reading all dicoms and then doing nothing...
@@ -48,7 +47,7 @@ def runActions(args, ap):
             ap.exit(0, f'No action given. Exiting SPYDCMTK without action\n')
         try:
             onlyOverview = args.quickInspect or args.quickInspectFull
-            ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
+            ListDicomStudies = spydcm.dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
         # Let IOERROR play out here is not correct input
@@ -64,7 +63,6 @@ def runActions(args, ap):
                     for iSeries in iDS:
                         iSeries.writeToNII(outputPath=args.outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])
             elif args.vti:
-                dcmTK.dcmVTKTK.testVTK()
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
                         iSeries.writeToVTI(outputPath=args.outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])

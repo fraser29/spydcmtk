@@ -11,7 +11,6 @@ import pydicom as dicom
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
-from spydcmtk.helpers import MANUSCRIPT_TABLE_TAG_LIST
 
 
 
