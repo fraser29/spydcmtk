@@ -107,7 +107,7 @@ setup(
     # If your package is a single module, use this instead of 'packages':
     # py_modules=['mypackage'],
     entry_points={
-        "console_scripts": ["spydcmtk=spydcmtk.cli.main:main"],
+        "console_scripts": ["spydcmtk=spydcmtk.spydcm:main"],
     },
     package_data={NAME: ['spydcmtk.conf']},
     install_requires=REQUIRED,

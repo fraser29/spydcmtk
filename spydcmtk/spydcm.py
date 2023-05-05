@@ -4,7 +4,9 @@
 """
 
 import os
+import sys
 import glob
+import argparse
 import numpy as np
 import pydicom as dicom
 
@@ -15,6 +17,14 @@ import spydcmtk.dcmTK as dcmTK
 
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
+    """ Write a directory of dicom files to a Nifti (*.nii.gz) file. 
+        Uses dcm2nii so MUST have dcm2nii installed and within path.
+
+    Args:
+        dcmDir (str): Path to directory containing dicom files
+        outputPath (str): Path to output directory where to save nifti
+        fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)
+    """
     dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, dcmDir)
     print('RUNNING: %s'%(dcm2niiCmd))
     os.system(dcm2niiCmd)
@@ -25,7 +35,14 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
     print('Made %s --> as %s'%(latest_file, newFileName))
 
 
-def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, seriesDescriptionIdentifier):
+def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, seriesDescriptionIdentifier=None):
+    """ Build a simple table of dicom parameters that would be suitable for input into a scientific manuscript.
+        Output is comma delimited multiline string of Tr, Te (etc) stats. 
+
+    Args:
+        topLevelDirectoryList (list): list of str that are paths to directories containing dicom files
+        seriesDescriptionIdentifier (str, optional): A substring of SeriesDescription tag used to select certian series only. Defaults to None.
+    """
     dfData = []
     for inspectDir in topLevelDirectoryList:
         try:
@@ -34,7 +51,10 @@ def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, seriesDescriptio
         except IndexError: # no dicoms found 
             continue
         for ss in ssL:
-            matchingSeries = ss.getSeriesMatchingDescription([seriesDescriptionIdentifier], RETURN_SERIES_OBJ=True)
+            if seriesDescriptionIdentifier is not None:
+                matchingSeries = ss.getSeriesMatchingDescription([seriesDescriptionIdentifier], RETURN_SERIES_OBJ=True)
+            else:
+                matchingSeries = ss
             if matchingSeries is not None:
                 for iSeries in matchingSeries:
                     resDict = iSeries.getSeriesInfoDict()
@@ -174,11 +194,135 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False):
                 continue
     return None
 
-def directoryToVTI(dcmDirectory, outputFolder, QUITE=True, FORCE=False):
+def directoryToVTI(dcmDirectory, outputFolder, 
+                   outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), 
+                   QUITE=True, FORCE=False):
+    """Convert directory of dicoms to VTI files (one vti per series)
+        Naming built from dicom tags: 
+
+    Args:
+        dcmDirectory (str): Directory containing dicom files
+        outputFolder (str): Directory where vti output files to be written
+        outputNamingTags (tuple, optional): Dicom tags used to generate vti file name. 
+                        Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription')
+        QUITE (bool, optional): Suppress output information. Defaults to True.
+        FORCE (bool, optional): Set True to overwrite already present files. Defaults to False.
+
+    Returns:
+        list: List of output file names written
+    """
     outputFiles = []
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
     for iDS in ListDicomStudies:
         for iSeries in iDS:
-            fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNaming=['PatientName', 'SeriesNumber', 'SeriesDescription'])
+            fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             outputFiles.append(fOut)
     return outputFiles
+
+
+### ====================================================================================================================
+##          RUN VIA MAIN
+### ====================================================================================================================
+# Override error to show help on argparse error (missing required argument etc)
+class MyParser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+##  ========= INSPECTION / VERIFICATION =========
+def quickInspect(dStudies, FULL):
+    frmtStr = dStudies.getSummaryString(FULL)
+    print(frmtStr)
+
+def checkArgs(args):
+    allActionArgs = [args.nii, 
+                args.vti, 
+                args.quickInspect, 
+                args.quickInspectFull, 
+                args.outputFolder is not None]
+    return any(allActionArgs)
+
+##  ========= RUN ACTIONS =========
+def runActions(args, ap):
+
+    ####
+    if args.dcmdump:
+        ds = returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
+        print(ds)
+    else:
+        # check arguments to avoid reading all dicoms and then doing nothing...
+        if not checkArgs(args):
+            ap.exit(0, f'No action given. Exiting SPYDCMTK without action\n')
+        try:
+            onlyOverview = args.quickInspect or args.quickInspectFull
+            ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
+        except IOError as e:
+            ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
+        # Let IOERROR play out here is not correct input
+        ##
+        if args.quickInspect or args.quickInspectFull:
+                print(ListDicomStudies.getSummaryString(args.quickInspectFull))
+        else:
+            if args.outputFolder is None:
+                print(f'WARNING: outputFolder not given - setting to inputFolder')
+                args.outputFolder = os.path.split(args.inputPath)[0]
+            if args.nii:
+                for iDS in ListDicomStudies:
+                    for iSeries in iDS:
+                        iSeries.writeToNII(outputPath=args.outputFolder)
+            elif args.vti:
+                for iDS in ListDicomStudies:
+                    for iSeries in iDS:
+                        iSeries.writeToVTI(outputPath=args.outputFolder)
+            elif args.outputFolder is not None:
+                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName)
+                allDirsPresent = all([os.path.isdir(i) for i in outDirList])
+                res = 0 if allDirsPresent else 1
+                ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
+        ##
+
+### ====================================================================================================================
+### ====================================================================================================================
+# S T A R T
+#
+def main():
+    # --------------------------------------------------------------------------
+    #  ARGUMENT PARSING
+    # --------------------------------------------------------------------------
+    ap = MyParser(description='Simple Python Dicom Toolkit - spydcmtk')
+
+    ap.add_argument('-i', dest='inputPath', help='Path to find dicoms (file or directory or tar or tar.gz or zip)', type=str, required=True)
+    ap.add_argument('-o', dest='outputFolder', help='Path for output - if set then will organise dicoms into this folder', type=str, default=None)
+
+    ap.add_argument('-a', dest='anonName',
+        help='anonymous name [optional - if not given, then not anoymised]', type=str, default=None)
+    ap.add_argument('-quickInspect', dest='quickInspect',
+        help='Will output a summary of dicoms to the terminal', action='store_true')
+    ap.add_argument('-quickInspectFull', dest='quickInspectFull',
+        help='Will output a full summary of dicoms to the terminal', action='store_true')
+    ap.add_argument('-dcmdump', dest='dcmdump',
+        help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
+    ap.add_argument('-nii', dest='nii',
+        help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
+    ap.add_argument('-vti', dest='vti',
+        help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
+    # -- program behaviour guidence -- #
+    ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dicom files missing header meta)',
+                            action='store_true')
+    ap.add_argument('-QUIET', dest='QUIET', help='Suppress progress bars and information output to terminal',
+                            action='store_true')
+    ##
+
+    arguments = ap.parse_args()
+    if arguments.inputPath is not None:
+        arguments.inputPath = os.path.abspath(arguments.inputPath)
+        if not arguments.QUIET:
+            print(f'Running SPYDCMTK with input {arguments.inputPath}')
+    ## -------------
+
+    runActions(arguments, ap)
+
+
+if __name__ == '__main__':
+
+    main()
