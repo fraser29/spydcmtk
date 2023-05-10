@@ -11,6 +11,8 @@ from spydcmtk import spydcm
 this_dir = os.path.split(os.path.realpath(__file__))[0]
 TEST_DIRECTORY = os.path.join(this_dir, 'TEST_DATA')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
+vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
+DEBUG = False
 
 
 class TestDicomSeries(unittest.TestCase):
@@ -35,7 +37,8 @@ class TestDicomSeries(unittest.TestCase):
         os.makedirs(tmpDir)
         dcmSeries.writeToOrganisedFileStructure(tmpDir)
         dcmSeries.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
-        shutil.rmtree(tmpDir)
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
         
 
 
@@ -56,7 +59,8 @@ class TestDicomStudy(unittest.TestCase):
         os.makedirs(tmpDir)
         dcmStudy.writeToOrganisedFileStructure(tmpDir)
         dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
-        shutil.rmtree(tmpDir)
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 
 class TestDicom2VT2Dicom(unittest.TestCase):
@@ -65,7 +69,9 @@ class TestDicom2VT2Dicom(unittest.TestCase):
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         vtiDict = dcmSeries.buildVTIDict()
         self.assertAlmostEqual(list(vtiDict.keys())[1], 0.05192, places=7, msg='time key in vti dict incorrect')
-        fOut = dcmSeries.writeToVTI('/tmp')
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp3')
+        os.makedirs(tmpDir)
+        fOut = dcmSeries.writeToVTI(tmpDir)
         self.assertTrue(os.path.isfile(fOut), msg='Written pvd file does not exist')
         dd = dcmTK.dcmVTKTK.readPVD(fOut)
         dTimes = sorted(dd.keys())
@@ -73,17 +79,29 @@ class TestDicom2VT2Dicom(unittest.TestCase):
         vti0 = dd[dTimes[0]]
         oo = vti0.GetOrigin()
         self.assertAlmostEqual(oo[1], 0.1166883275304, places=7, msg='origin in vti dict incorrect')
-        dcmTK.dcmVTKTK.deleteFilesByPVD(fOut)
+        if not DEBUG:
+            dcmTK.dcmVTKTK.deleteFilesByPVD(fOut)
+            shutil.rmtree(tmpDir)
 
 
 class TestDicom2MSTable(unittest.TestCase):
     def runTest(self):
-        msTable = spydcm.buildTableOfDicomParamsForManuscript([this_dir], 'a')
-        topDir = '/Volume/MRI_DATA'
-        if os.path.isdir(topDir):
-            msTable = spydcm.buildTableOfDicomParamsForManuscript([os.path.join(topDir, i) for i in os.listdir(topDir)], '4CH')
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp4')
+        os.makedirs(tmpDir)
+        fOut = spydcm.buildTableOfDicomParamsForManuscript([TEST_DIRECTORY], outputCSVPath= os.path.join(tmpDir, 'ms.csv'),seriesDescriptionIdentifier='RVLA')
+        self.assertTrue(os.path.isfile(fOut), msg='Written html file does not exist')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
         
 
+class TestDicom2HTML(unittest.TestCase):
+    def runTest(self):
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp5')
+        os.makedirs(tmpDir)
+        fOut = spydcm.convertInputsToHTML([vti001], tmpDir, QUIET=True)
+        self.assertTrue(os.path.isfile(fOut), msg='Written html file does not exist')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 if __name__ == '__main__':
     unittest.main()

@@ -15,7 +15,7 @@ from setuptools import find_packages, setup, Command
 NAME = 'spydcmtk'
 DESCRIPTION = 'Simple python dicom toolkit.'
 URL = 'https://github.com/fraser29/spydcmtk'
-EMAIL = 'fraser0505@gmail.com'
+EMAIL = 'callaghan.fm@gmail.com'
 AUTHOR = 'Fraser M. Callaghan'
 REQUIRES_PYTHON = '>=3.6.0'
 VERSION = '0.1.0'

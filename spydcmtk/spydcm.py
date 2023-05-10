@@ -6,6 +6,7 @@
 import os
 import sys
 import glob
+import base64
 import argparse
 import numpy as np
 import pydicom as dicom
@@ -35,12 +36,13 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
     print('Made %s --> as %s'%(latest_file, newFileName))
 
 
-def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, seriesDescriptionIdentifier=None):
+def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, seriesDescriptionIdentifier=None):
     """ Build a simple table of dicom parameters that would be suitable for input into a scientific manuscript.
         Output is comma delimited multiline string of Tr, Te (etc) stats. 
 
     Args:
         topLevelDirectoryList (list): list of str that are paths to directories containing dicom files
+        outputCSVPath (str): path to outputCSV
         seriesDescriptionIdentifier (str, optional): A substring of SeriesDescription tag used to select certian series only. Defaults to None.
     """
     dfData = []
@@ -62,24 +64,27 @@ def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, seriesDescriptio
                     dfData.append(resDict)
     stats = {}
     tagList = sorted(dfData[0].keys())
-    print(','+','.join(tagList))
+    strOut = ','+','.join(tagList) + '\n'
     for row in dfData:
-        print(',', end='')
+        strOut += ','
         for i in tagList:
-            print(f'{row[i]},', end='')
+            strOut += f'{row[i]},'
             stats.setdefault(i, []).append(row[i])
-        print('', end='\n')
-    print('\n\nSTATS:', end='\n')
+        strOut += '\n'
+    strOut += '\n\nSTATS:\n'
     for label, myFunc in zip(['Mean', 'Standard Deviation', 'Median', 'Min', 'Max'], 
                              [np.mean, np.std, np.median, np.min, np.max]):
         for k1 in range(len(tagList)):
             if k1 == 0:
-                print(f'{label},', end='')
+                strOut += f'{label},'
             try:
-                print(f'{myFunc(stats[tagList[k1]])},', end='')
+                strOut += f'{myFunc(stats[tagList[k1]])},'
             except:
-                print('NAN,', end='')
-        print('', end='\n')
+                strOut += 'NAN,'
+        strOut += '\n'
+    with open(outputCSVPath, 'w') as fid:
+        fid.write(strOut)
+    return outputCSVPath
 
 
 def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
@@ -170,13 +175,14 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         dcmTools.writeOut_ds(ds, outputDir)
 
 
-def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False):
+def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
     """
     Search recursively for first dicom file under root and return.
     If have dicoms in nice folder structure then this can be a fast way to find, e.g. all series with protocol X
 
     :param rootDir: directory on filesystem
     :param FILE_NAME_ONLY: If true will return the file name [Default False]
+    :param MatchingTag_dict: If given then will only consider dicoms where tag(key) matches value given [Default None]
     :return: pydicom dataset<without pixel data> or fileName<str>
     """
     for root, _, files in os.walk(rootDir):
@@ -186,6 +192,12 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False):
             thisFile = os.path.join(root, iFile)
             try:
                 dataset = dicom.read_file(thisFile, stop_before_pixels=True)
+                if MatchingTag_dict is not None:
+                    tf = []
+                    for iKey in MatchingTag_dict.keys():
+                        tf.append(str(dataset[iKey].value) == str(MatchingTag_dict[iKey]))
+                    if not all(tf):
+                        continue
                 if FILE_NAME_ONLY:
                     return thisFile
                 else:
@@ -218,6 +230,108 @@ def directoryToVTI(dcmDirectory, outputFolder,
             fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             outputFiles.append(fOut)
     return outputFiles
+
+
+# =========================================================================
+# =========================================================================
+## DATA TO HTML
+# =========================================================================
+def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET=False, DEBUG=False):
+    """Convert inputs to HTML viewable via ParaViewGlance (3D volumes and/or surface polymeshes)
+    
+    Keyword arguments:
+    listOfFilePaths             -- May be nii, vtk or dicoms
+    outputFile (optional)       -- Full path to outputfile, if not given then use first input path. Defaults to None.
+    glanceHtml (optional)       -- Full path to glanceHtml template file, if not given then use default. Defaults to None.
+    QUIET (optional)            -- Set True to suppress output. Defaults to False.
+    DEBUG (optional)            -- Set True to prevent cleanup of intermediary files. Defaults to False.
+    Return: path to html file written
+    """
+    
+    CLEAN_UP_LIST = []
+    FILE_TO_VTK_LIST = []
+    ## --- Check inputs ---
+    # Glance html
+    if glanceHtml is None:
+        thisDir = os.path.split(os.path.realpath(__file__))[0]
+        glanceHtml = os.path.join(thisDir, 'ParaViewGlance.html')
+        if not QUIET:
+            print('Using ParaView glance file: %s'%(glanceHtml))
+    if not os.path.isfile(glanceHtml):
+        raise ValueError('%s does not exist'%(glanceHtml))
+    if type(listOfFilePaths) != list:
+        listOfFilePaths = [listOfFilePaths]
+    ## --- Output file ---
+    if outputFile is None:
+        outputDir, fName = os.path.split(listOfFilePaths[0])
+        fNameOut = os.path.splitext(fName)[0]+'.html'
+        outputFile = os.path.join(outputDir, fNameOut)
+    elif os.path.isdir(outputFile):
+        outputDir = outputFile
+        _, fName = os.path.split(listOfFilePaths[0])
+        fNameOut = os.path.splitext(fName)[0]+'.html'
+        outputFile = os.path.join(outputDir, fNameOut)
+    else:
+        outputDir, fNameOut = os.path.split(outputFile)
+
+    ## --- VTK Objs / file paths ---
+    for iPath in listOfFilePaths:
+        if os.path.isfile(iPath):
+            if iPath.endswith('nii'):
+                iPath = dcmTK.dcmVTKTK.nii2vti(iPath)
+                CLEAN_UP_LIST.append(iPath)
+            FILE_TO_VTK_LIST.append(iPath)
+        else:
+            if os.path.isdir(iPath): # If path to dicoms
+                dcmToVTKPath = directoryToVTI(iPath, outputDir)
+                CLEAN_UP_LIST += dcmToVTKPath
+                FILE_TO_VTK_LIST += dcmToVTKPath
+            else:
+                raise ValueError('%s does not exist' % (iPath))
+
+    ## --- Build HTML Recursivly ---
+    if not QUIET:
+        print('Writing %s from base html %s, using:'%(outputFile, glanceHtml))
+        for iFile in listOfFilePaths:
+            print('    %s'%(iFile))
+
+    for k1, iFile in enumerate(FILE_TO_VTK_LIST):
+        outputTemp = outputFile[:-5]+'_TEMP%d.html'%(k1)
+        glanceHtml = __vtkToHTML(iFile, glanceHtml, outputTemp)
+        CLEAN_UP_LIST.append(outputTemp)
+    os.rename(CLEAN_UP_LIST.pop(), outputFile)
+
+    ## --- Clean up --- // Skipped if in DEBUG mode
+    if not DEBUG:
+        if not QUIET:
+            print('Cleaning up:', str(CLEAN_UP_LIST))
+        for ifile in CLEAN_UP_LIST:
+            os.unlink(ifile)
+
+    return outputFile
+
+
+def __vtkToHTML(vtkDataPath, glanceHtml, outputFile):
+    # Extract data as base64
+    with open(vtkDataPath, "rb") as data:
+        dataContent = data.read()
+        base64Content = base64.b64encode(dataContent)
+        base64Content = base64Content.decode().replace("\n", "")
+    # Create new output file
+    with open(glanceHtml, mode="r", encoding="utf-8") as srcHtml:
+        with open(outputFile, mode="w", encoding="utf-8") as dstHtml:
+            for line in srcHtml:
+                if "</body>" in line:
+                    dstHtml.write("<script>\n")
+                    dstHtml.write('var contentToLoad = "%s";\n\n' % base64Content)
+                    dstHtml.write(
+                        'Glance.importBase64Dataset("%s" , contentToLoad, glanceInstance.proxyManager);\n'
+                        % os.path.basename(vtkDataPath)
+                    )
+                    dstHtml.write("glanceInstance.showApp();\n")
+                    dstHtml.write("</script>\n")
+                dstHtml.write(line)
+    return outputFile
 
 
 ### ====================================================================================================================
@@ -274,6 +388,10 @@ def runActions(args, ap):
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
                         iSeries.writeToVTI(outputPath=args.outputFolder)
+            elif args.html:
+                for iDS in ListDicomStudies:
+                    for iSeries in iDS:
+                        convertInputsToHTML([iSeries.getRootDir()], args.outputFolder)
             elif args.outputFolder is not None:
                 outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
@@ -306,6 +424,8 @@ def main():
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
+    ap.add_argument('-html', dest='html',
+        help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     # -- program behaviour guidence -- #
     ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dicom files missing header meta)',
                             action='store_true')

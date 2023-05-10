@@ -229,7 +229,7 @@ class DicomSeries(list):
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
-                iA = self[c0].pixel_array
+                iA = self[c0].pixel_array.T
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()

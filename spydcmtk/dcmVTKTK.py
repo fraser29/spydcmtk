@@ -520,4 +520,3 @@ class NoVtkError(Exception):
         pass
     def __str__(self):
         return 'NoVtkError: VTK not found. Run: "pip install vtk"'
-    
