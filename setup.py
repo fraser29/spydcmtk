@@ -22,13 +22,9 @@ VERSION = '0.1.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pydicom', 'numpy', 'tqdm'
+    'pydicom', 'numpy', 'tqdm', 'vtk'
 ]
 
-# What packages are optional?
-EXTRAS = {
-    'dcm-vtk conversion': ['vtk'],
-}
 
 # The rest you shouldn't have to touch too much :)
 # ------------------------------------------------
