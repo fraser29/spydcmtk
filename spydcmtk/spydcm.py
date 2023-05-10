@@ -5,7 +5,6 @@
 
 import os
 import sys
-import glob
 import base64
 import argparse
 import numpy as np
@@ -26,14 +25,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
         outputPath (str): Path to output directory where to save nifti
         fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)
     """
-    dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, dcmDir)
-    print('RUNNING: %s'%(dcm2niiCmd))
-    os.system(dcm2niiCmd)
-    list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
-    latest_file = max(list_of_files, key=os.path.getctime)
-    newFileName = os.path.join(outputPath, fileName)
-    os.rename(latest_file, newFileName)
-    print('Made %s --> as %s'%(latest_file, newFileName))
+    return dcmTools._writeDirectoryToNII(dcmDir, outputPath, fileName)
 
 
 def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, seriesDescriptionIdentifier=None):
@@ -284,8 +276,12 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
         else:
             if os.path.isdir(iPath): # If path to dicoms
                 dcmToVTKPath = directoryToVTI(iPath, outputDir)
+                for ifile in dcmToVTKPath:
+                    if ifile.endswith('.pvd'):
+                        FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.readPVDFileName(ifile).values())
+                    else:
+                        FILE_TO_VTK_LIST.append(ifile)
                 CLEAN_UP_LIST += dcmToVTKPath
-                FILE_TO_VTK_LIST += dcmToVTKPath
             else:
                 raise ValueError('%s does not exist' % (iPath))
 
@@ -306,7 +302,10 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
         if not QUIET:
             print('Cleaning up:', str(CLEAN_UP_LIST))
         for ifile in CLEAN_UP_LIST:
-            os.unlink(ifile)
+            if iFile.endswith('.pvd'):
+                dcmTK.dcmVTKTK.deleteFilesByPVD(iFile)
+            else:
+                os.unlink(ifile)
 
     return outputFile
 
@@ -383,15 +382,21 @@ def runActions(args, ap):
             if args.nii:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
-                        iSeries.writeToNII(outputPath=args.outputFolder)
+                        fOut = iSeries.writeToNII(outputPath=args.outputFolder)
+                        if not args.QUIET:
+                            print(f'Written {fOut}')
             elif args.vti:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
-                        iSeries.writeToVTI(outputPath=args.outputFolder)
+                        fOut = iSeries.writeToVTI(outputPath=args.outputFolder)
+                        if not args.QUIET:
+                            print(f'Written {fOut}')
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
-                        convertInputsToHTML([iSeries.getRootDir()], args.outputFolder)
+                        fOut = convertInputsToHTML([iSeries.getRootDir()], args.outputFolder)
+                        if not args.QUIET:
+                            print(f'Written {fOut}')
             elif args.outputFolder is not None:
                 outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])

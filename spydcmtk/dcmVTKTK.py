@@ -51,6 +51,7 @@ def arrToVTI(arr, meta, ds=None):
         raise NoVtkError()
     dims = arr.shape
     vtkDict = {}
+    timesUsed = []
     for k1 in range(dims[-1]):
         newImg = vtk.vtkImageData()
         newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
@@ -66,7 +67,10 @@ def arrToVTI(arr, meta, ds=None):
         try:
             thisTime = meta['Times'][k1]
         except KeyError:
-            thisTime = 0.0
+            thisTime = k1
+        if thisTime in timesUsed:
+            thisTime = k1
+        timesUsed.append(thisTime)
         vtkDict[thisTime] = newImg
     return vtkDict
 

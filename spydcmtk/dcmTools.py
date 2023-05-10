@@ -6,6 +6,7 @@
 import os
 import datetime
 import json
+import glob
 import datetime
 import numpy as np
 import tarfile
@@ -308,3 +309,13 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
     return dsDict
 
 
+def _writeDirectoryToNII(dcmDir, outputPath, fileName):
+    dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, dcmDir)
+    print('RUNNING: %s'%(dcm2niiCmd))
+    os.system(dcm2niiCmd)
+    list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
+    latest_file = max(list_of_files, key=os.path.getctime)
+    newFileName = os.path.join(outputPath, fileName)
+    os.rename(latest_file, newFileName)
+    print('Made %s --> as %s'%(latest_file, newFileName))
+    return newFileName

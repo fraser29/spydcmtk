@@ -194,7 +194,7 @@ class DicomSeries(list):
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNamingTags, '.nii.gz')
-        return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
+        return dcmTools._writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNamingTags, '')
@@ -255,9 +255,10 @@ class DicomSeries(list):
         return self._getPixelSpacing()[1]
 
     def getDeltaSlice(self):
-        if len(set(self.sliceLocations)) == 1: # May be CINE at same location
+        sliceLocS = sorted(list(set(self.sliceLocations)))
+        if len(sliceLocS) == 1: # May be CINE at same location
             return float(self.getTag('SliceThickness'))
-        return np.mean(np.diff(self.sliceLocations))
+        return np.mean(np.diff(sliceLocS))
 
     def getTemporalResolution(self):
         try:
