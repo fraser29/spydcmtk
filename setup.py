@@ -105,7 +105,7 @@ setup(
     entry_points={
         "console_scripts": ["spydcmtk=spydcmtk.spydcm:main"],
     },
-    package_data={NAME: ['spydcmtk.conf']},
+    package_data={NAME: ['spydcmtk.conf', 'ParaViewGlance.html']},
     install_requires=REQUIRED,
     # extras_require=EXTRAS,
     include_package_data=True,
