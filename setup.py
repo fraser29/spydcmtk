@@ -107,7 +107,7 @@ setup(
     },
     package_data={NAME: ['spydcmtk.conf']},
     install_requires=REQUIRED,
-    extras_require=EXTRAS,
+    # extras_require=EXTRAS,
     include_package_data=True,
     license='MIT',
     classifiers=[
