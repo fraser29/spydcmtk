@@ -171,6 +171,44 @@ def __getTags(dataset, tagsList):
     return tagsDict
 
 
+def getRootDirWithSEdirs(startDir):
+    """
+    Search from startDir until find rootDir with format of subdirs:
+        SE123_
+        ... etc
+    param1: start directory of search
+    return: rootdirectory with subfolders of SE{int}_ format (startDir if not found)
+    """
+
+    def __isSEDirFormat(dd):
+        if dd[:2] == "SE":
+            try:
+                int(dd.split("_")[0][2:])
+            except ValueError:
+                return False
+            return True
+        return False
+
+    dicomRootDir = startDir
+    for root, dirs, _ in os.walk(startDir):
+        if any([__isSEDirFormat(dd) for dd in dirs]):
+            dicomRootDir = root
+            break
+    return dicomRootDir
+
+
+def seriesNumbersToDicomDirList(dicomRootDir, seriesNumbers):
+    if not type(seriesNumbers) == list:
+        seriesNumbers = [seriesNumbers]
+    dicomRootDir = getRootDirWithSEdirs(dicomRootDir)
+    SEList = os.listdir(dicomRootDir)
+    dicomDirs = []
+    for iSE in seriesNumbers:
+        ii = [jj for jj in SEList if "SE%d" % (iSE) in jj.split('_')]
+        dicomDirs.append(os.path.join(dicomRootDir, ii[0]))
+    return dicomDirs
+
+
 def walkdir(folder):
     """Walk through each files in a directory"""
     for dirpath, _, files in os.walk(folder):

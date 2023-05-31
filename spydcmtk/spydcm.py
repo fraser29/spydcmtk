@@ -105,6 +105,9 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     else:
         A = dcmTK.dcmVTKTK.getArrayAsNumpy(vti, arrayName)
     A = np.reshape(A, vti.GetDimensions(), 'F')
+    A = np.rot90(A)
+    A = np.flipud(A)
+    print(A.shape)
     if patientMatrixDict is None:
         patientMatrixDict = dcmTK.dcmVTKTK.getPatientMatrixDict(vti)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
@@ -143,7 +146,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
         ds.SliceThickness = patientMatrixDict['SliceThickness']
-        ds.SpacingBetweenSlices = patientMatrixDict['SliceThickness']
+        try:
+            ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
+        except KeyError:
+            ds.SpacingBetweenSlices = patientMatrixDict['SliceThickness']
         ds.SmallestImagePixelValue = max([0, np.min(sliceA)])
         mx = min([32767, np.max(sliceA)])
         ds.LargestImagePixelValue = mx
@@ -152,10 +158,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.PixelSpacing = list(patientMatrixDict['PixelSpacing'])
         kVec = np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
                         patientMatrixDict['ImageOrientationPatient'][3:])
-        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*kVec*patientMatrixDict['SliceThickness']
+        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*kVec*ds.SpacingBetweenSlices
         ds.ImagePositionPatient = list(ImagePositionPatient)
         try:
-            sliceLoc = tagUpdateDict['SliceLocation0'] + k*patientMatrixDict['SliceThickness']
+            sliceLoc = tagUpdateDict['SliceLocation0'] + k*ds.SpacingBetweenSlices
         except KeyError:
             sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
         ds.SliceLocation = sliceLoc
