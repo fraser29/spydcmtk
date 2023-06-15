@@ -467,12 +467,19 @@ def addFieldDataFromDcmDataSet(vtkObj, ds):
             continue # tag not found
 
 
-def getPatientMatrixDict(data):
-    patientMatrixDict = {'PixelSpacing': getFieldData(data, 'PixelSpacing'), 
-                         'ImagePositionPatient': getFieldData(data, 'ImagePositionPatient'), 
-                         'ImageOrientationPatient': getFieldData(data, 'ImageOrientationPatient'), 
-                         'SliceThickness': getFieldData(data, 'SliceThickness')}
-    return patientMatrixDict
+def getPatientMatrixDict(data, patMat):
+    dx,dy,dz = data.GetSpacing()
+    oo = data.GetOrigin()
+    try: # Try from passed Matrix first , else field data, else axis aligned
+        iop = getFieldData(data, 'ImageOrientationPatient')
+    except AttributeError:
+        iop = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    iop = patMat.get('ImageOrientationPatient', iop)
+    patMat = {'PixelSpacing': [dx*1000.0, dy*1000.0],
+                         'ImagePositionPatient': [i*1000.0 for i in oo],
+                         'ImageOrientationPatient': iop,
+                         'SpacingBetweenSlices': dz*1000.0}
+    return patMat
 
 
 def testVTK():

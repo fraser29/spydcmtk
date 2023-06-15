@@ -97,7 +97,7 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
     return fullDirsWithDicoms
 
 
-def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMatrixDict=None):
+def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMatrixDict={}):
     if type(vtiFile) == str:
         vti = dcmTK.dcmVTKTK.readVTKFile(vtiFile)
     if arrayName is None:
@@ -108,8 +108,7 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.rot90(A)
     A = np.flipud(A)
     print(A.shape)
-    if patientMatrixDict is None:
-        patientMatrixDict = dcmTK.dcmVTKTK.getPatientMatrixDict(vti)
+    patientMatrixDict = dcmTK.dcmVTKTK.getPatientMatrixDict(vti, patientMatrixDict)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
 
 
@@ -145,11 +144,8 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.RawDataRunNumber = k+1
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
-        ds.SliceThickness = patientMatrixDict['SliceThickness']
-        try:
-            ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
-        except KeyError:
-            ds.SpacingBetweenSlices = patientMatrixDict['SliceThickness']
+        ds.SliceThickness = patientMatrixDict['SpacingBetweenSlices'] # Can no longer claim overlapping slices if have modified
+        ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
         ds.SmallestImagePixelValue = max([0, np.min(sliceA)])
         mx = min([32767, np.max(sliceA)])
         ds.LargestImagePixelValue = mx
