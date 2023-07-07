@@ -74,6 +74,7 @@ def arrToVTI(arr, meta, ds=None):
         vtkDict[thisTime] = newImg
     return vtkDict
 
+
 def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
 
@@ -98,25 +99,41 @@ def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
         return writeVTI(vtkDict[times[0]], fOut)
+    
 
-
-def getTransFormMatrixFromFieldData(vtkObj, CONVERT_TO_M=True):
+def __transformMfromFieldData(vtkObj, CONVERT_TO_M=True):
     iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
     c = [iop[1]*iop[5]-iop[2]*iop[4],
          iop[2]*iop[3]-iop[0]*iop[5],
          iop[0]*iop[4]-iop[1]*iop[3]]
     iop += c
-    ipp = [vtkObj.GetFieldData().GetArray('ImagePositionPatient').GetTuple(i)[0] for i in range(3)]
-    if CONVERT_TO_M:
-        ipp = [i*0.001 for i in ipp]
-        # ipp = [i*1000.0 for i in ipp]
-    matrix = [iop[0], iop[3], iop[6], ipp[0],
-              iop[1], iop[4], iop[7], ipp[1],
-              iop[2], iop[5], iop[8], ipp[2],
+    # ipp = [vtkObj.GetFieldData().GetArray('ImagePositionPatient').GetTuple(i)[0] for i in range(3)]
+    ipp = vtkObj.GetOrigin()
+    dx, dy, dz = vtkObj.GetSpacing()
+    # if CONVERT_TO_M:
+    #     ipp = [i*0.001 for i in ipp]
+    matrix = [iop[0]*dx, iop[3]*dy, iop[6]*dz, ipp[0],
+              iop[1]*dx, iop[4]*dy, iop[7]*dz, ipp[1],
+              iop[2]*dx, iop[5]*dy, iop[8]*dz, ipp[2],
               0,0,0,1]
+    return matrix
+
+
+def getTransFormMatrixFromFieldData(vtkObj, CONVERT_TO_M=True):
+    matrix = __transformMfromFieldData(vtkObj, CONVERT_TO_M)
     transFormMatrix = vtk.vtkTransform()
     transFormMatrix.SetMatrix(matrix)
     return transFormMatrix
+
+
+def __matrixToDicomTagFieldData(vtiObj, matrix):
+    iop = [matrix[0], matrix[4], matrix[8], matrix[1], 
+           matrix[5], matrix[9], matrix[2], matrix[6], 
+           matrix[10]]
+    ipp = [matrix[3], matrix[7], matrix[11]]
+    addFieldData(vtkObj=vtiObj, fieldVal=iop, fieldName='ImageOrientationPatient')
+    addFieldData(vtkObj=vtiObj, fieldVal=ipp, fieldName='ImagePositionPatient')
+
 
 def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
     """
@@ -139,6 +156,7 @@ def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
     tfilterMatrix.SetInputData(vtiObj)
     tfilterMatrix.Update()
     return tfilterMatrix.GetOutput()
+
 
 # ===================================================================================================
 def __writerWrite(writer, data, fileName):
