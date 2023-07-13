@@ -368,12 +368,15 @@ def runActions(args, ap):
         # check arguments to avoid reading all dicoms and then doing nothing...
         if not checkArgs(args):
             ap.exit(0, f'No action given. Exiting SPYDCMTK without action\n')
+        if args.STREAM:
+            dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE)
+            sys.exit()
         try:
             onlyOverview = args.quickInspect or args.quickInspectFull
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
-        # Let IOERROR play out here is not correct input
+            # Let IOERROR play out here is not correct input
         ##
         if args.quickInspect or args.quickInspectFull:
                 print(ListDicomStudies.getSummaryString(args.quickInspectFull))
@@ -437,6 +440,8 @@ def main():
     ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dicom files missing header meta)',
                             action='store_true')
     ap.add_argument('-QUIET', dest='QUIET', help='Suppress progress bars and information output to terminal',
+                            action='store_true')
+    ap.add_argument('-STREAM', dest='STREAM', help='To organise dicoms rapidly without any quality checking',
                             action='store_true')
     ##
 

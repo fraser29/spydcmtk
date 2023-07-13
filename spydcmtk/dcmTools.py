@@ -313,6 +313,20 @@ def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAM
     ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
     return destFile
 
+def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False):
+    nFiles = countFilesInDir(inputDir)
+    for thisFile in tqdm(walkdir(inputDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
+        if 'dicomdir' in os.path.split(thisFile)[1].lower():
+            continue
+        if thisFile.endswith('json'):
+            continue
+        try:
+            dataset = dicom.dcmread(thisFile, force=FORCE_READ, stop_before_pixels=False)
+            fOut = getSaveFileNameFor_ds_UID(dataset, outputDir)
+            os.makedirs(os.path.split(fOut)[0], exist_ok=True)
+            dataset.save_as(fOut, write_like_original=False)
+        except dicom.filereader.InvalidDicomError:
+            continue
 
 def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
     dsDict = {}

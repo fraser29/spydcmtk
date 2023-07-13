@@ -288,6 +288,7 @@ class DicomSeries(list):
     def getSeriesInfoDict(self):
         outDict = {'SeriesNumber':self.getTag('SeriesNumber'),
             'SeriesDescription':self.getTag('SeriesDescription'),
+            'StudyDate':self.getTag('StudyDate'),
             'StartTime':self.getTag('AcquisitionTime'),
             'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
@@ -305,8 +306,13 @@ class DicomSeries(list):
             'RepetitionTime':self.getTag('RepetitionTime'),
             'PulseSequenceName':self.getPulseSequenceName(),
             'MagneticFieldStrength': self.getTag('MagneticFieldStrength'),
-            'InternalPulseSequenceName':self.getInternalPulseSequenceName()}
+            'InternalPulseSequenceName':self.getInternalPulseSequenceName(),
+            'ReconstructionDiameter': self.getTag(0x00181100),
+            'AcquisitionMatrix': f'"{str(self.getTag(0x00181310))}"',
+            'ManufacturerModelName': self.getTag('ManufacturerModelName'),
+            'SoftwareVersions': f'"{str(self.getTag(0x00181020))}"',}
         outDict['nSlice'] = len(self)
+        outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
