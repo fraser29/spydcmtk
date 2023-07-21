@@ -18,7 +18,7 @@ except ImportError:
 VTK_AVAILABLE = True
 try:
     import vtk
-    from vtk.util import numpy_support
+    from vtk.util import numpy_support # type: ignore
 except ImportError:
     VTK_AVAILABLE = False
 
