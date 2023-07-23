@@ -58,7 +58,7 @@ def arrToVTI(arr, meta, ds=None):
         newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
         newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
         A3 = arr[:,:,:,k1]
-        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(int)
+        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int16)
         aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
         aArray.SetName('PixelData')
         newImg.GetPointData().SetScalars(aArray)

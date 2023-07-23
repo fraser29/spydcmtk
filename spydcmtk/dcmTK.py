@@ -312,7 +312,10 @@ class DicomSeries(list):
             'ManufacturerModelName': self.getTag('ManufacturerModelName'),
             'SoftwareVersions': f'"{str(self.getTag(0x00181020))}"',}
         outDict['nSlice'] = len(self)
-        outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
+        try:
+            outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
+        except ValueError:
+            outDict['AcquiredResolution'] = f"{outDict['dRow']},{outDict['dCol']}"
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
