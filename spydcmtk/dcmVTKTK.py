@@ -52,10 +52,12 @@ def arrToVTI(arr, meta, ds=None):
     dims = arr.shape
     vtkDict = {}
     timesUsed = []
+    mat3x3 = _buildMatrix3x3(meta)
     for k1 in range(dims[-1]):
         newImg = vtk.vtkImageData()
         newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
         newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
+        newImg.SetDirectionMatrix(mat3x3)
         newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
         A3 = arr[:,:,:,k1]
         npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int16)
@@ -157,6 +159,16 @@ def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
     tfilterMatrix.Update()
     return tfilterMatrix.GetOutput()
 
+def _buildMatrix3x3(meta):
+    iop = np.zeros((3,3))
+    iop[0,:] = meta['ImageOrientationPatient'][0:3]
+    iop[1,:] = meta['ImageOrientationPatient'][3:6]
+    iop[2,:] = np.cross(iop[0,:], iop[1,:])
+    mat = vtk.vtkMatrix3x3()
+    for i in range(3):
+        for j in range(3):
+            mat.SetElement(i, j, iop[i,j])
+    return mat
 
 # ===================================================================================================
 def __writerWrite(writer, data, fileName):
