@@ -196,10 +196,10 @@ class DicomSeries(list):
         fileName = self.__generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools._writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
-    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
+    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
         fileName = self.__generateFileName(outputNamingTags, '')
         A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath, ds=self[0])
+        return dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath, ds=self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
 
     def buildVTIDict(self):
         A, meta = self.getPixelDataAsNumpy()

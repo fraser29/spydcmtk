@@ -29,7 +29,7 @@ import spydcmtk.dcmTools as dcmTools
 # EXPOSED METHODS
 # ===================================================================================================
 
-def arrToVTI(arr, meta, ds=None):
+def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=True):
     """Convert array (+meta) to VTI dict (keys=times, values=VTI volumes). 
 
     Args:
@@ -40,6 +40,8 @@ def arrToVTI(arr, meta, ds=None):
                     'ImageOrientationPatient': list_6 -> ImageOrientationPatient, 
                     'Times': list_nTime -> times (can be missing if nTime=1)}
         ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
+        INCLUDE_MATRIX (bool [True]) : Boolean to include transform matrix (from ImageOrientationPatient) 
+                                        in the image data (as DirectionMatrix). 
     
     Returns:
         vtiDict
@@ -52,12 +54,17 @@ def arrToVTI(arr, meta, ds=None):
     dims = arr.shape
     vtkDict = {}
     timesUsed = []
-    mat3x3 = _buildMatrix3x3(meta)
+    try:
+        mat3x3 = _buildMatrix3x3(meta)
+    except KeyError:
+        # Silently catch error and write without DirectionMatrix
+        INCLUDE_MATRIX = False
     for k1 in range(dims[-1]):
         newImg = vtk.vtkImageData()
         newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
         newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
-        newImg.SetDirectionMatrix(mat3x3)
+        if INCLUDE_MATRIX:
+            newImg.SetDirectionMatrix(mat3x3)
         newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
         A3 = arr[:,:,:,k1]
         npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int16)
@@ -77,7 +84,7 @@ def arrToVTI(arr, meta, ds=None):
     return vtkDict
 
 
-def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
+def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None, INCLUDE_MATRIX=True):
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
 
     Args:
@@ -94,7 +101,7 @@ def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None):
     Raises:
         ValueError: If VTK import not available
     """
-    vtkDict = arrToVTI(arr, meta, ds=ds)
+    vtkDict = arrToVTI(arr, meta, ds=ds, INCLUDE_MATRIX=INCLUDE_MATRIX)
     times = sorted(vtkDict.keys())
     if len(times) > 1:
         return writeVtkPvdDict(vtkDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
@@ -178,6 +185,16 @@ def __writerWrite(writer, data, fileName):
     return fileName
 
 
+def writeNII(data, fileName):
+    writer = vtk.vtkNIFTIImageWriter()
+    return __writerWrite(writer, data, fileName)
+
+
+def writeMHA(data, fileName):
+    writer = vtk.vtkMetaImageWriter()
+    return __writerWrite(writer, data, fileName)
+
+
 def writeVTS(data, fileName):
     writer = vtk.vtkXMLStructuredGridWriter()
     return __writerWrite(writer, data, fileName)
@@ -220,9 +237,10 @@ def nii2vti(fullFileName):
 def writeVtkFile(data, fileName):
     if fileName.endswith('.vti'):
         return writeVTI(data, fileName)
-    
-    if fileName.endswith('.vts'):
+    elif fileName.endswith('.vts'):
         return writeVTS(data, fileName)
+    elif fileName.endswith('.mha'):
+        return writeMHA(data, fileName)
     
 def readVTKFile(fileName):
     # --- CHECK EXTENSTION - READ FILE ---

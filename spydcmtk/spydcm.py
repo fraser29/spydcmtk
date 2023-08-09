@@ -202,7 +202,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
 
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), 
-                   QUITE=True, FORCE=False):
+                   QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
 
@@ -217,14 +217,18 @@ def directoryToVTI(dcmDirectory, outputFolder,
     Returns:
         list: List of output file names written
     """
-    outputFiles = []
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
+    return __listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+
+def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags, QUIET=True, INCLUDE_MATRIX=True):
+    outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
-            fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags)
+            fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
             outputFiles.append(fOut)
+            if not QUIET:
+                print(f'Written {fOut}')
     return outputFiles
-
 
 # =========================================================================
 # =========================================================================
@@ -370,7 +374,7 @@ def runActions(args, ap):
             ap.exit(0, f'No action given. Exiting SPYDCMTK without action\n')
         if args.STREAM:
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE)
-            sys.exit()
+            return 0
         try:
             onlyOverview = args.quickInspect or args.quickInspectFull
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
@@ -391,11 +395,7 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                for iDS in ListDicomStudies:
-                    for iSeries in iDS:
-                        fOut = iSeries.writeToVTI(outputPath=args.outputFolder)
-                        if not args.QUIET:
-                            print(f'Written {fOut}')
+                __listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUITE, INCLUDE_MATRIX=(not args.NO_MATRIX))
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
@@ -434,6 +434,7 @@ def main():
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
+    ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     # -- program behaviour guidence -- #
