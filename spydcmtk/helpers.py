@@ -33,8 +33,9 @@ DEBUG = config.get("app", "debug")
 
 # default_items = [vv for _,vv in config.items('DEFAULT')]
 
-SERIES_OVERVIEW_TAG_LIST = json.loads(config.get("series_overview_tags","tagList"))
-STUDY_OVERVIEW_TAG_LIST = json.loads(config.get("study_overview_tags","tagList"))
-SUBJECT_OVERVIEW_TAG_LIST = json.loads(config.get("patient_overview_tags","tagList"))
+SERIES_OVERVIEW_TAG_LIST  = json.loads(config.get("series_overview_tags", "tagList"))
+STUDY_OVERVIEW_TAG_LIST   = json.loads(config.get("study_overview_tags", "tagList"))
+SUBJECT_OVERVIEW_TAG_LIST = json.loads(config.get("patient_overview_tags", "tagList"))
+VTI_NAMING_TAG_LIST       = json.loads(config.get("vti_naming_tags", "tagList"))
 # MANUSCRIPT_TABLE_TAG_LIST = json.loads(config.get("manuscript_table_tags","tagList"))
 

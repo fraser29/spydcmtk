@@ -13,6 +13,7 @@ import pydicom as dicom
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
+from spydcmtk.helpers import VTI_NAMING_TAG_LIST
 
 
 
@@ -201,7 +202,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
     return None
 
 def directoryToVTI(dcmDirectory, outputFolder, 
-                   outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), 
+                   outputNamingTags=VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
@@ -220,7 +221,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
     return __listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
 
-def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags, QUIET=True, INCLUDE_MATRIX=True):
+def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
@@ -395,7 +396,7 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                __listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUITE, INCLUDE_MATRIX=(not args.NO_MATRIX))
+                __listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
