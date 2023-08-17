@@ -6,6 +6,7 @@
 import os
 import pydicom as dicom
 from pydicom.uid import generate_uid
+from datetime import datetime
 from tqdm import tqdm
 import json
 import numpy as np
@@ -65,9 +66,11 @@ class DicomSeries(list):
     def sortBySlice_InstanceNumber(self):
         self.sort(key=dcmTools.sliceLoc_InstanceNumberSortKey)
 
-    def getTag(self, tag, dsID=0, ifNotFound='Unknown'):
+    def getTag(self, tag, dsID=0, ifNotFound='Unknown', convertToType=None):
         try:
             tt = self.getTagObj(tag, dsID)
+            if convertToType is not None:
+                return convertToType(tt.value)
             return tt.value
         except KeyError:
             return ifNotFound
@@ -126,6 +129,14 @@ class DicomSeries(list):
         names.append('ImagesInSeries')
         vals.append(len(self))
         return names, vals
+
+    def getSeriesTimeAsDatetime(self):
+        dos = self.getTag('SeriesDate', ifNotFound="19000101")
+        tos = self.getTag('SeriesTime', ifNotFound="000000")
+        try:
+            return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S.%f")
+        except ValueError:
+            return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S")
 
     def yieldDataset(self):
         for ds in self:
@@ -330,6 +341,16 @@ class DicomSeries(list):
                 break
             se_instance_set.add(se_instance_str)
 
+    def getStudyOutputDir(self, rootDir='', anonName=None, studyPrefix=''):
+        # 'AccessionNumber' 'StudyID'
+        if anonName is not None:
+            ss = dcmTools.cleanString('%s_%s_%s' % (anonName, self.getTag('StudyID', ifNotFound='StudyID-unknown'),
+                                         self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
+        else:
+            ss = dcmTools.cleanString('%s_%s_%s' % (self.getTag('PatientName', ifNotFound='NAME-unknown'),
+                                            self.getTag('StudyID', ifNotFound='StudyID-unknown'),
+                                            self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
+        return os.path.join(rootDir, studyPrefix+ss)
 
 class DicomStudy(list):
     """
@@ -463,18 +484,9 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
-    def __getStudyOutputDir(self, anonName=None):
-        if anonName is not None:
-            return dcmTools.cleanString('%s_%s' % (self.getTag('StudyID', ifNotFound='StudyID-unknown'),
-                                         self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
-        else:
-            return dcmTools.cleanString('%s_%s_%s' % (self.getTag('PatientName', ifNotFound='NAME-unknown'),
-                                            self.getTag('StudyID', ifNotFound='StudyID-unknown'),
-                                            self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
-
     def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
-        studyOutputDir = os.path.join(patientOutputDir, studyPrefix+self.__getStudyOutputDir(anonName))
+        studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
         for iSeries in self:
             iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
         return studyOutputDir
