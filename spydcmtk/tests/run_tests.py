@@ -103,5 +103,29 @@ class TestDicom2HTML(unittest.TestCase):
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
+
+class TestZipAndUnZip(unittest.TestCase):
+    def runTest(self):
+        zipF = "/Volume/TEST/zipped.zip"
+        if not os.path.isfile(zipF):
+            print(f"WARNING: UnZip test not run - {zipF} not found")
+            return # Don't have data - can not run test
+        LDS = dcmTK.ListOfDicomStudies.setFromInput(zipF)
+        self.assertTrue(len(LDS[0].getSeriesBySeriesNumber(8))==5, msg='Incorrect number of images for series 8')
+        self.assertTrue(len(LDS[0].getSeriesBySeriesNumber(9))==6, msg='Incorrect number of images for series 9')
+        
+        tempTestDir = os.path.split(zipF)[0]
+        outputs = LDS.writeToZipArchive(tempTestDir, CLEAN_UP=False)
+        self.assertTrue(os.path.isfile(outputs[0]), msg='Written zip file does not exist')
+        self.assertTrue(os.path.isdir(outputs[0][:-4]), msg='Written zip temp directory does not exist')
+        shutil.rmtree(outputs[0][:-4])
+        os.unlink(outputs[0])
+        outputs = LDS.writeToZipArchive(tempTestDir, CLEAN_UP=True)
+        self.assertTrue(os.path.isfile(outputs[0]), msg='Written zip file does not exist')
+        self.assertFalse(os.path.isdir(outputs[0][:-4]), msg='Written zip temp directory does exist - should have been cleaned up')
+        os.unlink(outputs[0])
+
+
+
 if __name__ == '__main__':
     unittest.main()

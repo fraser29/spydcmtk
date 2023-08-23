@@ -10,6 +10,7 @@ from datetime import datetime
 from tqdm import tqdm
 import json
 import numpy as np
+import shutil
 
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
@@ -491,6 +492,15 @@ class DicomStudy(list):
             iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
         return studyOutputDir
 
+    def writeToZipArchive(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix='', CLEAN_UP=True):
+        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, SE_RENAME, studyPrefix)
+        r, f = os.path.split(studyOutputDir)
+        shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
+        fileOut = studyOutputDir+'.zip'
+        if CLEAN_UP:
+            shutil.rmtree(studyOutputDir)
+        return fileOut
+
     def checkIfShouldUse_SAFE_NAMING(self):
         se_instance_set = set()
         for i in self:
@@ -523,11 +533,9 @@ class ListOfDicomStudies(list):
             elif input.endswith('tar.gz'):
                 return ListOfDicomStudies.setFromTar(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
                                                             FORCE_READ=FORCE_READ)
-            # elif input.endswith('zip'): # TODO
-            #     return ListOfDicomStudies.setFromZip(input, OVERVIEW=OVERVIEW, 
-            #                                                         HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-            #                                                         FORCE_READ=FORCE_READ, 
-            #                                                         ONE_FILE_PER_DIR=ONE_FILE_PER_DIR)
+            elif input.endswith('zip'):
+                return ListOfDicomStudies.setFromZip(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                            FORCE_READ=FORCE_READ)
             else:
                 raise IOError("SPDCMTK only capable to read from directory, tar or tar.gz\n")
 
@@ -553,6 +561,12 @@ class ListOfDicomStudies(list):
                                     matchingTagValuePair=matchTagPair, QUIET=True)
         return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
+    @classmethod
+    def setFromZip(cls, zipFileName, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
+        dicomDict = dcmTools.getDicomDictFromZip(zipFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
+                                    matchingTagValuePair=matchTagPair, QUIET=True)
+        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+
 
     def __str__(self):
         return '%d studies, %d dicoms'%(len(self), self.getNumberOfDicoms())
@@ -567,6 +581,13 @@ class ListOfDicomStudies(list):
         outDirs = []
         for iStudy in self:
             ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, SE_RENAME=SE_RENAME)
+            outDirs.append(ooD)
+        return outDirs
+
+    def writeToZipArchive(self, outputRootDir, anonName=None, SE_RENAME={}, CLEAN_UP=True):
+        outDirs = []
+        for iStudy in self:
+            ooD = iStudy.writeToZipArchive(outputRootDir, anonName=None, SE_RENAME={}, CLEAN_UP=CLEAN_UP)
             outDirs.append(ooD)
         return outDirs
 

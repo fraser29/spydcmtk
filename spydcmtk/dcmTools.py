@@ -10,6 +10,7 @@ import glob
 import datetime
 import numpy as np
 import tarfile
+import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 
@@ -216,7 +217,7 @@ def walkdir(folder):
             yield os.path.abspath(os.path.join(dirpath, filename))
 
 
-def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=True,
+def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
                         matchingTagValuePair=None):
     # for sub dir in tar get first dicom - return list of ds
     dsDict = {}
@@ -250,6 +251,35 @@ def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                 if not QUIET:
                     print('FAIL: %s'%(thisFile))
     tar.close()
+    return dsDict
+
+
+def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
+                        matchingTagValuePair=None):
+    """Read a zip archive, extract dicoms to structures dictionary
+    """
+    dsDict = {}
+    with zipfile.ZipFile(zipFileToRead) as zf:
+        for file in zf.namelist():
+            with zf.open(file) as thisFile:
+                try:
+                    dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
+                    if matchingTagValuePair is not None:
+                        if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
+                            continue
+                    studyUID = str(dataset.StudyInstanceUID)
+                    seriesUID = str(dataset.SeriesInstanceUID)
+                    if studyUID not in dsDict:
+                        dsDict[studyUID] =  {}
+                    if seriesUID not in dsDict[studyUID]:
+                        dsDict[studyUID][seriesUID] = []
+                    dsDict[studyUID][seriesUID].append(dataset)
+
+                    if FIRST_ONLY:
+                        return dsDict
+                except dicom.filereader.InvalidDicomError:
+                    if not QUIET:
+                        print('FAIL: %s'%(thisFile))
     return dsDict
 
 def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, anonName=None):
