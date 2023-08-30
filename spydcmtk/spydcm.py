@@ -384,7 +384,10 @@ def runActions(args, ap):
             # Let IOERROR play out here is not correct input
         ##
         if args.quickInspect or args.quickInspectFull:
-                print(ListDicomStudies.getSummaryString(args.quickInspectFull))
+            for iStudy in ListDicomStudies:
+                print(iStudy[0].getRootDir())
+                print(iStudy.getStudySummary(args.quickInspectFull))
+                print('\n')
         else:
             if args.outputFolder is None:
                 print(f'WARNING: outputFolder not given - setting to inputFolder')

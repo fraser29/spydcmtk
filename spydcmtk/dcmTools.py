@@ -358,6 +358,18 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False):
         except dicom.filereader.InvalidDicomError:
             continue
 
+def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
+    # Reading specific tags is actually slower. 
+    # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
+    dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
+    studyUID = str(dataset.StudyInstanceUID)
+    seriesUID = str(dataset.SeriesInstanceUID)
+    if studyUID not in dsDict:
+        dsDict[studyUID] =  {}
+    if seriesUID not in dsDict[studyUID]:
+        dsDict[studyUID][seriesUID] = []
+    dsDict[studyUID][seriesUID].append(dataset)
+
 def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
     dsDict = {}
     successReadDirs = set()
@@ -372,16 +384,7 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
             if thisDir in successReadDirs:
                 continue
         try:
-            # Reading specific tags is actually slower. 
-            # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
-            dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
-            studyUID = str(dataset.StudyInstanceUID)
-            seriesUID = str(dataset.SeriesInstanceUID)
-            if studyUID not in dsDict:
-                dsDict[studyUID] =  {}
-            if seriesUID not in dsDict[studyUID]:
-                dsDict[studyUID][seriesUID] = []
-            dsDict[studyUID][seriesUID].append(dataset)
+            readDicomFile_intoDict(thisFile, dsDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
             if ONE_FILE_PER_DIR:
                 successReadDirs.add(thisDir)
         except dicom.filereader.InvalidDicomError:

@@ -537,7 +537,12 @@ class ListOfDicomStudies(list):
                 return ListOfDicomStudies.setFromZip(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
                                                             FORCE_READ=FORCE_READ)
             else:
-                raise IOError("SPDCMTK only capable to read from directory, tar or tar.gz\n")
+                dcmDict = {}
+                try:
+                    dcmTools.readDicomFile_intoDict(input, dcmDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
+                    return ListOfDicomStudies.setFromDcmDict(dcmDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+                except dicom.filereader.InvalidDicomError:
+                    raise IOError("ERROR READING DICOMS: SPDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
