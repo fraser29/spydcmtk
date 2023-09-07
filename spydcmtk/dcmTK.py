@@ -576,6 +576,11 @@ class ListOfDicomStudies(list):
     def __str__(self):
         return '%d studies, %d dicoms'%(len(self), self.getNumberOfDicoms())
 
+    def setSafeNameMode(self):
+        for iStudy in self:
+            for iSeries in iStudy:
+                iSeries.SAFE_NAME_MODE = True
+
     def isCompressed(self):
         return self[0].isCompressed()
 

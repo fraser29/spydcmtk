@@ -103,6 +103,24 @@ class TestDicom2HTML(unittest.TestCase):
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
+class TestStream(unittest.TestCase):
+    def runTest(self):
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp6')
+        os.makedirs(tmpDir)
+        spydcm.dcmTools.streamDicoms(TEST_DIRECTORY, tmpDir, FORCE_READ=False, HIDE_PROGRESSBAR=True, SAFE_NAMING=False)
+        expectedOutput = os.path.join(this_dir, "TEST_DATA/tmp6/ANON_ANON/1.3.12.2.1107.5.2.19.45557.30000014040822145264600000001/41_Cine_TruFisp_RVLA/IM-00041-00001.dcm")
+        self.assertTrue(os.path.isfile(expectedOutput), msg='Stream failed')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
+        ## Test with safe
+        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp7')
+        os.makedirs(tmpDir)
+        spydcm.dcmTools.streamDicoms(TEST_DIRECTORY, tmpDir, FORCE_READ=False, HIDE_PROGRESSBAR=True, SAFE_NAMING=True)
+        expectedOutput = os.path.join(this_dir, "TEST_DATA/tmp7/ANON/1.3.12.2.1107.5.2.19.45557.30000014040822145264600000001/1.3.12.2.1107.5.2.19.45557.2014040909463893489380900.0.0.0/IM-1.3.12.2.1107.5.2.19.45557.2014040909463913941980942.dcm")
+        self.assertTrue(os.path.isfile(expectedOutput), msg='Stream failed (SAFE)')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
+
 
 class TestZipAndUnZip(unittest.TestCase):
     def runTest(self):

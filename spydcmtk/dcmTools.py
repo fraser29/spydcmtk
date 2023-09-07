@@ -312,8 +312,31 @@ def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, ano
     return dataset
 
 def getSaveFileNameFor_ds_UID(ds, outputRootDir):
-    destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.SOPInstanceUID)
+    destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, __getDSSaveFileName(ds, SAFE_NAMING=True))
     return destFile
+
+def getSaveFileNameFor_ds(ds, outputRootDir):
+    destFile = os.path.join(outputRootDir, getPatientDirName(ds), getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
+    return destFile
+
+def getPatientDirName(ds):
+    try:
+        return cleanString(f'{ds[DicomTags.PatientName].value}_{ds[DicomTags.PatientID].value}')
+    except (TypeError, KeyError, AttributeError):
+        return ds.PatientID
+    
+def getStudyDirName(ds):
+    try:
+        return cleanString(f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.AccessionNumber].value}')
+    except (TypeError, KeyError, AttributeError):
+        return ds.StudyInstanceUID
+    
+def getSeriesDirName(ds):
+    try:
+        return cleanString(f'{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.SeriesDescription].value}')
+    except (TypeError, KeyError, AttributeError):
+        return ds.SeriesInstanceUID
+    
 
 def __getDSSaveFileName_Safe(ds):
     return 'IM-%s.dcm'%(ds.SOPInstanceUID)
@@ -343,7 +366,7 @@ def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAM
     ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
     return destFile
 
-def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False):
+def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False):
     nFiles = countFilesInDir(inputDir)
     for thisFile in tqdm(walkdir(inputDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
@@ -352,7 +375,10 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False):
             continue
         try:
             dataset = dicom.dcmread(thisFile, force=FORCE_READ, stop_before_pixels=False)
-            fOut = getSaveFileNameFor_ds_UID(dataset, outputDir)
+            if SAFE_NAMING: 
+                fOut = getSaveFileNameFor_ds_UID(dataset, outputDir)
+            else:
+                fOut = getSaveFileNameFor_ds(dataset, outputDir)
             os.makedirs(os.path.split(fOut)[0], exist_ok=True)
             dataset.save_as(fOut, write_like_original=False)
         except dicom.filereader.InvalidDicomError:

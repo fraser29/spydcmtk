@@ -374,11 +374,13 @@ def runActions(args, ap):
         if not checkArgs(args):
             ap.exit(0, f'No action given. Exiting SPYDCMTK without action\n')
         if args.STREAM:
-            dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE)
+            dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
         try:
             onlyOverview = args.quickInspect or args.quickInspectFull
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
+            if args.SAFE:
+                ListDicomStudies.setSafeNameMode()
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
@@ -442,6 +444,9 @@ def main():
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     # -- program behaviour guidence -- #
+    ap.add_argument('-SAFE', dest='SAFE', help='Safe naming - uses UIDs for naming to avoid potential conflicts.\n\t'+\
+                        'Note, normal behaviour is to check for safe naming but certain conditions may require this.',
+                            action='store_true')
     ap.add_argument('-FORCE', dest='FORCE', help='force reading even if not standard dicom (needed if dicom files missing header meta)',
                             action='store_true')
     ap.add_argument('-QUIET', dest='QUIET', help='Suppress progress bars and information output to terminal',
