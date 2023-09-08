@@ -53,6 +53,8 @@ class DicomTags(object):
     PatientDateOfBirth = 0x0010, 0x0030
     PatientSex = 0x0010, 0x0040
     InstanceNumber = 0x0020, 0x0013
+    StudyID = 0x0020, 0x0010
+    AccessionNumber = 0x0008, 0x0050
 
 
 def getTagCode(tagName):
