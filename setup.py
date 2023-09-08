@@ -17,7 +17,7 @@ DESCRIPTION = 'Simple python dicom toolkit.'
 URL = 'https://github.com/fraser29/spydcmtk'
 EMAIL = 'callaghan.fm@gmail.com'
 AUTHOR = 'Fraser M. Callaghan'
-REQUIRES_PYTHON = '>=3.6.0'
+REQUIRES_PYTHON = '>=3.9.0'
 VERSION = '0.1.0'
 
 # What packages are required for this module to be executed?
