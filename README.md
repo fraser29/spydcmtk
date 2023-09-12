@@ -10,8 +10,10 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 Using [pip](https://pip.pypa.io/en/stable/):
 ```
-# TODO
+# TODO - Deploy to PIP
 # pip install spydcmtk
+# Current
+pip install 'spydcmtk @ git+https://github.com/fraser29/spydcmtk.git'
 ```
 
 ## Quick start

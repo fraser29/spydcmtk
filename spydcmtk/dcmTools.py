@@ -53,6 +53,8 @@ class DicomTags(object):
     PatientDateOfBirth = 0x0010, 0x0030
     PatientSex = 0x0010, 0x0040
     InstanceNumber = 0x0020, 0x0013
+    StudyID = 0x0020, 0x0010
+    AccessionNumber = 0x0008, 0x0050
 
 
 def getTagCode(tagName):
@@ -333,13 +335,14 @@ def getPatientDirName(ds):
     
 def getStudyDirName(ds):
     try:
-        return cleanString(f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.AccessionNumber].value}')
+        
+        return cleanString(f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.StudyID].value}')
     except (TypeError, KeyError, AttributeError):
         return ds.StudyInstanceUID
     
 def getSeriesDirName(ds):
     try:
-        return cleanString(f'{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.SeriesDescription].value}')
+        return cleanString(f'SE{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.SeriesDescription].value}')
     except (TypeError, KeyError, AttributeError):
         return ds.SeriesInstanceUID
     
