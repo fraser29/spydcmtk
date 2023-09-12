@@ -288,18 +288,21 @@ def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, ano
         """Called from the dataset "walk" recursive function for all data elements."""
         if data_element.VR == "PN":
             data_element.value = 'anonymous'
-        if data_element.name == "Institution Name":
+        if "Institution" in data_element.name:
             data_element.value = 'anonymous'
         if (anonName is not None) & (data_element.name == "Patient's Name"):
             data_element.value = anonName
     # Remove patient name and any other person names
-    dataset.walk(PN_callback)
+    try:
+        dataset.walk(PN_callback)
+    except TypeError: # TODO config setting to control level of warnings for this. 
+        pass
     # Change ID
     dataset.PatientID = ''
     # Remove data elements (should only do so if DICOM type 3 optional)
     # Use general loop so easy to add more later
     # Could also have done: del ds.OtherPatientIDs, etc.
-    for name in ['OtherPatientIDs', 'OtherPatientIDsSequence']:
+    for name in ['OtherPatientIDs', 'OtherPatientIDsSequence', 'PatientAddress']:
         if name in dataset:
             delattr(dataset, name)
     if anon_birthdate:
@@ -308,7 +311,10 @@ def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, ano
                 dataset.data_element(name).value = ''
     # Remove private tags if function argument says to do so.
     if remove_private_tags:
-        dataset.remove_private_tags()
+        try:
+            dataset.remove_private_tags()
+        except TypeError:
+            pass
     return dataset
 
 def getSaveFileNameFor_ds_UID(ds, outputRootDir):
