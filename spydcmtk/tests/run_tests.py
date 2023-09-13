@@ -105,7 +105,8 @@ class TestDicom2MSTable(unittest.TestCase):
         cleanMakeDirs(tmpDir)
         fOut = spydcm.buildTableOfDicomParamsForManuscript([TEST_DIRECTORY], 
                                                            outputCSVPath=os.path.join(tmpDir, 'ms.csv'), 
-                                                           seriesDescriptionIdentifier='RVLA')
+                                                           seriesDescriptionIdentifier='RVLA',
+                                                           ONE_FILE_PER_DIR=False)
         self.assertTrue(os.path.isfile(fOut), msg='Written MS csv file does not exist')
         if not DEBUG:
             shutil.rmtree(tmpDir)
