@@ -331,7 +331,10 @@ def getPatientDirName(ds):
     try:
         return cleanString(f'{ds[DicomTags.PatientName].value}_{ds[DicomTags.PatientID].value}')
     except (TypeError, KeyError, AttributeError):
-        return ds.PatientID
+        try:
+            return ds.PatientID
+        except AttributeError:
+            return ''
     
 def getStudyDirName(ds):
     try:
@@ -439,3 +442,27 @@ def _writeDirectoryToNII(dcmDir, outputPath, fileName):
     os.rename(latest_file, newFileName)
     print('Made %s --> as %s'%(latest_file, newFileName))
     return newFileName
+
+def buildFakeDS():
+    meta = dicom.dataset.FileMetaDataset()
+    meta.FileMetaInformationVersion = b"\x00\x01"
+    meta.TransferSyntaxUID = ("1.2.840.10008.1.2.1")  # std transfer uid little endian, implicit vr
+    meta.ImplementationVersionName = "spydcmtk"
+    ds = dicom.dataset.FileDataset(f'/tmp/{dicom.uid.generate_uid()}.dcm', {}, file_meta=meta, preamble=b"\0" * 128)
+    ds.add_new([0x0008,0x0005], 'CS', 'ISO_IR 100')
+    ds.add_new([0x0008,0x0016], 'UI', 'SecondaryCaptureImageStorage')
+    ds.add_new([0x0008,0x0018], 'UI', dicom.uid.generate_uid())
+    ds.add_new([0x0008,0x0020], 'DA', '20000101')
+    ds.add_new([0x0008,0x0030], 'TM', '101010')
+    ds.add_new([0x0008,0x0060], 'CS', 'MR')
+    ds.add_new([0x0020,0x000d], 'UI', dicom.uid.generate_uid())
+    ds.add_new([0x0020,0x000e], 'UI', dicom.uid.generate_uid())
+    ds.add_new([0x0028,0x0002], 'US', 1)
+    ds.add_new([0x0028,0x0004], 'CS', 'MONOCHROME2')
+    ds.add_new([0x0028,0x0103], 'US', 0)
+    ##
+    ds.add_new([0x0010,0x0010], 'PN', "TEST^DATA")
+    ds.add_new([0x0010,0x0020], 'LO', '12345')
+    ds.fix_meta_info()
+    return ds
+

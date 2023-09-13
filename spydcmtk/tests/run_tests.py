@@ -6,18 +6,29 @@ import unittest
 import shutil
 from spydcmtk import dcmTK
 from spydcmtk import spydcm
+import numpy as np
 
 
 this_dir = os.path.split(os.path.realpath(__file__))[0]
 TEST_DIRECTORY = os.path.join(this_dir, 'TEST_DATA')
+TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
+imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = False
 
+def cleanMakeDirs(idir):
+    try:
+        os.makedirs(idir)
+    except FileExistsError:
+        shutil.rmtree(idir)
+        os.makedirs(idir)
 
 class TestDicomSeries(unittest.TestCase):
     def runTest(self):
-        dcmSeries = dcmTK.DicomSeries.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByDate('20140409')
+        dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         self.assertEqual(len(dcmSeries), 2, "Incorrect dicoms in dcmSeries")
         # ---
         self.assertEqual(dcmSeries.getNumberOfTimeSteps(), 2, msg="Incorrect read time steps")
@@ -33,8 +44,8 @@ class TestDicomSeries(unittest.TestCase):
         self.assertAlmostEqual(dcmSeries.getTemporalResolution(), 51.92, places=7, msg='deltaTime incorrect')
         self.assertEqual(dcmSeries.IS_SIEMENS(), True, msg="Incorrect manufactuer")
         self.assertEqual(dcmSeries.getPulseSequenceName(), '*tfi2d1_12', msg="Incorrect sequence name")
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp1')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp1')
+        cleanMakeDirs(tmpDir)
         dcmSeries.writeToOrganisedFileStructure(tmpDir)
         dcmSeries.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
         if not DEBUG:
@@ -44,7 +55,8 @@ class TestDicomSeries(unittest.TestCase):
 
 class TestDicomStudy(unittest.TestCase):
     def runTest(self):
-        dcmStudy = dcmTK.DicomStudy.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByDate('20140409')
         self.assertEqual(len(dcmStudy), 1, "Incorrect number series in dcmStudy")
         patOverview = dcmStudy.getPatientOverview()
         self.assertEqual(patOverview[0][4], "PatientAge", "Patient overview incorrect")
@@ -55,8 +67,8 @@ class TestDicomStudy(unittest.TestCase):
         seriesOverview = dcmStudy[0].getSeriesOverview()
         self.assertEqual(seriesOverview[0][1], "SeriesDescription", "Series overview incorrect")
         self.assertEqual(seriesOverview[1][1], "Cine_TruFisp_RVLA", "Series overview incorrect")
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp2')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp2')
+        cleanMakeDirs(tmpDir)
         dcmStudy.writeToOrganisedFileStructure(tmpDir)
         dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
         if not DEBUG:
@@ -65,12 +77,15 @@ class TestDicomStudy(unittest.TestCase):
 
 class TestDicom2VT2Dicom(unittest.TestCase):
     def runTest(self):
-        dcmStudy = dcmTK.DicomStudy.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
-        dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        for dcmStudy in listOfStudies:
+            dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
+            if dcmSeries is not None:
+                break
         vtiDict = dcmSeries.buildVTIDict()
         self.assertAlmostEqual(list(vtiDict.keys())[1], 0.05192, places=7, msg='time key in vti dict incorrect')
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp3')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp3')
+        cleanMakeDirs(tmpDir)
         fOut = dcmSeries.writeToVTI(tmpDir)
         self.assertTrue(os.path.isfile(fOut), msg='Written pvd file does not exist')
         dd = dcmTK.dcmVTKTK.readPVD(fOut)
@@ -86,18 +101,20 @@ class TestDicom2VT2Dicom(unittest.TestCase):
 
 class TestDicom2MSTable(unittest.TestCase):
     def runTest(self):
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp4')
-        os.makedirs(tmpDir)
-        fOut = spydcm.buildTableOfDicomParamsForManuscript([TEST_DIRECTORY], outputCSVPath= os.path.join(tmpDir, 'ms.csv'),seriesDescriptionIdentifier='RVLA')
-        self.assertTrue(os.path.isfile(fOut), msg='Written html file does not exist')
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp4')
+        cleanMakeDirs(tmpDir)
+        fOut = spydcm.buildTableOfDicomParamsForManuscript([TEST_DIRECTORY], 
+                                                           outputCSVPath=os.path.join(tmpDir, 'ms.csv'), 
+                                                           seriesDescriptionIdentifier='RVLA')
+        self.assertTrue(os.path.isfile(fOut), msg='Written MS csv file does not exist')
         if not DEBUG:
             shutil.rmtree(tmpDir)
         
 
 class TestDicom2HTML(unittest.TestCase):
     def runTest(self):
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp5')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp5')
+        cleanMakeDirs(tmpDir)
         fOut = spydcm.convertInputsToHTML([vti001], tmpDir, QUIET=True)
         self.assertTrue(os.path.isfile(fOut), msg='Written html file does not exist')
         if not DEBUG:
@@ -105,18 +122,18 @@ class TestDicom2HTML(unittest.TestCase):
 
 class TestStream(unittest.TestCase):
     def runTest(self):
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp6')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp6')
+        cleanMakeDirs(tmpDir)
         spydcm.dcmTools.streamDicoms(TEST_DIRECTORY, tmpDir, FORCE_READ=False, HIDE_PROGRESSBAR=True, SAFE_NAMING=False)
-        expectedOutput = os.path.join(this_dir, "TEST_DATA/tmp6/ANON_ANON/1.3.12.2.1107.5.2.19.45557.30000014040822145264600000001/41_Cine_TruFisp_RVLA/IM-00041-00001.dcm")
+        expectedOutput = os.path.join(this_dir, "TEST_OUTPUT/tmp6/TEST-DATA_12345/20000101_1088/SE88_SeriesLaugh/IM-00088-00001.dcm")
         self.assertTrue(os.path.isfile(expectedOutput), msg='Stream failed')
         if not DEBUG:
             shutil.rmtree(tmpDir)
         ## Test with safe
-        tmpDir = os.path.join(TEST_DIRECTORY, 'tmp7')
-        os.makedirs(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp7')
+        cleanMakeDirs(tmpDir)
         spydcm.dcmTools.streamDicoms(TEST_DIRECTORY, tmpDir, FORCE_READ=False, HIDE_PROGRESSBAR=True, SAFE_NAMING=True)
-        expectedOutput = os.path.join(this_dir, "TEST_DATA/tmp7/ANON/1.3.12.2.1107.5.2.19.45557.30000014040822145264600000001/1.3.12.2.1107.5.2.19.45557.2014040909463893489380900.0.0.0/IM-1.3.12.2.1107.5.2.19.45557.2014040909463913941980942.dcm")
+        expectedOutput = os.path.join(this_dir, "TEST_OUTPUT/tmp7/ANON/1.3.12.2.1107.5.2.19.45557.30000014040822145264600000001/1.3.12.2.1107.5.2.19.45557.2014040909463893489380900.0.0.0/IM-1.3.12.2.1107.5.2.19.45557.2014040909463913941980942.dcm")
         self.assertTrue(os.path.isfile(expectedOutput), msg='Stream failed (SAFE)')
         if not DEBUG:
             shutil.rmtree(tmpDir)
@@ -143,6 +160,40 @@ class TestZipAndUnZip(unittest.TestCase):
         self.assertFalse(os.path.isdir(outputs[0][:-4]), msg='Written zip temp directory does exist - should have been cleaned up')
         os.unlink(outputs[0])
 
+
+class TestImageToDicom(unittest.TestCase):
+    def runTest(self):
+        pixArray = np.load(imnpy)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp8')
+        cleanMakeDirs(tmpDir)
+        patMatrix = {'PixelSpacing': [0.02, 0.02], 
+                     'ImagePositionPatient': [0.0, 0.1, 0.3], 
+                     'ImageOrientationPatient': [0.0,0.0,1.0,0.0,1.0,0.0], 
+                     'SliceThickness': 0.04,
+                     'SpacingBetweenSlices': 0.04}
+        tagUpdateDict = {'SeriesNumber': 99, 
+                         'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataA"), 
+                         'SerisDescription': ([0x0008,0x103e], 'LO', "SeriesWink"), 
+                         'StudyID': ([0x0020,0x0010], 'SH', '1099')}
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,:3], None, patMatrix, tmpDir)
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
+
+        pixArray = np.load(imnpy)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmp9')
+        cleanMakeDirs(tmpDir)
+        patMatrix = {'PixelSpacing': [0.02, 0.02], 
+                     'ImagePositionPatient': [0.0, 0.1, 0.3], 
+                     'ImageOrientationPatient': [0.0,0.0,1.0,0.0,1.0,0.0], 
+                     'SliceThickness': 0.04,
+                     'SpacingBetweenSlices': 0.04}
+        tagUpdateDict = {'SeriesNumber': 88, 
+                         'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataB"), 
+                         'SerisDescription': ([0x0008,0x103e], 'LO', "SeriesLaugh"), 
+                         'StudyID': ([0x0020,0x0010], 'SH', '1088')}
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,3:], None, patMatrix, tmpDir, tagUpdateDict=tagUpdateDict)
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 
 if __name__ == '__main__':
