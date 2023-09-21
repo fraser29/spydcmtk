@@ -755,7 +755,7 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
-    print(A.shape)
+    print(A.shape, type(A), A.dtype)
     patientMatrixDict = dcmVTKTK.getPatientMatrixDict(vti, patientMatrixDict)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
 
@@ -775,7 +775,14 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds = dcmTemplate_or_ds
     nRow, nCol, nSlice = pixelArray.shape
     if pixelArray.dtype != np.int16:
+        pixelArray = pixelArray * (2**13 / np.max(pixelArray) )
         pixelArray = pixelArray.astype(np.int16)
+    mx, mn = np.max(pixelArray), 0
+    try:
+        slice0 = tagUpdateDict.pop('SliceLocation0')
+    except KeyError:
+        slice0 = 0.0
+
     SeriesUID = dicom.uid.generate_uid()
     try:
         SeriesNumber = tagUpdateDict.pop('SeriesNumber')
@@ -785,9 +792,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         except AttributeError:
             SeriesNumber = 99
     for k in range(nSlice):
-        sliceA = pixelArray[:,:,k]
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
+        # ds.SpecificCharacterSet = 'ISO_IR 100'
+        # ds.SOPClassUID = 'SecondaryCaptureImageStorage'
         ds.Rows = nRow
         ds.Columns = nCol
         ds.ImagesInAcquisition = nSlice
@@ -797,12 +805,11 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.InstanceNumber = k+1
         ds.SamplesPerPixel = 1
         ds.BitsAllocated = 16
-        ds.BitsStored = 12
-        ds.HighBit = 11
+        ds.BitsStored = 16
+        ds.HighBit = 15
         ds.SliceThickness = patientMatrixDict['SpacingBetweenSlices'] # Can no longer claim overlapping slices if have modified
         ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
-        ds.SmallestImagePixelValue = max([0, np.min(sliceA)])
-        mx = min([32767, np.max(sliceA)])
+        ds.SmallestImagePixelValue = int(mn)
         ds.LargestImagePixelValue = int(mx)
         ds.WindowCenter = int(mx / 2)
         ds.WindowWidth = int(mx / 2)
@@ -811,10 +818,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
                         patientMatrixDict['ImageOrientationPatient'][3:])
         ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*kVec*ds.SpacingBetweenSlices
         ds.ImagePositionPatient = list(ImagePositionPatient)
-        try:
-            sliceLoc = tagUpdateDict.pop('SliceLocation0') + k*ds.SpacingBetweenSlices
-        except KeyError:
-            sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
+        # try:
+        sliceLoc = slice0 + k*ds.SpacingBetweenSlices
+        # except KeyError:
+        #     sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
         ds.SliceLocation = sliceLoc
         ds.ImageOrientationPatient = list(patientMatrixDict['ImageOrientationPatient'])
         for iKey in tagUpdateDict.keys():
@@ -822,5 +829,6 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
                 ds[iKey] = tagUpdateDict[iKey]
             except (ValueError, TypeError):
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
-        ds.PixelData = sliceA.tobytes()
+        ds.PixelData = pixelArray[:,:,k].tostring()
+        ds['PixelData'].VR = 'OW'
         dcmTools.writeOut_ds(ds, outputDir)
