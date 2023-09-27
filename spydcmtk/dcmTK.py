@@ -2,7 +2,7 @@
 
 """Classes for working with Dicom studies
 """
-
+import copy
 import os
 import pydicom as dicom
 from pydicom.uid import generate_uid
@@ -768,11 +768,11 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     if tagUpdateDict is None:
         tagUpdateDict = {}
     if dcmTemplate_or_ds is None:
-        ds = dcmTools.buildFakeDS()
+        dsRAW = dcmTools.buildFakeDS()
     elif type(dcmTemplate_or_ds) == str:
-        ds = dicom.read_file(dcmTemplate_or_ds)
+        dsRAW = dicom.read_file(dcmTemplate_or_ds)
     else:
-        ds = dcmTemplate_or_ds
+        dsRAW = dcmTemplate_or_ds
     nRow, nCol, nSlice = pixelArray.shape
     if pixelArray.dtype != np.int16:
         pixelArray = pixelArray * (2**13 / np.max(pixelArray) )
@@ -788,10 +788,12 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         SeriesNumber = tagUpdateDict.pop('SeriesNumber')
     except KeyError:
         try:
-            SeriesNumber = ds.SeriesNumber * 100
+            SeriesNumber = dsRAW.SeriesNumber * 100
         except AttributeError:
             SeriesNumber = 99
+    dsList = []
     for k in range(nSlice):
+        ds = copy.deepcopy(dsRAW)
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
         # ds.SpecificCharacterSet = 'ISO_IR 100'
@@ -831,4 +833,6 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
         ds.PixelData = pixelArray[:,:,k].tostring()
         ds['PixelData'].VR = 'OW'
-        dcmTools.writeOut_ds(ds, outputDir)
+        dsList.append(ds)
+    dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
+    dcmSeries.writeToOrganisedFileStructure(outputDir)
