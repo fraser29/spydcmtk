@@ -149,11 +149,35 @@ def directoryToVTI(dcmDirectory, outputFolder,
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
     return __listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
 
-def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True):
+
+def directoryToVTS(dcmDirectory, outputFolder, 
+                   outputNamingTags=VTI_NAMING_TAG_LIST, 
+                   QUITE=True, FORCE=False):
+    """Convert directory of dicoms to VTS files (Good for cine etc)
+        Naming built from dicom tags: 
+
+    Args:
+        dcmDirectory (str): Directory containing dicom files
+        outputFolder (str): Directory where vti output files to be written
+        outputNamingTags (tuple, optional): Dicom tags used to generate vti file name. 
+                        Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription')
+        QUITE (bool, optional): Suppress output information. Defaults to True.
+        FORCE (bool, optional): Set True to overwrite already present files. Defaults to False.
+
+    Returns:
+        list: List of output file names written
+    """
+    ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
+    return __listDicomStudiesToVTS(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
+
+def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
-            fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+            if VTS:
+                fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
+            else:
+                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
             outputFiles.append(fOut)
             if not QUIET:
                 print(f'Written {fOut}')

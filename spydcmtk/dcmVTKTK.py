@@ -102,35 +102,45 @@ def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None, INCLUDE_MATRIX=Tru
         ValueError: If VTK import not available
     """
     vtkDict = arrToVTI(arr, meta, ds=ds, INCLUDE_MATRIX=INCLUDE_MATRIX)
-    times = sorted(vtkDict.keys())
+    return writeVTIDict(vtkDict, outputPath, filePrefix)
+
+def writeVTIDict(vtiDict, outputPath, filePrefix):
+    times = sorted(vtiDict.keys())
     if len(times) > 1:
-        return writeVtkPvdDict(vtkDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
+        return writeVtkPvdDict(vtiDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
-        return writeVTI(vtkDict[times[0]], fOut)
+        return writeVTI(vtiDict[times[0]], fOut)
     
 
-def __transformMfromFieldData(vtkObj, CONVERT_TO_M=True):
+def __transformMfromFieldData(vtkObj):
     iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
     c = [iop[1]*iop[5]-iop[2]*iop[4],
          iop[2]*iop[3]-iop[0]*iop[5],
          iop[0]*iop[4]-iop[1]*iop[3]]
     iop += c
-    # ipp = [vtkObj.GetFieldData().GetArray('ImagePositionPatient').GetTuple(i)[0] for i in range(3)]
     ipp = vtkObj.GetOrigin()
-    dx, dy, dz = vtkObj.GetSpacing()
-    # if CONVERT_TO_M:
-    #     ipp = [i*0.001 for i in ipp]
-    matrix = [iop[0]*dx, iop[3]*dy, iop[6]*dz, ipp[0],
-              iop[1]*dx, iop[4]*dy, iop[7]*dz, ipp[1],
-              iop[2]*dx, iop[5]*dy, iop[8]*dz, ipp[2],
+    matrix = [iop[0], iop[3], iop[6], ipp[0],
+              iop[1], iop[4], iop[7], ipp[1],
+              iop[2], iop[5], iop[8], ipp[2],
               0,0,0,1]
     return matrix
 
 
-def getTransFormMatrixFromFieldData(vtkObj, CONVERT_TO_M=True):
-    matrix = __transformMfromFieldData(vtkObj, CONVERT_TO_M)
+def getTransFormMatrixFromFieldData(vtkObj):
+    matrix = __transformMfromFieldData(vtkObj)
     transFormMatrix = vtk.vtkTransform()
+    transFormMatrix.SetMatrix(matrix)
+    return transFormMatrix
+
+
+def getTransFormMatrixFromVTIObjDirectionMatrix(vtkObj):
+    transFormMatrix = vtk.vtkTransform()
+    oo = vtkObj.GetOrigin()
+    matrix = [vtkObj.GetDirectionMatrix().GetElement(0,0), vtkObj.GetDirectionMatrix().GetElement(1,0), vtkObj.GetDirectionMatrix().GetElement(2,0), oo[0],
+                vtkObj.GetDirectionMatrix().GetElement(0,1), vtkObj.GetDirectionMatrix().GetElement(1,1), vtkObj.GetDirectionMatrix().GetElement(2,1), oo[1],
+                vtkObj.GetDirectionMatrix().GetElement(0,2), vtkObj.GetDirectionMatrix().GetElement(1,2), vtkObj.GetDirectionMatrix().GetElement(2,2), oo[2],
+                0,0,0,1]
     transFormMatrix.SetMatrix(matrix)
     return transFormMatrix
 
@@ -144,20 +154,20 @@ def __matrixToDicomTagFieldData(vtiObj, matrix):
     addFieldData(vtkObj=vtiObj, fieldVal=ipp, fieldName='ImagePositionPatient')
 
 
-def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
+def vtiToVts_viaTransform(vtiObj, transMatrix=None):
     """
     Uses field data: ImageOrientationPatient, ImagePositionPatient
     :param vtiObj:
-    :param CONVERT_TO_M:
     :param transMatrix: can pass or grab from field data
     :return:
     """
-    if transMatrix is None:
-        transMatrix = getTransFormMatrixFromFieldData(vtiObj, CONVERT_TO_M=CONVERT_TO_M)
-        if CONVERT_TO_M:
-            res = vtiObj.GetSpacing()
-            vtiObj.SetSpacing(res[0] * 0.001, res[1] * 0.001, res[2] * 0.001)
-        # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
+    if vtiObj.GetDirectionMatrix().IsIdentity():
+        if transMatrix is None:
+            transMatrix = getTransFormMatrixFromFieldData(vtiObj)
+            # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
+            vtiObj.SetOrigin(0.0,0.0,0.0)
+    else:
+        transMatrix = getTransFormMatrixFromVTIObjDirectionMatrix(vtiObj)
         vtiObj.SetOrigin(0.0,0.0,0.0)
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
@@ -168,9 +178,9 @@ def vtiToVts_viaTransform(vtiObj, CONVERT_TO_M=True, transMatrix=None):
 
 def _buildMatrix3x3(meta):
     iop = np.zeros((3,3))
-    iop[0,:] = meta['ImageOrientationPatient'][0:3]
-    iop[1,:] = meta['ImageOrientationPatient'][3:6]
-    iop[2,:] = np.cross(iop[0,:], iop[1,:])
+    iop[:,0] = meta['ImageOrientationPatient'][0:3]
+    iop[:,1] = meta['ImageOrientationPatient'][3:6]
+    iop[:,2] = np.cross(iop[0,:], iop[1,:])
     mat = vtk.vtkMatrix3x3()
     for i in range(3):
         for j in range(3):

@@ -198,7 +198,10 @@ class DicomSeries(list):
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
-        fileName = '_'.join([str(self.getTag(i)) for i in tagsToUse])
+        if type(tagsToUse) == str:
+            fileName = tagsToUse
+        else:
+            fileName = '_'.join([str(self.getTag(i)) for i in tagsToUse])
         fileName = dcmTools.cleanString(fileName)
         if (len(extn) > 0) and (not extn.startswith('.')):
             extn = '.'+extn
@@ -210,16 +213,28 @@ class DicomSeries(list):
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
         fileName = self.__generateFileName(outputNamingTags, '')
-        A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.writeArrToVTI(arr=A, meta=meta, filePrefix=fileName, outputPath=outputPath, ds=self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
+        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=INCLUDE_MATRIX)
+        return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
-    def buildVTIDict(self):
+    def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
+        vtsDict = self.buildVTSDict()
+        fileName = self.__generateFileName(outputNamingTags, '')
+        return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
+
+    def buildVTSDict(self):
+        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=False)
+        vtsDict = {}
+        for ikey in vtiDict.keys():
+            vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
+        return vtsDict
+
+    def buildVTIDict(self, INCLUDE_MATRIX=True):
         A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, meta, self[0])
+        return dcmVTKTK.arrToVTI(A, meta, self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
 
     @property
     def sliceLocations(self):
-        return sorted([float(self.getTag('SliceLocation', i)) for i in range(len(self))])
+        return sorted([float(self.getTag('SliceLocation', i, ifNotFound=0.0)) for i in range(len(self))])
 
     def getNumberOfSlicesPerVolume(self):
         sliceLoc = self.sliceLocations
