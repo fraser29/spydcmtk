@@ -139,6 +139,10 @@ class DicomSeries(list):
         except ValueError:
             return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S")
 
+    def getImagePositionPatient_np(self, dsID):
+        ipp = self.getTag('ImagePositionPatient', dsID=dsID)
+        return np.array(ipp)
+
     def yieldDataset(self):
         for ds in self:
             if self.OVERVIEW:
@@ -223,9 +227,13 @@ class DicomSeries(list):
 
     def buildVTSDict(self):
         vtiDict = self.buildVTIDict(INCLUDE_MATRIX=False)
+        t0 = sorted(vtiDict.keys())[0] #DEBUG
+        print(vtiDict[t0].GetDimensions(), vtiDict[t0].GetSpacing()) # DEBUG
         vtsDict = {}
         for ikey in vtiDict.keys():
             vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
+        print(vtsDict[t0].GetDimensions(), getResolution(vtsDict[t0])) # DEBUG
+        printPoints(vtsDict[t0]) # DEBUG
         return vtsDict
 
     def buildVTIDict(self, INCLUDE_MATRIX=True):
@@ -261,7 +269,7 @@ class DicomSeries(list):
                 c0 += 1
         dt = self.getTemporalResolution()
         meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
-                'Origin': [i*0.001 for i in self.getTag('ImagePositionPatient')], 
+                'Origin': [i*0.001 for i in self.getImagePositionPatient_np(0)], 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
                 'Times': [dt*n*0.001 for n in range(N)]}
         return A, meta
@@ -282,9 +290,16 @@ class DicomSeries(list):
         return self._getPixelSpacing()[1]
 
     def getDeltaSlice(self):
-        sliceLocS = sorted(list(set(self.sliceLocations)))
+        self.sortByInstanceNumber()
+        p0 = self.getImagePositionPatient_np(0)
+        sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
+        sliceLocS = sorted(list(set(sliceLoc)))
+        print(sliceLocS) # DEBUG
         if len(sliceLocS) == 1: # May be CINE at same location
-            return float(self.getTag('SliceThickness'))
+            dZ = self.getTag('SpacingBetweenSlices', ifNotFound=None)
+            if dZ is None:
+                dZ = self.getTag('SliceThickness')
+            return float(dZ)
         return np.mean(np.diff(sliceLocS))
 
     def getTemporalResolution(self):
@@ -851,3 +866,28 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         dsList.append(ds)
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
     dcmSeries.writeToOrganisedFileStructure(outputDir)
+
+
+
+def getResolution(dataVts):
+    o,p1,p2,p3 = [0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0]
+    i0,i1,j0,j1,k0,k1 = dataVts.GetExtent()
+    print(i0,i1,j0,j1,k0,k1)
+    dataVts.GetPoint(i0,j0,k0, o)
+    dataVts.GetPoint(i0+1,j0,k0, p1)
+    dataVts.GetPoint(i0,j0+1,k0, p2)
+    dataVts.GetPoint(i0,j0,k0+1, p3)
+    di = abs(distBetweenTwoPts(p1, o))
+    dj = abs(distBetweenTwoPts(p2, o))
+    dk = abs(distBetweenTwoPts(p3, o))
+    return [di, dj, dk]
+
+def distBetweenTwoPts(a, b):
+    return np.sqrt(np.sum((np.asarray(a) - np.asarray(b)) ** 2))
+
+def printPoints(vtsD):
+    dd = vtsD.GetDimensions()
+    ijks = [[0,0,0],[0,0,1],[0,0,2],[0,0,3],[0,0,4]]
+    for ii in ijks:
+        ID = np.ravel_multi_index(ii, dd, order='F')
+        print(ii, ID, vtsD.GetPoint(ID))

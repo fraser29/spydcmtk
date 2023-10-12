@@ -163,11 +163,15 @@ def vtiToVts_viaTransform(vtiObj, transMatrix=None):
     """
     if vtiObj.GetDirectionMatrix().IsIdentity():
         if transMatrix is None:
+            print('using transmatrix from field data')
             transMatrix = getTransFormMatrixFromFieldData(vtiObj)
+            print(transMatrix)
             # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
             vtiObj.SetOrigin(0.0,0.0,0.0)
     else:
         transMatrix = getTransFormMatrixFromVTIObjDirectionMatrix(vtiObj)
+        print('got trans matrixcx from direction matrix')
+        print(transMatrix)
         vtiObj.SetOrigin(0.0,0.0,0.0)
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
