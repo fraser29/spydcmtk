@@ -143,6 +143,10 @@ class DicomSeries(list):
         ipp = self.getTag('ImagePositionPatient', dsID=dsID)
         return np.array(ipp)
 
+    def getImageOrientationPatient_np(self, dsID=0):
+        iop = self.getTag('ImageOrientationPatient', dsID=dsID)
+        return np.array(iop)
+
     def yieldDataset(self):
         for ds in self:
             if self.OVERVIEW:
@@ -252,6 +256,17 @@ class DicomSeries(list):
         sliceLoc = self.sliceLocations
         sliceLocS = set(sliceLoc)
         return sliceLoc.count(sliceLocS.pop())
+
+    def getMatrix(self):
+        self.sortBySlice_InstanceNumber()
+        ipp = self.getImagePositionPatient_np(0)
+        iop = self.getImageOrientationPatient_np()
+        vecC = np.cross(iop[3:6], iop[:3])
+        dx, dy, dz = self.getDeltaCol(), self.getDeltaRow(), self.getDeltaSlice()
+        return np.array([[iop[3]*dx, iop[0]*dy, vecC[0]*dz, iop[0]],
+                         [iop[4]*dx, iop[1]*dy, vecC[1]*dz, iop[1]],
+                         [iop[5]*dx, iop[2]*dy, vecC[2]*dz, iop[2]],
+                         [0,0,0,1]])
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).

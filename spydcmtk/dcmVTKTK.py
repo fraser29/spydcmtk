@@ -115,10 +115,8 @@ def writeVTIDict(vtiDict, outputPath, filePrefix):
 
 def __transformMfromFieldData(vtkObj):
     iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
-    c = [iop[1]*iop[5]-iop[2]*iop[4],
-         iop[2]*iop[3]-iop[0]*iop[5],
-         iop[0]*iop[4]-iop[1]*iop[3]]
-    iop += c
+    vecC = np.cross(iop[3:6], iop[:3])
+    iop += vecC.tolist()
     ipp = vtkObj.GetOrigin()
     matrix = [iop[0], iop[3], iop[6], ipp[0],
               iop[1], iop[4], iop[7], ipp[1],
@@ -148,7 +146,7 @@ def getTransFormMatrixFromVTIObjDirectionMatrix(vtkObj):
 def __matrixToDicomTagFieldData(vtiObj, matrix):
     iop = [matrix[0], matrix[4], matrix[8], matrix[1], 
            matrix[5], matrix[9], matrix[2], matrix[6], 
-           matrix[10]]
+           matrix[10]] # TODO check this
     ipp = [matrix[3], matrix[7], matrix[11]]
     addFieldData(vtkObj=vtiObj, fieldVal=iop, fieldName='ImageOrientationPatient')
     addFieldData(vtkObj=vtiObj, fieldVal=ipp, fieldName='ImagePositionPatient')
@@ -163,15 +161,13 @@ def vtiToVts_viaTransform(vtiObj, transMatrix=None):
     """
     if vtiObj.GetDirectionMatrix().IsIdentity():
         if transMatrix is None:
-            print('using transmatrix from field data')
+            print('using transmatrix from field data') # DEBUG
             transMatrix = getTransFormMatrixFromFieldData(vtiObj)
-            print(transMatrix)
             # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
             vtiObj.SetOrigin(0.0,0.0,0.0)
     else:
         transMatrix = getTransFormMatrixFromVTIObjDirectionMatrix(vtiObj)
-        print('got trans matrixcx from direction matrix')
-        print(transMatrix)
+        print('got trans matrixcx from direction matrix') #DEBUG
         vtiObj.SetOrigin(0.0,0.0,0.0)
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
@@ -184,11 +180,13 @@ def _buildMatrix3x3(meta):
     iop = np.zeros((3,3))
     iop[:,0] = meta['ImageOrientationPatient'][0:3]
     iop[:,1] = meta['ImageOrientationPatient'][3:6]
-    iop[:,2] = np.cross(iop[0,:], iop[1,:])
+    iop[:,2] = np.cross(iop[:,1], iop[:,0])
     mat = vtk.vtkMatrix3x3()
+    print(meta['ImageOrientationPatient']) # DEBUG
     for i in range(3):
         for j in range(3):
             mat.SetElement(i, j, iop[i,j])
+    print('MAT is', mat) # DEBUG
     return mat
 
 # ===================================================================================================
