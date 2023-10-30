@@ -10,6 +10,7 @@ import glob
 import datetime
 import numpy as np
 import tarfile
+import shutil
 import zipfile
 import pydicom as dicom
 from tqdm import tqdm
@@ -17,6 +18,8 @@ from tqdm import tqdm
 # =========================================================================
 ## CONSTANTS
 # =========================================================================
+dcm2nii = 'dcm2nii'
+
 class DicomTags(object):
     # these are based on keyword value
     Modality = 0x0008, 0x0060
@@ -432,8 +435,11 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
     return dsDict
 
 
-def _writeDirectoryToNII(dcmDir, outputPath, fileName):
-    dcm2niiCmd = "dcm2nii -p n -e y -d n -x n -o '%s' '%s'"%(outputPath, dcmDir)
+def writeDirectoryToNII(dcmDir, outputPath, fileName):
+    res = shutil.which(dcm2nii)
+    if res is None:
+        raise OSError(f"Program {dcm2nii} must exist and be in path. ")
+    dcm2niiCmd = f"{dcm2nii} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"%(outputPath, dcmDir)
     print('RUNNING: %s'%(dcm2niiCmd))
     os.system(dcm2niiCmd)
     list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
@@ -450,7 +456,7 @@ def buildFakeDS():
     meta.ImplementationVersionName = "spydcmtk"
     ds = dicom.dataset.FileDataset(f'/tmp/{dicom.uid.generate_uid()}.dcm', {}, file_meta=meta, preamble=b"\0" * 128)
     ds.add_new([0x0008,0x0005], 'CS', 'ISO_IR 100')
-    ds.add_new([0x0008,0x0016], 'UI', 'SecondaryCaptureImageStorage')
+    ds.add_new([0x0008,0x0016], 'UI', '1.2.840.10008.5.1.4.1.1.7')
     ds.add_new([0x0008,0x0018], 'UI', dicom.uid.generate_uid())
     ds.add_new([0x0008,0x0020], 'DA', '20000101')
     ds.add_new([0x0008,0x0030], 'TM', '101010')

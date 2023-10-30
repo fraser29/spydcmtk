@@ -26,7 +26,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
         outputPath (str): Path to output directory where to save nifti
         fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)
     """
-    return dcmTools._writeDirectoryToNII(dcmDir, outputPath, fileName)
+    return dcmTools.writeDirectoryToNII(dcmDir, outputPath, fileName)
 
 
 def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, seriesDescriptionIdentifier=None, ONE_FILE_PER_DIR=True):
@@ -150,7 +150,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
     return __listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
 
 
-def directoryToVTS(dcmDirectory, outputFolder, 
+def directoryToVTS(dcmDirectory, outputFolder,
                    outputNamingTags=VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False):
     """Convert directory of dicoms to VTS files (Good for cine etc)
@@ -168,14 +168,16 @@ def directoryToVTS(dcmDirectory, outputFolder,
         list: List of output file names written
     """
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
-    return __listDicomStudiesToVTS(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
+    return __listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
+
 
 def __listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
             if VTS:
-                fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
+                print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
+                # fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             else:
                 fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
             outputFiles.append(fOut)
@@ -234,7 +236,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
             FILE_TO_VTK_LIST.append(iPath)
         else:
             if os.path.isdir(iPath): # If path to dicoms
-                dcmToVTKPath = directoryToVTI(iPath, outputDir)
+                dcmToVTKPath = directoryToVTI(iPath, outputDir, INCLUDE_MATRIX=False)
                 for ifile in dcmToVTKPath:
                     if ifile.endswith('.pvd'):
                         FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.readPVDFileName(ifile).values())

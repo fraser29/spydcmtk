@@ -231,13 +231,9 @@ class DicomSeries(list):
 
     def buildVTSDict(self):
         vtiDict = self.buildVTIDict(INCLUDE_MATRIX=False)
-        t0 = sorted(vtiDict.keys())[0] #DEBUG
-        print(vtiDict[t0].GetDimensions(), vtiDict[t0].GetSpacing()) # DEBUG
         vtsDict = {}
         for ikey in vtiDict.keys():
             vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
-        print(vtsDict[t0].GetDimensions(), getResolution(vtsDict[t0])) # DEBUG
-        printPoints(vtsDict[t0]) # DEBUG
         return vtsDict
 
     def buildVTIDict(self, INCLUDE_MATRIX=True):
@@ -309,7 +305,6 @@ class DicomSeries(list):
         p0 = self.getImagePositionPatient_np(0)
         sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
         sliceLocS = sorted(list(set(sliceLoc)))
-        print(sliceLocS) # DEBUG
         if len(sliceLocS) == 1: # May be CINE at same location
             dZ = self.getTag('SpacingBetweenSlices', ifNotFound=None)
             if dZ is None:
@@ -847,7 +842,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.Columns = nCol
         ds.ImagesInAcquisition = nSlice
         ds.InStackPositionNumber = k+1
-        ds.RawDataRunNumber = k+1
+        # ds.RawDataRunNumber = k+1
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
         ds.SamplesPerPixel = 1

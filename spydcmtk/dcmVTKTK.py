@@ -161,13 +161,11 @@ def vtiToVts_viaTransform(vtiObj, transMatrix=None):
     """
     if vtiObj.GetDirectionMatrix().IsIdentity():
         if transMatrix is None:
-            print('using transmatrix from field data') # DEBUG
             transMatrix = getTransFormMatrixFromFieldData(vtiObj)
             # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
             vtiObj.SetOrigin(0.0,0.0,0.0)
     else:
         transMatrix = getTransFormMatrixFromVTIObjDirectionMatrix(vtiObj)
-        print('got trans matrixcx from direction matrix') #DEBUG
         vtiObj.SetOrigin(0.0,0.0,0.0)
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
@@ -182,11 +180,9 @@ def _buildMatrix3x3(meta):
     iop[:,1] = meta['ImageOrientationPatient'][3:6]
     iop[:,2] = np.cross(iop[:,1], iop[:,0])
     mat = vtk.vtkMatrix3x3()
-    print(meta['ImageOrientationPatient']) # DEBUG
     for i in range(3):
         for j in range(3):
             mat.SetElement(i, j, iop[i,j])
-    print('MAT is', mat) # DEBUG
     return mat
 
 # ===================================================================================================
