@@ -46,6 +46,8 @@ dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
 
 ## Documentation
 
+Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
+
 Some format conversions are provided by this package to permit further use of dicom data. 
 
 
