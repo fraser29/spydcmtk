@@ -287,7 +287,7 @@ def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                         print('FAIL: %s'%(thisFile))
     return dsDict
 
-def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, anonName=None):
+def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, anonName=None, anonID=''):
     # Define call-back functions for the dataset.walk() function
     def PN_callback(ds, data_element):
         """Called from the dataset "walk" recursive function for all data elements."""
@@ -303,7 +303,7 @@ def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, ano
     except TypeError: # TODO config setting to control level of warnings for this. 
         pass
     # Change ID
-    dataset.PatientID = ''
+    dataset.PatientID = anonID
     # Remove data elements (should only do so if DICOM type 3 optional)
     # Use general loop so easy to add more later
     # Could also have done: del ds.OtherPatientIDs, etc.
@@ -370,12 +370,12 @@ def getDicomFileIdentifierStr(ds):
             f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.InstanceNumber].value}'
     return cleanString(strOut)
 
-def writeOut_ds(ds, outputRootDir, anonName=None, WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
+def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
     destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
     os.makedirs(outputRootDir, exist_ok=True)
     if anonName is not None:
         try:
-            ds = anonymiseDicomDS(ds, anonName=anonName)
+            ds = anonymiseDicomDS(ds, anonName=anonName, anonID=anonID)
         except NotImplementedError:
             pass
     ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)

@@ -180,7 +180,7 @@ class DicomSeries(list):
             self[k1].StudyInstanceUID = studyUID
 
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
@@ -202,7 +202,7 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
@@ -525,15 +525,15 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix=''):
+    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
         studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
+            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
         return studyOutputDir
 
-    def writeToZipArchive(self, patientOutputDir, anonName=None, SE_RENAME={}, studyPrefix='', CLEAN_UP=True):
-        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, SE_RENAME, studyPrefix)
+    def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True):
+        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, anonID, SE_RENAME, studyPrefix)
         r, f = os.path.split(studyOutputDir)
         shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
         fileOut = studyOutputDir+'.zip'
@@ -627,17 +627,17 @@ class ListOfDicomStudies(list):
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
 
-    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, SE_RENAME={}):
+    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, SE_RENAME=SE_RENAME)
+            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME)
             outDirs.append(ooD)
         return outDirs
 
-    def writeToZipArchive(self, outputRootDir, anonName=None, SE_RENAME={}, CLEAN_UP=True):
+    def writeToZipArchive(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, CLEAN_UP=True):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToZipArchive(outputRootDir, anonName=None, SE_RENAME={}, CLEAN_UP=CLEAN_UP)
+            ooD = iStudy.writeToZipArchive(outputRootDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME, CLEAN_UP=CLEAN_UP)
             outDirs.append(ooD)
         return outDirs
 
@@ -755,7 +755,7 @@ def walkdir(folder):
             yield os.path.abspath(os.path.join(dirpath, filename))
 
 
-def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, FORCE_READ=False, HIDE_PROGRESSBAR=False):
+def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, HIDE_PROGRESSBAR=False):
     """ Recurse down directory tree - grab dicoms and move to new
         hierarchical folder structure
     """
@@ -767,7 +767,7 @@ def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, FORCE_READ=Fals
        studies = ListOfDicomStudies.setFromDirectory(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, ONE_FILE_PER_DIR=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
     if not HIDE_PROGRESSBAR:
         print('WRITTING...')
-    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName)
+    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, anonID=anonID)
     if res is None:
         print('    ## WARNING - No valid dicoms found')
 
