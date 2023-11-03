@@ -287,7 +287,7 @@ def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                         print('FAIL: %s'%(thisFile))
     return dsDict
 
-def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, anonName=None, anonID=''):
+def anonymiseDicomDS(dataset, UIDupdateDict, anon_birthdate=True, remove_private_tags=True, anonName=None, anonID=''):
     # Define call-back functions for the dataset.walk() function
     def PN_callback(ds, data_element):
         """Called from the dataset "walk" recursive function for all data elements."""
@@ -304,6 +304,10 @@ def anonymiseDicomDS(dataset, anon_birthdate=True, remove_private_tags=True, ano
         pass
     # Change ID
     dataset.PatientID = anonID
+    # UIDs
+    dataset.SOPInstanceUID = dicom.uid.generate_uid()
+    dataset.StudyInstanceUID = UIDupdateDict.get('StudyInstanceUID', dataset.StudyInstanceUID)
+    dataset.SeriesInstanceUID = UIDupdateDict['SeriesInstanceUID']
     # Remove data elements (should only do so if DICOM type 3 optional)
     # Use general loop so easy to add more later
     # Could also have done: del ds.OtherPatientIDs, etc.
@@ -370,14 +374,13 @@ def getDicomFileIdentifierStr(ds):
             f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.InstanceNumber].value}'
     return cleanString(strOut)
 
-def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
+def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict=None, WRITE_LIKE_ORIG=True, SAFE_NAMING=False):
     destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
     os.makedirs(outputRootDir, exist_ok=True)
     if anonName is not None:
-        try:
-            ds = anonymiseDicomDS(ds, anonName=anonName, anonID=anonID)
-        except NotImplementedError:
-            pass
+        if UIDupdateDict is None:
+            raise ValueError("UIDupdateDict must be given for anonymisation")
+        ds = anonymiseDicomDS(ds, UIDupdateDict=UIDupdateDict, anonName=anonName, anonID=anonID)
     ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
     return destFile
 
@@ -430,7 +433,11 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
                 successReadDirs.add(thisDir)
         except dicom.filereader.InvalidDicomError:
             if DEBUG:
-                print('Error reading %s'%(thisFile))
+                print(f"Error reading {thisFile}")
+            continue
+        except AttributeError:
+            if DEBUG:
+                print(f"Error reading {thisFile} - missing a needed dicom tag")
             continue
     return dsDict
 

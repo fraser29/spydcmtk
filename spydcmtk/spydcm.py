@@ -323,6 +323,12 @@ def runActions(args, ap):
     if args.dcmdump:
         ds = returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
         print(ds)
+    elif args.msTable:
+        fOut = buildTableOfDicomParamsForManuscript([args.inputPath], 
+                                                    outputCSVPath=os.path.join(args.outputFolder, 'ms.csv'), 
+                                                    seriesDescriptionIdentifier=None,
+                                                    ONE_FILE_PER_DIR=False)
+        print(f"Written Manuscript table like csv to {fOut}")
     else:
         # check arguments to avoid reading all dicoms and then doing nothing...
         if not checkArgs(args):
@@ -390,6 +396,8 @@ def main():
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-quickInspectFull', dest='quickInspectFull',
         help='Will output a full summary of dicoms to the terminal', action='store_true')
+    ap.add_argument('-msTable', dest='msTable',
+        help='Will output a csv to outputFolder with tags info suitable for building manuscript style table', action='store_true')
     ap.add_argument('-dcmdump', dest='dcmdump',
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
     ap.add_argument('-nii', dest='nii',

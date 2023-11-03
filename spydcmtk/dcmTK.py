@@ -180,7 +180,7 @@ class DicomSeries(list):
             self[k1].StudyInstanceUID = studyUID
 
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', UIDupdateDict={}, SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
@@ -196,13 +196,14 @@ class DicomSeries(list):
         if self.FORCE_READ:
             ADD_TRANSFERSYNTAX = True ## THIS IS A BESPOKE CHANGE
         TO_DECOMPRESS = self.isCompressed()
+        UIDupdateDict['SeriesInstanceUID'] = dicom.uid.generate_uid()
         for ds in tqdm(self.yieldDataset(), total=len(self), disable=self.HIDE_PROGRESSBAR):
             if TO_DECOMPRESS:
                 ds.decompress('gdcm')
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, UIDupdateDict, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
@@ -528,8 +529,9 @@ class DicomStudy(list):
     def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
         studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
+        UIDupdateDict = {'StudyInstanceUID': dicom.uid.generate_uid()}
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
+            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
         return studyOutputDir
 
     def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True):
