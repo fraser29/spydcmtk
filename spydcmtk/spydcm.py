@@ -310,7 +310,7 @@ def quickInspect(dStudies, FULL):
 
 def checkArgs(args):
     allActionArgs = [args.nii, 
-                args.vti, 
+                # args.vti, 
                 args.quickInspect, 
                 args.quickInspectFull, 
                 args.outputFolder is not None]
@@ -360,8 +360,8 @@ def runActions(args, ap):
                         fOut = iSeries.writeToNII(outputPath=args.outputFolder)
                         if not args.QUIET:
                             print(f'Written {fOut}')
-            elif args.vti:
-                __listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
+            # elif args.vti:
+            #     __listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
