@@ -8,16 +8,13 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.0 Release. 
+Current is VERSION 1.0.1 Release. 
 
 ## Installation
 
 Using [pip](https://pip.pypa.io/en/stable/):
 ```
-# TODO - Deploy to PIP
-# pip install spydcmtk
-# Current
-pip install 'spydcmtk @ git+https://github.com/fraser29/spydcmtk.git'
+pip install spydcmtk
 ```
 
 ## Quick start
