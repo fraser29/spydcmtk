@@ -22,7 +22,7 @@ VERSION = '1.0.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pydicom', 'numpy', 'tqdm', 'vtk'
+    'pydicom>=2.0.0', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk==9.3.0'
 ]
 
 
@@ -116,7 +116,7 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
