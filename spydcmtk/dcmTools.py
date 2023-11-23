@@ -446,14 +446,14 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
     res = shutil.which(dcm2nii)
     if res is None:
         raise OSError(f"Program {dcm2nii} must exist and be in path. ")
-    dcm2niiCmd = f"{dcm2nii} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"%(outputPath, dcmDir)
-    print('RUNNING: %s'%(dcm2niiCmd))
+    dcm2niiCmd = f"{dcm2nii} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"
+    print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
     list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
     latest_file = max(list_of_files, key=os.path.getctime)
     newFileName = os.path.join(outputPath, fileName)
     os.rename(latest_file, newFileName)
-    print('Made %s --> as %s'%(latest_file, newFileName))
+    print(f"Built {latest_file} --> as {newFileName}")
     return newFileName
 
 def buildFakeDS():

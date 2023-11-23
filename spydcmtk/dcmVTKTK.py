@@ -49,7 +49,7 @@ def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=True):
     Raises:
         ValueError: If VTK import not available
     """
-    print("WARNING: DICOMS TO VTI CODE IN DEV - ORIENTATION NOT GARUNTEED")
+    print("WARNING: DICOMS TO VTI CODE IN DEV - ORIENTATION NOT QUARANTEED")
     if not VTK_AVAILABLE:
         raise NoVtkError()
     dims = arr.shape

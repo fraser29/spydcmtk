@@ -338,6 +338,8 @@ def runActions(args, ap):
             return 0
         try:
             onlyOverview = args.quickInspect or args.quickInspectFull
+            if not args.QUIET:
+                print(f"READING...")
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
@@ -369,6 +371,8 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.outputFolder is not None:
+                if not args.QUIET:
+                    print(f"WRITTING...")
                 outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName, anonID=args.anonID)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
                 res = 0 if allDirsPresent else 1
@@ -422,6 +426,10 @@ def main():
     arguments = ap.parse_args()
     if arguments.inputPath is not None:
         arguments.inputPath = os.path.abspath(arguments.inputPath)
+        if not (os.path.isdir(arguments.inputPath) or os.path.isfile(arguments.inputPath)):
+            print(f'## ERROR : Can not find input {arguments.inputPath}')
+            print('EXITING')
+            sys.exit(1)
         if not arguments.QUIET:
             print(f'Running SPYDCMTK with input {arguments.inputPath}')
     ## -------------

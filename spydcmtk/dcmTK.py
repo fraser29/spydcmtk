@@ -218,7 +218,7 @@ class DicomSeries(list):
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         fileName = self.__generateFileName(outputNamingTags, '.nii.gz')
-        return dcmTools._writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
+        return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
         fileName = self.__generateFileName(outputNamingTags, '')
