@@ -763,10 +763,7 @@ def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORC
     """
     if not HIDE_PROGRESSBAR:
         print('READING...')
-    if os.path.isfile(dcmDirectory):
-        studies = ListOfDicomStudies.setFromTar(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
-    else:      
-       studies = ListOfDicomStudies.setFromDirectory(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, ONE_FILE_PER_DIR=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
+    studies = ListOfDicomStudies.setFromInput(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
     if not HIDE_PROGRESSBAR:
         print('WRITTING...')
     res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, anonID=anonID)
