@@ -655,6 +655,13 @@ class ListOfDicomStudies(list):
             return dcmTools._tagValuesListToString(DICOM_TAGS, output)
         return output
 
+    def printSummaryTable(self):
+        overviewList = self.getTableOfTagValues(SUBJECT_OVERVIEW_TAG_LIST+STUDY_OVERVIEW_TAG_LIST, False)
+        print(','.join(SUBJECT_OVERVIEW_TAG_LIST+STUDY_OVERVIEW_TAG_LIST))
+        for i in overviewList:
+            print(','.join(i))
+
+
     def getStudyByDate(self, date_str):
         for i in self:
             if i.getTag('StudyDate') == date_str:
