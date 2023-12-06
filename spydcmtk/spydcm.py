@@ -373,7 +373,10 @@ def runActions(args, ap):
             elif args.outputFolder is not None:
                 if not args.QUIET:
                     print(f"WRITTING...")
-                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, anonName=args.anonName, anonID=args.anonID)
+                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, 
+                                                                            anonName=args.anonName, 
+                                                                            anonID=args.anonID,
+                                                                            REMOVE_PRIVATE_TAGS=args.REMOVE_PRIVATE_TAGS)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
                 res = 0 if allDirsPresent else 1
                 ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
@@ -396,6 +399,8 @@ def main():
         help='anonymous name [optional - if not given, then not anoymised]', type=str, default=None)
     ap.add_argument('-aid', dest='anonID',
         help='anonymous ID [optional - only used if anonName is given, default=""]', type=str, default='')
+    ap.add_argument('-RemovePrivateTags', dest='REMOVE_PRIVATE_TAGS',
+        help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
     ap.add_argument('-quickInspect', dest='quickInspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-quickInspectFull', dest='quickInspectFull',

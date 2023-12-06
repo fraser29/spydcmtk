@@ -180,11 +180,13 @@ class DicomSeries(list):
             self[k1].StudyInstanceUID = studyUID
 
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', UIDupdateDict={}, SE_RENAME={}, LIKE_ORIG=True, SAFE_NAMING_CHECK=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', UIDupdateDict={}, SE_RENAME={}, 
+                                      LIKE_ORIG=True, SAFE_NAMING_CHECK=True, REMOVE_PRIVATE_TAGS=False):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
             LIKE_ORIG - set to False if updated some tags
+            REMOVE_PRIVATE_TAGS - remove private tags on anonymisation - default False
         """
         if SAFE_NAMING_CHECK:
             self.checkIfShouldUse_SAFE_NAMING()
@@ -203,7 +205,8 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, UIDupdateDict, WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, UIDupdateDict, 
+                                            WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
         return destFile
 
     def __generateFileName(self, tagsToUse, extn):
@@ -526,16 +529,19 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix=''):
+    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', REMOVE_PRIVATE_TAGS=False):
         self.checkIfShouldUse_SAFE_NAMING()
         studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
         UIDupdateDict = {'StudyInstanceUID': dicom.uid.generate_uid()}
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, SAFE_NAMING_CHECK=False)
+            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, 
+                                                  UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, 
+                                                  SAFE_NAMING_CHECK=False, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
         return studyOutputDir
 
-    def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True):
-        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, anonID, SE_RENAME, studyPrefix)
+    def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True, REMOVE_PRIVATE_TAGS=False):
+        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, anonID, SE_RENAME, studyPrefix, 
+                                                            REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
         r, f = os.path.split(studyOutputDir)
         shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
         fileOut = studyOutputDir+'.zip'
@@ -629,10 +635,11 @@ class ListOfDicomStudies(list):
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
 
-    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}):
+    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, REMOVE_PRIVATE_TAGS=False):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME)
+            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, anonID=anonID, 
+                                                       SE_RENAME=SE_RENAME, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
             outDirs.append(ooD)
         return outDirs
 
@@ -764,7 +771,8 @@ def walkdir(folder):
             yield os.path.abspath(os.path.join(dirpath, filename))
 
 
-def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, HIDE_PROGRESSBAR=False):
+def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, 
+                   HIDE_PROGRESSBAR=False, REMOVE_PRIVATE_TAGS=False):
     """ Recurse down directory tree - grab dicoms and move to new
         hierarchical folder structure
     """
@@ -773,7 +781,7 @@ def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORC
     studies = ListOfDicomStudies.setFromInput(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
     if not HIDE_PROGRESSBAR:
         print('WRITTING...')
-    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, anonID=anonID)
+    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, anonID=anonID, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
     if res is None:
         print('    ## WARNING - No valid dicoms found')
 
