@@ -37,7 +37,7 @@ If you would like to incorporate spydcmtk into your python project, then import 
 import spydcmtk
 
 listOfStudies = spydcmtk.dcmTK.ListOfDicomStudies.setFromDirectory(MY_DICOM_DIRECTORY)
-dcmStudy = listOfStudies.getStudyByDate('20140409') # Dates in dicom standard string format: YYYYMMDD
+dcmStudy = listOfStudies.getStudyByDate('20230429') # Dates in dicom standard string format: YYYYMMDD
 dcmSeries = dcmStudy.getSeriesBySeriesNumber(1)
 dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
 
@@ -52,7 +52,16 @@ Clear documentation of basic features can be seen by running the *"spycmtk -h"* 
 Some format conversions are provided by this package to permit further use of dicom data. 
 
 
-### Dicom to VTK
+### Dicom to Nifti
+
+Relies on [*dcm2nii*](https://people.cas.sc.edu/rorden/mricron/dcm2nii.html), which must be installed and in path.
+
+### Dicom to HTML
+
+Will build a standalone .html file to display dicom series in [*ParaView Glance*](https://www.kitware.com/exporting-paraview-scenes-to-paraview-glance/) renderer. 
+
+
+### Coming Soon: Dicom to VTK
 
 A dicom to vtk format conversion is provided. See VTK format documentation [*here*](https://examples.vtk.org/site/VTKFileFormats/). 
 
@@ -62,12 +71,4 @@ Format conversions are:
 
 - *WORK IN PROGRESS*: dicom to structured dataset (vts format). 
 
-- *WORK IN PROGRESS*: dicom to planar dataset (vtp format). 
-
-### Dicom to Nifti
-
-Relies on [*dcm2nii*](https://people.cas.sc.edu/rorden/mricron/dcm2nii.html), which must be installed and in path.
-
-### Dicom to HTML
-
-Will build a standalone .html file to display dicom series in [*ParaView Glance*](https://www.kitware.com/exporting-paraview-scenes-to-paraview-glance/) renderer. 
+- *WORK IN PROGRESS*: dicom to planar dataset (vtp format).
