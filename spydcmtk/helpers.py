@@ -29,7 +29,8 @@ all_config_files = [os.path.join(rootDir,thisConfFileName),
 config.read(all_config_files)
 
 environment = config.get("app", "environment")
-DEBUG = config.get("app", "debug")
+DEBUG = config.getboolean("app", "debug")
+dcm2nii_path = config.get("app", "dcm2nii_path")
 
 # default_items = [vv for _,vv in config.items('DEFAULT')]
 

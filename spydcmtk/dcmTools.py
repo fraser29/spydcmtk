@@ -15,10 +15,11 @@ import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 
+from spydcmtk.helpers import dcm2nii_path
+
 # =========================================================================
 ## CONSTANTS
 # =========================================================================
-dcm2nii = 'dcm2nii'
 
 class DicomTags(object):
     # these are based on keyword value
@@ -443,10 +444,11 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
 
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
-    res = shutil.which(dcm2nii)
-    if res is None:
-        raise OSError(f"Program {dcm2nii} must exist and be in path. ")
-    dcm2niiCmd = f"{dcm2nii} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"
+    if not os.path.isfile(dcm2nii_path):
+        res = shutil.which(dcm2nii_path) # Maybe command name and in path
+        if res is None:
+            raise OSError(f"Program {dcm2nii_path} must exist and be in path (or give full path). ")
+    dcm2niiCmd = f"{dcm2nii_path} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
     list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
