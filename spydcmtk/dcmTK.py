@@ -195,6 +195,9 @@ class DicomSeries(list):
         destFile = None
         seriesOutDirName = self.getSeriesOutDirName(SE_RENAME)
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
+        seriesOutputDirTemp = seriesOutputDir+".WORKING"
+        if os.path.isdir(seriesOutputDir):
+            os.rename(seriesOutputDir, seriesOutputDirTemp)
         if self.FORCE_READ:
             ADD_TRANSFERSYNTAX = True ## THIS IS A BESPOKE CHANGE
         TO_DECOMPRESS = self.isCompressed()
@@ -205,9 +208,11 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDir, anonName, anonID, UIDupdateDict, 
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, anonName, anonID, UIDupdateDict, 
                                             WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
-        return destFile
+        # ON COMPLETION RENAME OUTPUTDIR
+        os.rename(seriesOutputDirTemp, seriesOutputDir)
+        return seriesOutputDir
 
     def __generateFileName(self, tagsToUse, extn):
         if type(tagsToUse) == str:
@@ -532,11 +537,15 @@ class DicomStudy(list):
     def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', REMOVE_PRIVATE_TAGS=False):
         self.checkIfShouldUse_SAFE_NAMING()
         studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
+        studyOutputDirTemp = studyOutputDir+".WORKING"
+        if os.path.isdir(studyOutputDir):
+            os.rename(studyOutputDir, studyOutputDirTemp)
         UIDupdateDict = {'StudyInstanceUID': dicom.uid.generate_uid()}
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDir, anonName=anonName, anonID=anonID, 
+            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, anonName=anonName, anonID=anonID, 
                                                   UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, 
                                                   SAFE_NAMING_CHECK=False, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+        os.rename(studyOutputDirTemp, studyOutputDir)
         return studyOutputDir
 
     def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True, REMOVE_PRIVATE_TAGS=False):
