@@ -8,6 +8,7 @@ import sys
 import base64
 import argparse
 import numpy as np
+import shutil
 import pydicom as dicom
 
 # Local imports 
@@ -96,6 +97,19 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
                     print('FAIL: %s'%(thisFile))
                 continue
     return fullDirsWithDicoms
+
+
+def anonymiseInPlace(dicomDirectory, anonName=None):
+    if anonName is None:
+        ds = returnFirstDicomFound(dicomDirectory)
+        if ds is None:
+            return # Nothing to anonymise... 
+        anonName = ds.get("StudyInstanceUID", "ANON")
+    #
+    tmpDir = dicomDirectory+".WORKING"
+    os.rename(dicomDirectory, tmpDir)
+    dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName)
+    shutil.rmtree(tmpDir)
 
 
 def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
