@@ -19,10 +19,11 @@ EMAIL = 'callaghan.fm@gmail.com'
 AUTHOR = 'Fraser M. Callaghan'
 REQUIRES_PYTHON = '>=3.9.0'
 VERSION = '1.1.1'
+KEYWORDS="medical, imaging, mri, ct, dicom"
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pydicom>=2.0.0', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk==9.3.0'
+    'pydicom>=2.0.0', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk==9.3.0', 'python-gdcm'
 ]
 
 
@@ -99,6 +100,7 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
+    keywords=KEYWORDS,
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     # If your package is a single module, use this instead of 'packages':
     # py_modules=['mypackage'],
