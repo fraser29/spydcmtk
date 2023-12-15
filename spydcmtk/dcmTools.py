@@ -283,9 +283,9 @@ def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
 
                     if FIRST_ONLY:
                         return dsDict
-                except dicom.filereader.InvalidDicomError:
+                except (dicom.filereader.InvalidDicomError, AttributeError):
                     if not QUIET:
-                        print('FAIL: %s'%(thisFile))
+                        print('FAIL reading: %s'%(thisFile))
     return dsDict
 
 def anonymiseDicomDS(dataset, UIDupdateDict={}, anon_birthdate=True, remove_private_tags=False, anonName=None, anonID=''):

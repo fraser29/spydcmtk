@@ -204,7 +204,11 @@ class DicomSeries(list):
         UIDupdateDict['SeriesInstanceUID'] = dicom.uid.generate_uid()
         for ds in tqdm(self.yieldDataset(), total=len(self), disable=self.HIDE_PROGRESSBAR):
             if TO_DECOMPRESS:
-                ds.decompress('gdcm')
+                try:
+                    ds.decompress()
+                except AttributeError:
+                    print(f'Error with file in {seriesOutputDirTemp}')
+                    continue
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
