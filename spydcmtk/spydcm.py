@@ -27,7 +27,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
         outputPath (str): Path to output directory where to save nifti
         fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)
     """
-    return dcmTools.writeDirectoryToNII(dcmDir, outputPath, fileName)
+    return dcmTools.writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=True)
 
 
 def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, seriesDescriptionIdentifier=None, ONE_FILE_PER_DIR=True):

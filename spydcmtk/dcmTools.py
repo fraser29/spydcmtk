@@ -15,7 +15,7 @@ import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 
-from spydcmtk.helpers import dcm2nii_path
+from spydcmtk import helpers
 
 # =========================================================================
 ## CONSTANTS
@@ -444,20 +444,24 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
     return dsDict
 
 
-def writeDirectoryToNII(dcmDir, outputPath, fileName):
-    if not os.path.isfile(dcm2nii_path):
-        res = shutil.which(dcm2nii_path) # Maybe command name and in path
+def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
+    if not os.path.isfile(helpers.dcm2nii_path):
+        res = shutil.which(helpers.dcm2nii_path) # Maybe command name and in path
         if res is None:
-            raise OSError(f"Program {dcm2nii_path} must exist and be in path (or give full path). ")
-    dcm2niiCmd = f"{dcm2nii_path} -p n -e y -d n -x n -o '{outputPath}' '{dcmDir}'"
+            raise OSError(f"Program {helpers.dcm2nii_path} must exist and be in path (or give full path). ")
+    dcm2niiCmd = f"{helpers.dcm2nii_path} {helpers.dcm2nii_options} -o '{outputPath}' '{dcmDir}'"
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
-    list_of_files = glob.glob(os.path.join(outputPath, '*.nii.gz')) 
-    latest_file = max(list_of_files, key=os.path.getctime)
-    newFileName = os.path.join(outputPath, fileName)
-    os.rename(latest_file, newFileName)
-    print(f"Built {latest_file} --> as {newFileName}")
-    return newFileName
+    if FORCE_FILENAME or (len(helpers.dcm2nii_options) == 0):
+        list_of_files = glob.glob(os.path.join(outputPath, '*.nii')) 
+        latest_file = max(list_of_files, key=os.path.getctime)
+        newFileName = os.path.join(outputPath, fileName)
+        os.rename(latest_file, newFileName)
+        print(f"Renamed {latest_file} --> as {newFileName}")
+        latest_json = latest_file.replace('.nii', '.json')
+        if os.path.isfile(latest_json):
+            os.rename(latest_json, newFileName.replace('.nii', '.json'))
+        return newFileName
 
 def buildFakeDS():
     meta = dicom.dataset.FileMetaDataset()

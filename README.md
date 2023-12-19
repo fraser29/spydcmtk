@@ -54,7 +54,7 @@ Some format conversions are provided by this package to permit further use of di
 
 ### Dicom to Nifti
 
-Relies on [*dcm2nii*](https://people.cas.sc.edu/rorden/mricron/dcm2nii.html), which must be installed and in path.
+Relies on [*dcm2niix*](https://github.com/rordenlab/dcm2niix), which must be installed and in path.
 
 ### Dicom to HTML
 
