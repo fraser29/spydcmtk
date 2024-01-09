@@ -331,6 +331,9 @@ class DicomSeries(list):
         except ZeroDivisionError:
             return 0       
 
+    def getTemporalResolution_TR_VPS(self):
+        return float(self.getTag('RepetitionTime', ifNotFound=0.0)*self.getTag('ViewsPerSegment', ifNotFound=1.0))
+
     def getManufacturer(self):
         return self.getTag(0x00080070, ifNotFound='Unknown')
     def IS_GE(self):
@@ -381,6 +384,10 @@ class DicomSeries(list):
             outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
         except ValueError:
             outDict['AcquiredResolution'] = f"{outDict['dRow']},{outDict['dCol']}"
+        try:
+            outDict['AcquiredTemporalResolution'] = self.getTemporalResolution_TR_VPS()
+        except ValueError:
+            outDict['AcquiredTemporalResolution'] = 0.0
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
