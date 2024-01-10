@@ -162,10 +162,13 @@ class DicomSeries(list):
 
     def getSeriesOutDirName(self, SE_RENAME={}):
         thisSeNum = self.getTag('SeriesNumber', ifNotFound='#')
+        if (thisSeNum=="#") or self.SAFE_NAME_MODE:
+            suffix = self.getTag("SeriesInstanceUID", ifNotFound=self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown'))
+        else:
+            suffix = self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown')
         if thisSeNum in SE_RENAME.keys():
             return SE_RENAME[thisSeNum]
-        return dcmTools.cleanString('SE%s_%s'%(self.getTag('SeriesNumber', ifNotFound='#'),
-                                                    self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown')))
+        return dcmTools.cleanString(f"SE{thisSeNum}_{suffix}")
 
     def resetUIDs(self, studyUID=None):
         """
@@ -332,7 +335,7 @@ class DicomSeries(list):
             return 0       
 
     def getTemporalResolution_TR_VPS(self):
-        return float(self.getTag('RepetitionTime', ifNotFound=0.0)*self.getTag('ViewsPerSegment', ifNotFound=1.0))
+        return float(self.getTag('RepetitionTime', ifNotFound=0.0)*self.getTag(0x00431007, ifNotFound=1.0))
 
     def getManufacturer(self):
         return self.getTag(0x00080070, ifNotFound='Unknown')
@@ -404,13 +407,15 @@ class DicomSeries(list):
 
     def getStudyOutputDir(self, rootDir='', anonName=None, studyPrefix=''):
         # 'AccessionNumber' 'StudyID'
-        if anonName is not None:
-            ss = dcmTools.cleanString('%s_%s_%s' % (anonName, self.getTag('StudyID', ifNotFound='StudyID-unknown'),
-                                         self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
+        if self.SAFE_NAME_MODE:
+            suffix = f"{self.getTag('StudyID', ifNotFound='')}_{self.getTag('StudyInstanceUID', ifNotFound=self.getTag('StudyDate', ifNotFound='StudyDate-unknown'))}"
+            if suffix.startswith('_'): suffix = suffix[1:]
         else:
-            ss = dcmTools.cleanString('%s_%s_%s' % (self.getTag('PatientName', ifNotFound='NAME-unknown'),
-                                            self.getTag('StudyID', ifNotFound='StudyID-unknown'),
-                                            self.getTag('StudyDate', ifNotFound='StudyData-unknown')))
+            suffix = f"{self.getTag('StudyID', ifNotFound='StudyID-unknown')}_{self.getTag('StudyDate', ifNotFound='StudyDate-unknown')}"
+        if anonName is not None:
+            ss = dcmTools.cleanString(f'{anonName}_{suffix}')
+        else:
+            ss = dcmTools.cleanString(f"{self.getTag('PatientName', ifNotFound='NAME-unknown')}_{suffix}")
         return os.path.join(rootDir, studyPrefix+ss)
 
 class DicomStudy(list):
