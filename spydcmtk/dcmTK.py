@@ -222,7 +222,7 @@ class DicomSeries(list):
         os.rename(seriesOutputDirTemp, seriesOutputDir)
         return seriesOutputDir
 
-    def __generateFileName(self, tagsToUse, extn):
+    def _generateFileName(self, tagsToUse, extn):
         if type(tagsToUse) == str:
             fileName = tagsToUse
         else:
@@ -233,17 +233,17 @@ class DicomSeries(list):
         return fileName+extn
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        fileName = self.__generateFileName(outputNamingTags, '.nii.gz')
+        fileName = self._generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
-        fileName = self.__generateFileName(outputNamingTags, '')
+        fileName = self._generateFileName(outputNamingTags, '')
         vtiDict = self.buildVTIDict(INCLUDE_MATRIX=INCLUDE_MATRIX)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         vtsDict = self.buildVTSDict()
-        fileName = self.__generateFileName(outputNamingTags, '')
+        fileName = self._generateFileName(outputNamingTags, '')
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self):
