@@ -15,7 +15,8 @@ import shutil
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
-from spydcmtk.helpers import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, SUBJECT_OVERVIEW_TAG_LIST
+from spydcmtk.helpers import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, \
+                            SUBJECT_OVERVIEW_TAG_LIST, MANUSCRIPT_TABLE_EXTRA_TAG_LIST
 
 
 
@@ -356,12 +357,9 @@ class DicomSeries(list):
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
 
-    def getSeriesInfoDict(self):
-        outDict = {'SeriesNumber':self.getTag('SeriesNumber'),
-            'SeriesDescription':self.getTag('SeriesDescription'),
-            'StudyDate':self.getTag('StudyDate'),
-            'StartTime':self.getTag('AcquisitionTime'),
-            'ScanDuration':self.getScanDuration_secs(),
+    def getSeriesInfoDict(self, EXTRA_MS_TAGS=MANUSCRIPT_TABLE_EXTRA_TAG_LIST):
+        # Default (standard tags):
+        outDict = {'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
             'nRow':self.getTag('Rows'),
             'nCols':self.getTag('Columns'),
@@ -371,7 +369,6 @@ class DicomSeries(list):
             'dTime': self.getTemporalResolution(),
             'SpacingBetweenSlices':self.getTag('SpacingBetweenSlices'),
             'FlipAngle':self.getTag('FlipAngle'),
-            'InPlanePhaseEncodingDirection':self.getTag('InPlanePhaseEncodingDirection'),
             'HeartRate':self.getTag('HeartRate'),
             'EchoTime':self.getTag('EchoTime'),
             'RepetitionTime':self.getTag('RepetitionTime'),
@@ -380,8 +377,11 @@ class DicomSeries(list):
             'InternalPulseSequenceName':self.getInternalPulseSequenceName(),
             'ReconstructionDiameter': self.getTag(0x00181100),
             'AcquisitionMatrix': f'"{str(self.getTag(0x00181310))}"',
+            'Manufacturer': self.getTag('Manufacturer'),
             'ManufacturerModelName': self.getTag('ManufacturerModelName'),
             'SoftwareVersions': f'"{str(self.getTag(0x00181020))}"',}
+        for extraTag in EXTRA_MS_TAGS:
+            outDict[extraTag] = self.getTag(extraTag)
         outDict['nSlice'] = len(self)
         try:
             outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))

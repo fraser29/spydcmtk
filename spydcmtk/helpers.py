@@ -34,10 +34,30 @@ dcm2nii_path = config.get("app", "dcm2nii_path")
 dcm2nii_options = config.get("app", "dcm2nii_options", fallback='')
 
 # default_items = [vv for _,vv in config.items('DEFAULT')]
-
-SERIES_OVERVIEW_TAG_LIST  = json.loads(config.get("series_overview_tags", "tagList"))
-STUDY_OVERVIEW_TAG_LIST   = json.loads(config.get("study_overview_tags", "tagList"))
-SUBJECT_OVERVIEW_TAG_LIST = json.loads(config.get("patient_overview_tags", "tagList"))
-VTI_NAMING_TAG_LIST       = json.loads(config.get("vti_naming_tags", "tagList"))
-# MANUSCRIPT_TABLE_TAG_LIST = json.loads(config.get("manuscript_table_tags","tagList"))
+extra_error_info = "Ensure to use double not single quotes for strings. "
+try:
+    SERIES_OVERVIEW_TAG_LIST  = json.loads(config.get("series_overview_tags", "tagList"))
+except json.decoder.JSONDecodeError:
+    print(f"Error reading series_overview_tags from spydcmtk.conf.")
+    print(f"  {extra_error_info}")
+try:
+    STUDY_OVERVIEW_TAG_LIST   = json.loads(config.get("study_overview_tags", "tagList"))
+except json.decoder.JSONDecodeError:
+    print(f"Error reading study_overview_tags from spydcmtk.conf.")
+    print(f"  {extra_error_info}")
+try:
+    SUBJECT_OVERVIEW_TAG_LIST = json.loads(config.get("patient_overview_tags", "tagList"))
+except json.decoder.JSONDecodeError:
+    print(f"Error reading patient_overview_tags from spydcmtk.conf.")
+    print(f"  {extra_error_info}")
+try: 
+    VTI_NAMING_TAG_LIST       = json.loads(config.get("vti_naming_tags", "tagList"))
+except json.decoder.JSONDecodeError:
+    print(f"Error reading vti_naming_tags from spydcmtk.conf.")
+    print(f"  {extra_error_info}")
+try: 
+    MANUSCRIPT_TABLE_EXTRA_TAG_LIST = json.loads(config.get("manuscript_table_extra_tags","tagList"))
+except json.decoder.JSONDecodeError:
+    print(f"Error reading manuscript_table_extra_tags from spydcmtk.conf.")
+    print(f"  {extra_error_info}")
 
