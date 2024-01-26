@@ -318,14 +318,15 @@ class MyParser(argparse.ArgumentParser):
         self.print_help()
         sys.exit(2)
 ##  ========= INSPECTION / VERIFICATION =========
-def quickInspect(dStudies, FULL):
+def inspect(dStudies, FULL):
     frmtStr = dStudies.getSummaryString(FULL)
     print(frmtStr)
 
 def checkArgs(args):
     allActionArgs = [args.nii, 
-                args.quickInspect, 
-                args.quickInspectFull, 
+                args.inspect, 
+                args.inspectFull, 
+                args.inspectQuick,
                 args.outputFolder is not None]
     if DEBUG: allActionArgs.append(args.vti)
     return any(allActionArgs)
@@ -351,20 +352,24 @@ def runActions(args, ap):
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
         try:
-            onlyOverview = args.quickInspect or args.quickInspectFull
+            onlyOverview = args.inspect or args.inspectFull
             if not args.QUIET:
                 print(f"READING...")
-            ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, HIDE_PROGRESSBAR=args.QUIET, FORCE_READ=args.FORCE, OVERVIEW=onlyOverview) 
+            ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, 
+                                                                     ONE_FILE_PER_DIR=args.inspectQuick,
+                                                                     HIDE_PROGRESSBAR=args.QUIET, 
+                                                                     FORCE_READ=args.FORCE, 
+                                                                     OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
         ##
-        if args.quickInspect or args.quickInspectFull:
+        if args.inspect or args.inspectFull or args.inspectQuick:
             for iStudy in ListDicomStudies:
-                print(iStudy[0].getRootDir())
-                print(iStudy.getStudySummary(args.quickInspectFull))
+                print(iStudy.getTopDir())
+                print(iStudy.getStudySummary(args.inspectFull))
                 print('\n')
         else:
             if args.outputFolder is None:
@@ -415,10 +420,12 @@ def main():
         help='anonymous ID [optional - only used if anonName is given, default=""]', type=str, default='')
     ap.add_argument('-RemovePrivateTags', dest='REMOVE_PRIVATE_TAGS',
         help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
-    ap.add_argument('-quickInspect', dest='quickInspect',
+    ap.add_argument('-inspect', dest='inspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
-    ap.add_argument('-quickInspectFull', dest='quickInspectFull',
+    ap.add_argument('-inspectFull', dest='inspectFull',
         help='Will output a full summary of dicoms to the terminal', action='store_true')
+    ap.add_argument('-inspectQuick', dest='inspectQuick',
+        help='Run inspection - expect organised file structure (read only one file per directory)', action='store_true')
     ap.add_argument('-msTable', dest='msTable',
         help='Will output a csv to outputFolder with tags info suitable for building manuscript style table', action='store_true')
     ap.add_argument('-dcmdump', dest='dcmdump',

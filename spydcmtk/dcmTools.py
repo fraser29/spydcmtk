@@ -310,9 +310,6 @@ def anonymiseDicomDS(dataset, UIDupdateDict={}, anon_birthdate=True, remove_priv
         dataset.SOPInstanceUID = dicom.uid.generate_uid()
         dataset.StudyInstanceUID = UIDupdateDict.get('StudyInstanceUID', dataset.StudyInstanceUID)
         dataset.SeriesInstanceUID = UIDupdateDict['SeriesInstanceUID']
-    # Remove data elements (should only do so if DICOM type 3 optional)
-    # Use general loop so easy to add more later
-    # Could also have done: del ds.OtherPatientIDs, etc.
     for name in ['OtherPatientIDs', 'OtherPatientIDsSequence', 'PatientAddress']:
         if name in dataset:
             delattr(dataset, name)
@@ -320,7 +317,6 @@ def anonymiseDicomDS(dataset, UIDupdateDict={}, anon_birthdate=True, remove_priv
         for name in ['PatientBirthDate']:
             if name in dataset:
                 dataset.data_element(name).value = ''
-    # Remove private tags if function argument says to do so.
     if remove_private_tags:
         try:
             dataset.remove_private_tags()
