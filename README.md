@@ -6,7 +6,7 @@ Dicom organisational, querying and conversion toolkit
 
 *spydcmtk* is a pure Python package built on top of [*pydicom*](https://github.com/pydicom/pydicom).
 
-This package extends pydicom with a class structure based upon the Patient-Study-Series-Image heirachy. In addition, it provides a number of builtin routines for common actions when working with dicom files, such as human readable renaming, anonymisation, searching and summarising. 
+This package extends pydicom with a class structure based upon the Patient-Study-Series-Image hierarchy. In addition, it provides a number of built in routines for common actions when working with dicom files, such as human readable renaming, anonymisation, searching and summarising. 
 
 ## Version
 

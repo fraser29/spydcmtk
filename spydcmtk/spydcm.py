@@ -57,6 +57,8 @@ def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, s
                     resDict["Identifier"] = dcmTools.getDicomFileIdentifierStr(iSeries[0])
                     dfData.append(resDict)
     stats = {}
+    dfData = sorted(dfData, key=lambda i:i["Identifier"])
+    # dfData = sorted(dfData, key=lambda i:i["PatientWeight"])
     tagList = sorted(dfData[0].keys())
     strOut = ','+','.join(tagList) + '\n'
     for row in dfData:
@@ -339,8 +341,9 @@ def runActions(args, ap):
         ds = returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
         print(ds)
     elif args.msTable:
+        outputCSV = args.outputFolder if args.outputFolder.endswith('.csv') else os.path.join(args.outputFolder, 'ms.csv')
         fOut = buildTableOfDicomParamsForManuscript([args.inputPath], 
-                                                    outputCSVPath=os.path.join(args.outputFolder, 'ms.csv'), 
+                                                    outputCSVPath= outputCSV,
                                                     seriesDescriptionIdentifier=None,
                                                     ONE_FILE_PER_DIR=False)
         print(f"Written Manuscript table like csv to {fOut}")
