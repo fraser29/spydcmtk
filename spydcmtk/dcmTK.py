@@ -910,7 +910,8 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
                 ds[iKey] = tagUpdateDict[iKey]
             except (ValueError, TypeError):
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
-        ds.PixelData = pixelArray[:,:,k].tostring()
+        # ds.PixelData = pixelArray[:,:,k].tostring()
+        ds.PixelData = pixelArray[:,:,k].tobytes()
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)

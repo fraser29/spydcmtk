@@ -15,7 +15,10 @@ TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
-DEBUG = False
+DEBUG = spydcm.helpers.DEBUG
+
+if DEBUG: 
+    print("WARNING - RUNNING IN DEBUG MODE - TEST OUTPUTS WILL NOT BE CLEANED")
 
 def cleanMakeDirs(idir):
     try:
@@ -118,6 +121,16 @@ class TestDicom2HTML(unittest.TestCase):
         cleanMakeDirs(tmpDir)
         fOut = spydcm.convertInputsToHTML([vti001], tmpDir, QUIET=True)
         self.assertTrue(os.path.isfile(fOut), msg='Written html file does not exist')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
+
+class TestDicom2VTI(unittest.TestCase):
+    def runTest(self):
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpDCM2VIT')
+        cleanMakeDirs(tmpDir)
+        fOut = spydcm.directoryToVTI(dcm001, tmpDir)
+        for iFOut in fOut:
+            self.assertTrue(os.path.isfile(iFOut), msg='Written vti file does not exist')
         if not DEBUG:
             shutil.rmtree(tmpDir)
 

@@ -14,7 +14,7 @@ import pydicom as dicom
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
-from spydcmtk.helpers import VTI_NAMING_TAG_LIST, DEBUG
+import spydcmtk.helpers as helpers
 
 
 
@@ -146,7 +146,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
     return None
 
 def directoryToVTI(dcmDirectory, outputFolder, 
-                   outputNamingTags=VTI_NAMING_TAG_LIST, 
+                   outputNamingTags=helpers.VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
@@ -167,7 +167,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
 
 
 def directoryToVTS(dcmDirectory, outputFolder,
-                   outputNamingTags=VTI_NAMING_TAG_LIST, 
+                   outputNamingTags=helpers.VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False):
     """Convert directory of dicoms to VTS files (Good for cine etc)
         Naming built from dicom tags: 
@@ -187,7 +187,7 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=helpers.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
@@ -329,8 +329,8 @@ def checkArgs(args):
                 args.inspect, 
                 args.inspectFull, 
                 args.inspectQuick,
-                args.outputFolder is not None]
-    if DEBUG: allActionArgs.append(args.vti)
+                args.outputFolder is not None,
+                args.vti]
     return any(allActionArgs)
 
 ##  ========= RUN ACTIONS =========
@@ -384,7 +384,7 @@ def runActions(args, ap):
                         fOut = iSeries.writeToNII(outputPath=args.outputFolder)
                         if not args.QUIET:
                             print(f'Written {fOut}')
-            elif DEBUG and args.vti:
+            elif args.vti:
                 _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
             elif args.html:
                 for iDS in ListDicomStudies:
@@ -435,10 +435,9 @@ def main():
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
     ap.add_argument('-nii', dest='nii',
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
-    if DEBUG:
-        ap.add_argument('-vti', dest='vti',
-            help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
-        ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
+    ap.add_argument('-vti', dest='vti',
+        help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
+    ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     # -- program behaviour guidence -- #
