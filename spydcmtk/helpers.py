@@ -29,7 +29,7 @@ all_config_files = [os.path.join(rootDir,thisConfFileName),
 config.read(all_config_files)
 
 environment = config.get("app", "environment")
-DEBUG = config.getboolean("app", "debug")
+DEBUG = config.getboolean("app", "debug", fallback=False)
 dcm2nii_path = config.get("app", "dcm2nii_path")
 dcm2nii_options = config.get("app", "dcm2nii_options", fallback='')
 

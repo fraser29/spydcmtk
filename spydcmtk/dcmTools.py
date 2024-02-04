@@ -444,19 +444,20 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
     if not os.path.isfile(helpers.dcm2nii_path):
         res = shutil.which(helpers.dcm2nii_path) # Maybe command name and in path
         if res is None:
-            raise OSError(f"Program {helpers.dcm2nii_path} must exist and be in path (or give full path). ")
+            raise OSError(f"Program {helpers.dcm2nii_path} must exist and be set in config (or in path). ")
     dcm2niiCmd = f"{helpers.dcm2nii_path} {helpers.dcm2nii_options} -o '{outputPath}' '{dcmDir}'"
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
+    extn = '.nii.gz' if '-z y' in helpers.dcm2nii_options else '.nii'
     if FORCE_FILENAME or (len(helpers.dcm2nii_options) == 0):
-        list_of_files = glob.glob(os.path.join(outputPath, '*.nii')) 
+        list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
         latest_file = max(list_of_files, key=os.path.getctime)
         newFileName = os.path.join(outputPath, fileName)
         os.rename(latest_file, newFileName)
         print(f"Renamed {latest_file} --> as {newFileName}")
-        latest_json = latest_file.replace('.nii', '.json')
+        latest_json = latest_file.replace(extn, '.json')
         if os.path.isfile(latest_json):
-            os.rename(latest_json, newFileName.replace('.nii', '.json'))
+            os.rename(latest_json, newFileName.replace(extn, '.json'))
         return newFileName
 
 def buildFakeDS():

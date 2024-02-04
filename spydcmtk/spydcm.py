@@ -246,7 +246,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
     ## --- VTK Objs / file paths ---
     for iPath in listOfFilePaths:
         if os.path.isfile(iPath):
-            if iPath.endswith('nii'):
+            if iPath.endswith('nii') or iPath.endswith('nii.gz') :
                 iPath = dcmTK.dcmVTKTK.nii2vti(iPath)
                 CLEAN_UP_LIST.append(iPath)
             FILE_TO_VTK_LIST.append(iPath)
