@@ -15,8 +15,7 @@ import shutil
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
-from spydcmtk.helpers import SERIES_OVERVIEW_TAG_LIST, STUDY_OVERVIEW_TAG_LIST, \
-                            SUBJECT_OVERVIEW_TAG_LIST, MANUSCRIPT_TABLE_EXTRA_TAG_LIST
+from spydcmtk.helpers import SpydcmTK_config
 
 
 
@@ -126,7 +125,7 @@ class DicomSeries(list):
             dOut[ds.InstanceNumber] = dd
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
 
-    def getSeriesOverview(self, tagList=SERIES_OVERVIEW_TAG_LIST):
+    def getSeriesOverview(self, tagList=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
         vals.append(len(self))
@@ -163,13 +162,16 @@ class DicomSeries(list):
 
     def getSeriesOutDirName(self, SE_RENAME={}):
         thisSeNum = self.getTag('SeriesNumber', ifNotFound='#')
+        suffix = ''
         if (thisSeNum=="#") or self.SAFE_NAME_MODE:
-            suffix = self.getTag("SeriesInstanceUID", ifNotFound=self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown'))
-        else:
-            suffix = self.getTag('SeriesDescription', ifNotFound='SeriesDesc-unknown')
+            suffix += self.getTag("SeriesInstanceUID")
+        for iTag in SpydcmTK_config.SERIES_NAMING_TAG_LIST:
+            iVal = self.getTag(iTag, ifNotFound='')
+            if len(iVal) > 0:
+                suffix += '_'+iVal
         if thisSeNum in SE_RENAME.keys():
             return SE_RENAME[thisSeNum]
-        return dcmTools.cleanString(f"SE{thisSeNum}_{suffix}")
+        return dcmTools.cleanString(f"SE{thisSeNum}{suffix}")
 
     def resetUIDs(self, studyUID=None):
         """
@@ -357,7 +359,7 @@ class DicomSeries(list):
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
 
-    def getSeriesInfoDict(self, EXTRA_MS_TAGS=MANUSCRIPT_TABLE_EXTRA_TAG_LIST):
+    def getSeriesInfoDict(self, EXTRA_MS_TAGS=SpydcmTK_config.MANUSCRIPT_TABLE_EXTRA_TAG_LIST):
         # Default (standard tags):
         outDict = {'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
@@ -407,16 +409,18 @@ class DicomSeries(list):
 
     def getStudyOutputDir(self, rootDir='', anonName=None, studyPrefix=''):
         # 'AccessionNumber' 'StudyID'
+        suffix = ''
         if self.SAFE_NAME_MODE:
-            suffix = f"{self.getTag('StudyID', ifNotFound='')}_{self.getTag('StudyInstanceUID', ifNotFound=self.getTag('StudyDate', ifNotFound='StudyDate-unknown'))}"
-            if suffix.startswith('_'): suffix = suffix[1:]
-        else:
-            suffix = f"{self.getTag('StudyID', ifNotFound='StudyID-unknown')}_{self.getTag('StudyDate', ifNotFound='StudyDate-unknown')}"
+            suffix += f"{self.getTag('StudyInstanceUID')}"
+        for iTag in SpydcmTK_config.STUDY_NAMING_TAG_LIST:
+            if (anonName is not None) and ('name' in iTag.lower()):
+                continue
+            iVal = self.getTag(iTag, ifNotFound='', convertToType=str)
+            if len(iVal) > 0:
+                suffix += '_'+iVal
         if anonName is not None:
-            ss = dcmTools.cleanString(f'{anonName}_{suffix}')
-        else:
-            ss = dcmTools.cleanString(f"{self.getTag('PatientName', ifNotFound='NAME-unknown')}_{suffix}")
-        return os.path.join(rootDir, studyPrefix+ss)
+            suffix = f'{anonName}_{suffix}'
+        return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
 class DicomStudy(list):
     """
@@ -453,8 +457,8 @@ class DicomStudy(list):
                                                 len(self),
                                                 self.getNumberOfDicoms())
 
-    def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown'):
-        return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound)
+    def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
+        return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
 
     def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
         return self[seriesID].getTagListAndNames(tagList, dsID=instanceID)
@@ -490,10 +494,10 @@ class DicomStudy(list):
             return possibles
         return [f'SE{possibles[i].getTag("SeriesnNumber")}:{possibles[i].getTag("SeriesDescription")}' for i in range(len(possibles))]
 
-    def getStudyOverview(self, tagList=STUDY_OVERVIEW_TAG_LIST):
+    def getStudyOverview(self, tagList=SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST):
         return self.getTagListAndNames(tagList)
 
-    def getPatientOverview(self, tagList=SUBJECT_OVERVIEW_TAG_LIST):
+    def getPatientOverview(self, tagList=SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST):
         return self.getTagListAndNames(tagList)
 
     def getSeriesByID(self, ID):
@@ -662,8 +666,22 @@ class ListOfDicomStudies(list):
 
     def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, REMOVE_PRIVATE_TAGS=False):
         outDirs = []
+
         for iStudy in self:
-            ooD = iStudy.writeToOrganisedFileStructure(outputRootDir, anonName=anonName, anonID=anonID, 
+
+            suffix = ''
+            for iTag in SpydcmTK_config.SUBJECT_NAMING_TAG_LIST:
+                if (anonName is not None) and ('name' in iTag.lower()):
+                    continue
+                iVal = iStudy.getTag(iTag, ifNotFound='', convertToType=str)
+                if len(iVal) > 0:
+                    suffix += '_'+iVal
+            if len(suffix) > 0:
+                ioutputRootDir = os.path.join(outputRootDir, dcmTools.cleanString(suffix))
+            else:
+                ioutputRootDir = outputRootDir
+
+            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir, anonName=anonName, anonID=anonID, 
                                                        SE_RENAME=SE_RENAME, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
             outDirs.append(ooD)
         return outDirs
@@ -688,8 +706,8 @@ class ListOfDicomStudies(list):
         return output
 
     def printSummaryTable(self):
-        overviewList = self.getTableOfTagValues(SUBJECT_OVERVIEW_TAG_LIST+STUDY_OVERVIEW_TAG_LIST, False)
-        print(','.join(SUBJECT_OVERVIEW_TAG_LIST+STUDY_OVERVIEW_TAG_LIST))
+        overviewList = self.getTableOfTagValues(SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST, False)
+        print(','.join(SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST))
         for i in overviewList:
             print(','.join(i))
 
@@ -699,7 +717,7 @@ class ListOfDicomStudies(list):
             if i.getTag('StudyDate') == date_str:
                 return i
 
-    def buildMSTable(self, DICOM_TAGS=SERIES_OVERVIEW_TAG_LIST):
+    def buildMSTable(self, DICOM_TAGS=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
         pass
         #TODO - need to pass series name or something to query and then calc mean / stdev etc
 

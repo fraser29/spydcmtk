@@ -6,6 +6,7 @@ import unittest
 import shutil
 from spydcmtk import dcmTK
 from spydcmtk import spydcm
+from spydcmtk.helpers import SpydcmTK_config
 import numpy as np
 
 
@@ -15,10 +16,12 @@ TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
-DEBUG = spydcm.helpers.DEBUG
+DEBUG = SpydcmTK_config.DEBUG
 
 if DEBUG: 
+    print('')
     print("WARNING - RUNNING IN DEBUG MODE - TEST OUTPUTS WILL NOT BE CLEANED")
+    print('')
 
 def cleanMakeDirs(idir):
     try:

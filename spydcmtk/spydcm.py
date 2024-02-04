@@ -14,7 +14,7 @@ import pydicom as dicom
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
-import spydcmtk.helpers as helpers
+from spydcmtk.helpers import SpydcmTK_config
 
 
 
@@ -146,7 +146,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
     return None
 
 def directoryToVTI(dcmDirectory, outputFolder, 
-                   outputNamingTags=helpers.VTI_NAMING_TAG_LIST, 
+                   outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
@@ -167,7 +167,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
 
 
 def directoryToVTS(dcmDirectory, outputFolder,
-                   outputNamingTags=helpers.VTI_NAMING_TAG_LIST, 
+                   outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False):
     """Convert directory of dicoms to VTS files (Good for cine etc)
         Naming built from dicom tags: 
@@ -187,7 +187,7 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=helpers.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:

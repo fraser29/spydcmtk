@@ -15,7 +15,7 @@ import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 
-from spydcmtk import helpers
+from spydcmtk.helpers import SpydcmTK_config
 
 # =========================================================================
 ## CONSTANTS
@@ -119,13 +119,27 @@ def cleanString(ss):
         return ss
     ss = ss.replace('^', '-')
     ss = ss.replace(' ', '_')
+    ss = ss.replace('__', '_')
     keepcharacters = ('-', '.', '_', 'ö','ü','ä','é','è','à')
     ss = "".join([c for c in ss if (c.isalnum() or (c.lower() in keepcharacters))]).rstrip()
-    try:
-        if ss[-1] == '.':
-            ss = ss[:-1]
-    except IndexError:
-        pass
+    while True:
+        try:
+            if ss[-1] == '.':
+                ss = ss[:-1]
+            else:
+                break
+        except IndexError:
+            pass
+            break
+    while True:
+        try:
+            if ss[0] == '_':
+                ss = ss[1:]
+            else:
+                break
+        except IndexError:
+            pass
+            break
     return fixPath(ss)
 
 
@@ -441,15 +455,15 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
 
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
-    if not os.path.isfile(helpers.dcm2nii_path):
-        res = shutil.which(helpers.dcm2nii_path) # Maybe command name and in path
+    if not os.path.isfile(SpydcmTK_config.dcm2nii_path):
+        res = shutil.which(SpydcmTK_config.dcm2nii_path) # Maybe command name and in path
         if res is None:
-            raise OSError(f"Program {helpers.dcm2nii_path} must exist and be set in config (or in path). ")
-    dcm2niiCmd = f"{helpers.dcm2nii_path} {helpers.dcm2nii_options} -o '{outputPath}' '{dcmDir}'"
+            raise OSError(f"Program {SpydcmTK_config.dcm2nii_path} must exist and be set in config (or in path). ")
+    dcm2niiCmd = f"{SpydcmTK_config.dcm2nii_path} {SpydcmTK_config.dcm2nii_options} -o '{outputPath}' '{dcmDir}'"
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
-    extn = '.nii.gz' if '-z y' in helpers.dcm2nii_options else '.nii'
-    if FORCE_FILENAME or (len(helpers.dcm2nii_options) == 0):
+    extn = '.nii.gz' if '-z y' in SpydcmTK_config.dcm2nii_options else '.nii'
+    if FORCE_FILENAME or (len(SpydcmTK_config.dcm2nii_options) == 0):
         list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
         latest_file = max(list_of_files, key=os.path.getctime)
         newFileName = os.path.join(outputPath, fileName)
