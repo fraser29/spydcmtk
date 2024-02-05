@@ -453,7 +453,6 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
             continue
     return dsDict
 
-
 def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
     if not os.path.isfile(SpydcmTK_config.dcm2nii_path):
         res = shutil.which(SpydcmTK_config.dcm2nii_path) # Maybe command name and in path

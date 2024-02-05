@@ -24,12 +24,22 @@ from spydcmtk.spydcm_config import SpydcmTK_config
 ##        CLASSES
 ## =====================================================================================================================
 class DicomSeries(list):
-    """
-    Extends a list of ds (pydicom dataset) objects.
+    """Extends a list of ds (pydicom dataset) objects.
     """
     def __init__(self, dsList=None, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, SAFE_NAME_MODE=False):
-        """
-        Set OVERVIEW = False to read pixel data as well (at a cost)
+        """Initialise DicomSeries with list of pydicom datasets.
+
+        Args:
+            dsList (list, optional): list of pydicom dataset. Defaults to None.
+            OVERVIEW (bool, optional): Set True to not read pixel data, for efficiency in applications of meta 
+                                        data only interest. 
+                                        Pass to pydicom.filereader.dcmread parameter:stop_before_pixels
+                                        Defaults to False.
+            HIDE_PROGRESSBAR (bool, optional): Set True to hide tqdm progressbar. Defaults to False.
+            FORCE_READ (bool, optional): Force read dicom files even if they do not conform to DICOM standard. 
+                                            Pass to pydicom.filereader.dcmread parameter:force
+                                            Defaults to False.
+            SAFE_NAME_MODE (bool, optional): Set writing mode to use UIDs for file naming. Defaults to False.
         """
         if dsList is None:
             dsList = []
@@ -40,11 +50,12 @@ class DicomSeries(list):
         list.__init__(self, dsList)
 
     def __str__(self):
+        """Return output of getSeriesOverview method
+        """
         return ' '.join([str(i) for i in self.getSeriesOverview()[1]])
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+    def _setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
@@ -54,9 +65,48 @@ class DicomSeries(list):
         return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
+        """Initialise object from directory of dicom files.
+
+        Args:
+            dirName (str): Path to directory of dicom files
+            OVERVIEW (bool, optional): Set attribute OVERVIEW. Defaults to False.
+            HIDE_PROGRESSBAR (bool, optional): Set attribute HIDE_PROGRESSBAR. Defaults to False.
+            FORCE_READ (bool, optional): Set attribute FORCE_READ. Defaults to False.
+            ONE_FILE_PER_DIR (bool, optional): Read only one file per directory for fast applications
+                                                with meta interest only. Defaults to False.
+
+        Raises:
+            ValueError: If dicom files belonging to more than one study are found.
+            ValueError: If dicom files belonging to more than one series are found.
+
+        Returns:
+            DicomSeries: An instance of DicomSeries class.
+        """
+        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+
+    @classmethod
     def setFromFileList(cls, fileList, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
-        dsList = [dicom.read_file(i, stop_before_pixels=OVERVIEW, force=FORCE_READ) for i in fileList]
-        return cls(dsList, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        """Initialise object from list of files
+
+        Args:
+            fileList (list): List of full file names
+            OVERVIEW (bool, optional): Set attribute OVERVIEW. Defaults to False.
+            HIDE_PROGRESSBAR (bool, optional): Set attribute HIDE_PROGRESSBAR. Defaults to False.
+            FORCE_READ (bool, optional): Set attribute FORCE_READ. Defaults to False.
+
+        Raises:
+            ValueError: If dicom files belonging to more than one study are found.
+            ValueError: If dicom files belonging to more than one series are found.
+
+        Returns:
+            DicomSeries: An instance of DicomSeries class.
+        """
+        dicomDict = {}
+        for iFile in fileList:
+            dcmTools.readDicomFile_intoDict(iFile, dicomDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
+        return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     def getRootDir(self):
         return os.path.split(self[0].filename)[0]
