@@ -15,7 +15,7 @@ import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 
-from spydcmtk.helpers import SpydcmTK_config
+from spydcmtk.spydcm_config import SpydcmTK_config
 
 # =========================================================================
 ## CONSTANTS

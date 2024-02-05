@@ -14,7 +14,7 @@ import pydicom as dicom
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
-from spydcmtk.helpers import SpydcmTK_config
+from spydcmtk.spydcm_config import SpydcmTK_config
 
 
 
@@ -53,12 +53,11 @@ def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, s
                 matchingSeries = ss
             if matchingSeries is not None:
                 for iSeries in matchingSeries:
-                    resDict = iSeries.getSeriesInfoDict()
+                    resDict = iSeries.getSeriesInfoDict(EXTRA_TAGS=SpydcmTK_config.MANUSCRIPT_TABLE_EXTRA_TAG_LIST)
                     resDict["Identifier"] = dcmTools.getDicomFileIdentifierStr(iSeries[0])
                     dfData.append(resDict)
     stats = {}
     dfData = sorted(dfData, key=lambda i:i["Identifier"])
-    # dfData = sorted(dfData, key=lambda i:i["PatientWeight"])
     tagList = sorted(dfData[0].keys())
     strOut = ','+','.join(tagList) + '\n'
     for row in dfData:
@@ -414,7 +413,7 @@ def main():
     # --------------------------------------------------------------------------
     ap = MyParser(description='Simple Python Dicom Toolkit - spydcmtk')
 
-    ap.add_argument('-i', dest='inputPath', help='Path to find dicoms (file or directory or tar or tar.gz or zip)', type=str, required=True)
+    ap.add_argument('-i', dest='inputPath', help='Path to find dicoms (file or directory or tar or tar.gz or zip)', type=str, default=None)
     ap.add_argument('-o', dest='outputFolder', help='Path for output - if set then will organise dicoms into this folder', type=str, default=None)
 
     ap.add_argument('-a', dest='anonName',
@@ -440,6 +439,8 @@ def main():
     ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
+    #
+    ap.add_argument('-config', dest='configFile', help='Path to configuration file to use.', type=str, default=None)
     # -- program behaviour guidence -- #
     ap.add_argument('-SAFE', dest='SAFE', help='Safe naming - uses UIDs for naming to avoid potential conflicts.\n\t'+\
                         'Note, normal behaviour is to check for safe naming but certain conditions may require this.',
@@ -448,11 +449,18 @@ def main():
                             action='store_true')
     ap.add_argument('-QUIET', dest='QUIET', help='Suppress progress bars and information output to terminal',
                             action='store_true')
+    ap.add_argument('-INFO', dest='INFO', help='Provide setup (configuration) info and exit.',
+                            action='store_true')
     ap.add_argument('-STREAM', dest='STREAM', help='To organise dicoms rapidly without any quality checking',
                             action='store_true')
     ##
 
     arguments = ap.parse_args()
+    SpydcmTK_config.runconfigParser(arguments.configFile)
+    if arguments.INFO:
+        SpydcmTK_config.printInfo()
+        sys.exit(1)
+
     if arguments.inputPath is not None:
         arguments.inputPath = os.path.abspath(arguments.inputPath)
         if not (os.path.isdir(arguments.inputPath) or os.path.isfile(arguments.inputPath)):
@@ -461,6 +469,11 @@ def main():
             sys.exit(1)
         if not arguments.QUIET:
             print(f'Running SPYDCMTK with input {arguments.inputPath}')
+    else:
+        print(f'## ERROR : inputPath (-i option) must be provided. ')
+        print('EXITING')
+        sys.exit(1)
+
     ## -------------
 
     runActions(arguments, ap)

@@ -10,8 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.1.1 Release. 
+Current is VERSION 1.1.3 Release. 
 
+1.1.3: Additional configuration moved to config file. DCM2VTI active. 
 1.1.1: Add option to keep private tags when running anonymisation. Dcm2nii path configurable from config file. 
 1.1.0: Some bug fixes and restrict the use of dicom to vti (WIP)
 1.0.0: Initial Release
@@ -46,24 +47,43 @@ dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
 ```
 
 
+# Configuration
+
+miresearch uses a spydcmtk.conf file for configuration. 
+
+By default spydcmtk.conf files are search for in the following locations: 
+
+1. source_code_directory/spydcmtk.conf (file with default settings)
+2. $HOME/spydcmtk.conf
+3. $HOME/.spydcmtk.conf
+4. $HOME/.config/spydcmtk.conf
+5. Full file path defined at environment variable: "SPYDCMTK_CONF"
+6. Full path passed as commandline argument to `spydcmtk`
+
+Files are read in the above order with each subsequent variable present overwritting any previously defined. 
+For information on files found and variables used run:
+
+`spydcmtk -INFO` 
+
 
 ## Documentation
 
 Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
 
-Some format conversions are provided by this package to permit further use of dicom data. 
+For detailed documentation please see [wiki](https://github.com/fraser29/spydcmtk/wiki)
 
+Some format conversions are provided by this package:
 
 ### Dicom to Nifti
 
-Relies on [*dcm2niix*](https://github.com/rordenlab/dcm2niix), which must be installed and in path.
+Relies on [*dcm2niix*](https://github.com/rordenlab/dcm2niix), which must be installed and in path (or set in config file).
 
 ### Dicom to HTML
 
 Will build a standalone .html file to display dicom series in [*ParaView Glance*](https://www.kitware.com/exporting-paraview-scenes-to-paraview-glance/) renderer. 
 
 
-### Coming Soon: Dicom to VTK
+### Dicom to VTK
 
 A dicom to vtk format conversion is provided. See VTK format documentation [*here*](https://examples.vtk.org/site/VTKFileFormats/). 
 
@@ -74,3 +94,4 @@ Format conversions are:
 - *WORK IN PROGRESS*: dicom to structured dataset (vts format). 
 
 - *WORK IN PROGRESS*: dicom to planar dataset (vtp format).
+

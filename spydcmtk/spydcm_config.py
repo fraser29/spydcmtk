@@ -27,7 +27,7 @@ class _SpydcmTK_config():
             if os.path.isfile(extraConfFile):
                 self.all_config_files.append(extraConfFile)
             else:
-                print(f"WARNING: {extraConfFile} passed as config file to read, but FileNotFound")
+                print(f"WARNING: {extraConfFile} passed as config file to read, but FileNotFound - skipping")
 
         self.config.read(self.all_config_files)
 
@@ -56,38 +56,20 @@ class _SpydcmTK_config():
                 print(f"Error reading {iGroup} from spydcmtk.conf.")
                 print(f"  {extra_error_info}")
 
+    def printInfo(self):
+        print(" ----- SPYDCMTK Configuration INFO -----")
+        print('   Using configuration files found at: ')
+        for iFile in self.all_config_files:
+            if os.path.isfile(iFile):
+                print(f"    {iFile}")
+        print('')
+        print('   Configuration settings:')
+        attributes = vars(self)
+        for attribute_name in sorted(attributes.keys()):
+            if 'config' in attribute_name:
+                continue
+            print(f"   --  {attribute_name}: {attributes[attribute_name]}")
 
-
-        # try:
-        #     self.SERIES_OVERVIEW_TAG_LIST  = json.loads(self.config.get("series_overview_tags", "tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading series_overview_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
-        # try:
-        #     self.STUDY_OVERVIEW_TAG_LIST   = json.loads(self.config.get("study_overview_tags", "tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading study_overview_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
-        # try:
-        #     self.SUBJECT_OVERVIEW_TAG_LIST = json.loads(self.config.get("patient_overview_tags", "tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading patient_overview_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
-        # try: 
-        #     self.VTI_NAMING_TAG_LIST       = json.loads(self.config.get("vti_naming_tags", "tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading vti_naming_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
-        # try: 
-        #     self.MANUSCRIPT_TABLE_EXTRA_TAG_LIST = json.loads(self.config.get("manuscript_table_extra_tags","tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading manuscript_table_extra_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
-        # try: 
-        #     self.SUBJECT_NAMING_TAG_LIST = json.loads(self.config.get("manuscript_table_extra_tags","tagList"))
-        # except json.decoder.JSONDecodeError:
-        #     print(f"Error reading manuscript_table_extra_tags from spydcmtk.conf.")
-        #     print(f"  {extra_error_info}")
 
 SpydcmTK_config = _SpydcmTK_config()
 SpydcmTK_config.runconfigParser()

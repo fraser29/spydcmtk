@@ -15,7 +15,7 @@ import shutil
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
-from spydcmtk.helpers import SpydcmTK_config
+from spydcmtk.spydcm_config import SpydcmTK_config
 
 
 
@@ -164,7 +164,7 @@ class DicomSeries(list):
         thisSeNum = self.getTag('SeriesNumber', ifNotFound='#')
         suffix = ''
         if (thisSeNum=="#") or self.SAFE_NAME_MODE:
-            suffix += self.getTag("SeriesInstanceUID")
+            suffix += '_'+self.getTag("SeriesInstanceUID")
         for iTag in SpydcmTK_config.SERIES_NAMING_TAG_LIST:
             iVal = self.getTag(iTag, ifNotFound='')
             if len(iVal) > 0:
@@ -200,6 +200,7 @@ class DicomSeries(list):
         LIKE_ORIG = True
         destFile = None
         seriesOutDirName = self.getSeriesOutDirName(SE_RENAME)
+        print('SERIES OUT: ', seriesOutDirName)
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
         seriesOutputDirTemp = seriesOutputDir+".WORKING"
         if os.path.isdir(seriesOutputDir):
@@ -359,7 +360,7 @@ class DicomSeries(list):
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
 
-    def getSeriesInfoDict(self, EXTRA_MS_TAGS=SpydcmTK_config.MANUSCRIPT_TABLE_EXTRA_TAG_LIST):
+    def getSeriesInfoDict(self, EXTRA_TAGS=[]):
         # Default (standard tags):
         outDict = {'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
@@ -378,11 +379,11 @@ class DicomSeries(list):
             'MagneticFieldStrength': self.getTag('MagneticFieldStrength'),
             'InternalPulseSequenceName':self.getInternalPulseSequenceName(),
             'ReconstructionDiameter': self.getTag(0x00181100),
-            'AcquisitionMatrix': f'"{str(self.getTag(0x00181310))}"',
-            'Manufacturer': self.getTag('Manufacturer'),
-            'ManufacturerModelName': self.getTag('ManufacturerModelName'),
-            'SoftwareVersions': f'"{str(self.getTag(0x00181020))}"',}
-        for extraTag in EXTRA_MS_TAGS:
+            'AcquisitionMatrix': str(self.getTag(0x00181310)),
+            'Manufacturer': self.getTag("Manufacturer"),
+            'ManufacturerModelName': self.getTag("ManufacturerModelName"),
+            'SoftwareVersions': str(self.getTag(0x00181020)),}
+        for extraTag in EXTRA_TAGS:
             outDict[extraTag] = self.getTag(extraTag)
         outDict['nSlice'] = len(self)
         try:
@@ -393,6 +394,12 @@ class DicomSeries(list):
             outDict['AcquiredTemporalResolution'] = self.getTemporalResolution_TR_VPS()
         except ValueError:
             outDict['AcquiredTemporalResolution'] = 0.0
+        for i in outDict.keys():
+            try:
+                if ',' in outDict[i]:
+                    outDict[i] = f'"{outDict[i]}"'
+            except TypeError:
+                pass
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
@@ -666,9 +673,7 @@ class ListOfDicomStudies(list):
 
     def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, REMOVE_PRIVATE_TAGS=False):
         outDirs = []
-
         for iStudy in self:
-
             suffix = ''
             for iTag in SpydcmTK_config.SUBJECT_NAMING_TAG_LIST:
                 if (anonName is not None) and ('name' in iTag.lower()):

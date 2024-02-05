@@ -6,7 +6,7 @@ import unittest
 import shutil
 from spydcmtk import dcmTK
 from spydcmtk import spydcm
-from spydcmtk.helpers import SpydcmTK_config
+from spydcmtk.spydcm_config import SpydcmTK_config
 import numpy as np
 
 
