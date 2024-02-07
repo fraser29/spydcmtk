@@ -10,9 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.1.3 Release. 
+Current is VERSION 1.1.4 Release. 
 
-1.1.3: Additional configuration moved to config file. DCM2VTI active. 
+1.1.4: Additional configuration moved to config file. DCM2VTI active. 
 1.1.1: Add option to keep private tags when running anonymisation. Dcm2nii path configurable from config file. 
 1.1.0: Some bug fixes and restrict the use of dicom to vti (WIP)
 1.0.0: Initial Release
