@@ -49,7 +49,7 @@ dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
 
 # Configuration
 
-miresearch uses a spydcmtk.conf file for configuration. 
+spydcmtk uses a spydcmtk.conf file for configuration. 
 
 By default spydcmtk.conf files are search for in the following locations: 
 
