@@ -460,7 +460,7 @@ class DicomSeries(list):
             instance = self.getTag('InstanceNumber', dsID=k1, ifNotFound='unknown')
             se_instance_str = f"{se}_{instance}"
             if se_instance_str in se_instance_set:
-                self.SAFE_NAMING = True
+                self.SAFE_NAME_MODE = True
                 break
             se_instance_set.add(se_instance_str)
 
@@ -513,6 +513,11 @@ class DicomStudy(list):
                                                 self.getTag('SeriesDescription'),
                                                 len(self),
                                                 self.getNumberOfDicoms())
+
+
+    def setSafeNameMode(self):
+        for iSeries in self:
+            iSeries.SAFE_NAME_MODE = True
 
     def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
         return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
