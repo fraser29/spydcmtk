@@ -144,6 +144,16 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
                 continue
     return None
 
+def getTag(pathToDicoms, tagName):
+    """Convienience function to find first dicom and then get tag value
+
+    Args:
+        pathToDicoms (str): path to dicoms
+        tagName (str): dicom tag name
+    """
+    ds = returnFirstDicomFound(pathToDicoms)
+    return ds[tagName].value, ds.filename
+
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
                    QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
@@ -339,6 +349,9 @@ def runActions(args, ap):
     if args.dcmdump:
         ds = returnFirstDicomFound(args.inputPath, FILE_NAME_ONLY=False)
         print(ds)
+    if args.tagValue is not None:
+        val, fileName = getTag(args.inputPath, args.tagValue)
+        print(f"{args.tagValue} = {val} (found at {fileName})")
     elif args.msTable:
         outputCSV = args.outputFolder if args.outputFolder.endswith('.csv') else os.path.join(args.outputFolder, 'ms.csv')
         fOut = buildTableOfDicomParamsForManuscript([args.inputPath], 
@@ -432,6 +445,8 @@ def main():
         help='Will output a csv to outputFolder with tags info suitable for building manuscript style table', action='store_true')
     ap.add_argument('-dcmdump', dest='dcmdump',
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
+    ap.add_argument('-tag', dest='tagValue',
+        help='Get tag value for first dicom found under input', type=str, default=None)
     ap.add_argument('-nii', dest='nii',
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
