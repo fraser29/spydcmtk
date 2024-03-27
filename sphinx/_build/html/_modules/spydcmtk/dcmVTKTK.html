@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>spydcmtk.dcmVTKTK &mdash; spydcmtk 1.1.5 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=a48ae3df"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            spydcmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/introduction.html">spydcmtk</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/version-history.html">Version</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/dicom-conversion.html">DICOM CONVERSION</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">spydcmtk</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">spydcmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">spydcmtk.dcmVTKTK</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for spydcmtk.dcmVTKTK</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Created on MArch 2023 (rewrite from old module - remove reliance on VTKDICOM)</span>
+
+<span class="sd">@author: fraser</span>
+
+<span class="sd">Dicom to VTK conversion toolkit</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pydicom</span> <span class="k">as</span> <span class="nn">dicom</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">xml.etree.cElementTree</span> <span class="k">as</span> <span class="nn">ET</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">xml.etree.ElementTree</span> <span class="k">as</span> <span class="nn">ET</span>
+
+<span class="n">VTK_AVAILABLE</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">vtk</span>
+    <span class="kn">from</span> <span class="nn">vtk.util</span> <span class="kn">import</span> <span class="n">numpy_support</span> <span class="c1"># type: ignore</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">VTK_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="kn">import</span> <span class="nn">spydcmtk.dcmTools</span> <span class="k">as</span> <span class="nn">dcmTools</span>
+
+
+<span class="c1"># ===================================================================================================</span>
+<span class="c1"># EXPOSED METHODS</span>
+<span class="c1"># ===================================================================================================</span>
+
+<div class="viewcode-block" id="arrToVTI">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.arrToVTI">[docs]</a>
+<span class="k">def</span> <span class="nf">arrToVTI</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">meta</span><span class="p">,</span> <span class="n">ds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert array (+meta) to VTI dict (keys=times, values=VTI volumes). </span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        arr (np.array): Array of pixel data, shape: nR,nC,nSlice,nTime</span>
+<span class="sd">        meta (dict): dictionary containing meta to be added as Field data</span>
+<span class="sd">            meta = {&#39;Spacing&#39;: list_3 -&gt; resolution, </span>
+<span class="sd">                    &#39;Origin&#39;: list_3 -&gt; origin, </span>
+<span class="sd">                    &#39;ImageOrientationPatient&#39;: list_6 -&gt; ImageOrientationPatient, </span>
+<span class="sd">                    &#39;Times&#39;: list_nTime -&gt; times (can be missing if nTime=1)}</span>
+<span class="sd">        ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data</span>
+<span class="sd">        INCLUDE_MATRIX (bool [True]) : Boolean to include transform matrix (from ImageOrientationPatient) </span>
+<span class="sd">                                        in the image data (as DirectionMatrix). </span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        vtiDict</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If VTK import not available</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">VTK_AVAILABLE</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NoVtkError</span><span class="p">()</span>
+    <span class="n">dims</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">vtkDict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">timesUsed</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">mat3x3</span> <span class="o">=</span> <span class="n">_buildMatrix3x3</span><span class="p">(</span><span class="n">meta</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+        <span class="c1"># Silently catch error and write without DirectionMatrix</span>
+        <span class="n">INCLUDE_MATRIX</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">for</span> <span class="n">k1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">newImg</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkImageData</span><span class="p">()</span>
+        <span class="n">newImg</span><span class="o">.</span><span class="n">SetSpacing</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Spacing&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="p">,</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Spacing&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="p">,</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Spacing&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">newImg</span><span class="o">.</span><span class="n">SetOrigin</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Origin&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Origin&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Origin&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">INCLUDE_MATRIX</span><span class="p">:</span>
+            <span class="n">newImg</span><span class="o">.</span><span class="n">SetDirectionMatrix</span><span class="p">(</span><span class="n">mat3x3</span><span class="p">)</span>
+        <span class="n">newImg</span><span class="o">.</span><span class="n">SetDimensions</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">A3</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[:,:,:,</span><span class="n">k1</span><span class="p">]</span>
+        <span class="n">npArray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">A3</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]),</span> <span class="s1">&#39;F&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int16</span><span class="p">)</span>
+        <span class="n">aArray</span> <span class="o">=</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">numpy_to_vtk</span><span class="p">(</span><span class="n">npArray</span><span class="p">,</span> <span class="n">deep</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">aArray</span><span class="o">.</span><span class="n">SetName</span><span class="p">(</span><span class="s1">&#39;PixelData&#39;</span><span class="p">)</span>
+        <span class="n">newImg</span><span class="o">.</span><span class="n">GetPointData</span><span class="p">()</span><span class="o">.</span><span class="n">SetScalars</span><span class="p">(</span><span class="n">aArray</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">addFieldDataFromDcmDataSet</span><span class="p">(</span><span class="n">newImg</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">thisTime</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;Times&#39;</span><span class="p">][</span><span class="n">k1</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">thisTime</span> <span class="o">=</span> <span class="n">k1</span>
+        <span class="k">if</span> <span class="n">thisTime</span> <span class="ow">in</span> <span class="n">timesUsed</span><span class="p">:</span>
+            <span class="n">thisTime</span> <span class="o">=</span> <span class="n">k1</span>
+        <span class="n">timesUsed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">thisTime</span><span class="p">)</span>
+        <span class="n">vtkDict</span><span class="p">[</span><span class="n">thisTime</span><span class="p">]</span> <span class="o">=</span> <span class="n">newImg</span>
+    <span class="k">return</span> <span class="n">vtkDict</span></div>
+
+
+
+<div class="viewcode-block" id="writeArrToVTI">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeArrToVTI">[docs]</a>
+<span class="k">def</span> <span class="nf">writeArrToVTI</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">meta</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">ds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        arr (np.array): Array of pixel data, shape: nR,nC,nSlice,nTime</span>
+<span class="sd">        meta (dict): dictionary containing meta to be added as Field data</span>
+<span class="sd">            meta = {&#39;Spacing&#39;: list_3 -&gt; resolution, </span>
+<span class="sd">                    &#39;Origin&#39;: list_3 -&gt; origin, </span>
+<span class="sd">                    &#39;ImageOrientationPatient&#39;: list_6 -&gt; ImageOrientationPatient, </span>
+<span class="sd">                    &#39;Times&#39;: list_nTime -&gt; times (can be missing if nTime=1)}</span>
+<span class="sd">        filePrefix (str): File name prefix (if nTime&gt;1 then named &#39;{fileprefix}_{timeID:05d}.vti)</span>
+<span class="sd">        outputPath (str): Output path (if nTime &gt; 1 then &#39;{fileprefix}.pvd written to outputPath and sub-directory holds *.vti files)</span>
+<span class="sd">        ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If VTK import not available</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">vtkDict</span> <span class="o">=</span> <span class="n">arrToVTI</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">meta</span><span class="p">,</span> <span class="n">ds</span><span class="o">=</span><span class="n">ds</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="n">INCLUDE_MATRIX</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">writeVTIDict</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="writeVTIDict">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeVTIDict">[docs]</a>
+<span class="k">def</span> <span class="nf">writeVTIDict</span><span class="p">(</span><span class="n">vtiDict</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">):</span>
+    <span class="n">times</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">vtiDict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">writeVtkPvdDict</span><span class="p">(</span><span class="n">vtiDict</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="s1">&#39;vti&#39;</span><span class="p">,</span> <span class="n">BUILD_SUBDIR</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">fOut</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputPath</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">filePrefix</span><span class="si">}</span><span class="s1">.vti&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">writeVTI</span><span class="p">(</span><span class="n">vtiDict</span><span class="p">[</span><span class="n">times</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">fOut</span><span class="p">)</span></div>
+
+    
+
+<span class="k">def</span> <span class="nf">__transformMfromFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">):</span>
+    <span class="n">iop</span> <span class="o">=</span> <span class="p">[</span><span class="n">vtkObj</span><span class="o">.</span><span class="n">GetFieldData</span><span class="p">()</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">GetTuple</span><span class="p">(</span><span class="n">i</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">)]</span>
+    <span class="n">vecC</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">iop</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">6</span><span class="p">],</span> <span class="n">iop</span><span class="p">[:</span><span class="mi">3</span><span class="p">])</span>
+    <span class="n">iop</span> <span class="o">+=</span> <span class="n">vecC</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">ipp</span> <span class="o">=</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetOrigin</span><span class="p">()</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="p">[</span><span class="n">iop</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span> <span class="n">ipp</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+              <span class="n">iop</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">7</span><span class="p">],</span> <span class="n">ipp</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+              <span class="n">iop</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">8</span><span class="p">],</span> <span class="n">ipp</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+              <span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">matrix</span>
+
+
+<div class="viewcode-block" id="getTransFormMatrixFromFieldData">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getTransFormMatrixFromFieldData">[docs]</a>
+<span class="k">def</span> <span class="nf">getTransFormMatrixFromFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">):</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="n">__transformMfromFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">)</span>
+    <span class="n">transFormMatrix</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkTransform</span><span class="p">()</span>
+    <span class="n">transFormMatrix</span><span class="o">.</span><span class="n">SetMatrix</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">transFormMatrix</span></div>
+
+
+
+<div class="viewcode-block" id="getTransFormMatrixFromVTIObjDirectionMatrix">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getTransFormMatrixFromVTIObjDirectionMatrix">[docs]</a>
+<span class="k">def</span> <span class="nf">getTransFormMatrixFromVTIObjDirectionMatrix</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">):</span>
+    <span class="n">transFormMatrix</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkTransform</span><span class="p">()</span>
+    <span class="n">oo</span> <span class="o">=</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetOrigin</span><span class="p">()</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="p">[</span><span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">oo</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">oo</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">GetElement</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">oo</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                <span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">transFormMatrix</span><span class="o">.</span><span class="n">SetMatrix</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">transFormMatrix</span></div>
+
+
+
+<span class="k">def</span> <span class="nf">__matrixToDicomTagFieldData</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">,</span> <span class="n">matrix</span><span class="p">):</span>
+    <span class="n">iop</span> <span class="o">=</span> <span class="p">[</span><span class="n">matrix</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">8</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> 
+           <span class="n">matrix</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">9</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span> 
+           <span class="n">matrix</span><span class="p">[</span><span class="mi">10</span><span class="p">]]</span> <span class="c1"># TODO check this</span>
+    <span class="n">ipp</span> <span class="o">=</span> <span class="p">[</span><span class="n">matrix</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">7</span><span class="p">],</span> <span class="n">matrix</span><span class="p">[</span><span class="mi">11</span><span class="p">]]</span>
+    <span class="n">addFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="o">=</span><span class="n">vtiObj</span><span class="p">,</span> <span class="n">fieldVal</span><span class="o">=</span><span class="n">iop</span><span class="p">,</span> <span class="n">fieldName</span><span class="o">=</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">)</span>
+    <span class="n">addFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="o">=</span><span class="n">vtiObj</span><span class="p">,</span> <span class="n">fieldVal</span><span class="o">=</span><span class="n">ipp</span><span class="p">,</span> <span class="n">fieldName</span><span class="o">=</span><span class="s1">&#39;ImagePositionPatient&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="vtiToVts_viaTransform">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.vtiToVts_viaTransform">[docs]</a>
+<span class="k">def</span> <span class="nf">vtiToVts_viaTransform</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">,</span> <span class="n">transMatrix</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Uses field data: ImageOrientationPatient, ImagePositionPatient</span>
+<span class="sd">    :param vtiObj:</span>
+<span class="sd">    :param transMatrix: can pass or grab from field data</span>
+<span class="sd">    :return:</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">vtiObj</span><span class="o">.</span><span class="n">GetDirectionMatrix</span><span class="p">()</span><span class="o">.</span><span class="n">IsIdentity</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">transMatrix</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">transMatrix</span> <span class="o">=</span> <span class="n">getTransFormMatrixFromFieldData</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">)</span>
+            <span class="c1"># As we took IPP from field data, explicitlly set VTI origin to 0,0,0</span>
+            <span class="n">vtiObj</span><span class="o">.</span><span class="n">SetOrigin</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span><span class="mf">0.0</span><span class="p">,</span><span class="mf">0.0</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">transMatrix</span> <span class="o">=</span> <span class="n">getTransFormMatrixFromVTIObjDirectionMatrix</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">)</span>
+        <span class="n">vtiObj</span><span class="o">.</span><span class="n">SetOrigin</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span><span class="mf">0.0</span><span class="p">,</span><span class="mf">0.0</span><span class="p">)</span>
+    <span class="c1">##</span>
+    <span class="n">tfilterMatrix</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkTransformFilter</span><span class="p">()</span>
+    <span class="n">tfilterMatrix</span><span class="o">.</span><span class="n">SetTransform</span><span class="p">(</span><span class="n">transMatrix</span><span class="p">)</span>
+    <span class="n">tfilterMatrix</span><span class="o">.</span><span class="n">SetInputData</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">)</span>
+    <span class="n">tfilterMatrix</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">tfilterMatrix</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span></div>
+
+
+<span class="k">def</span> <span class="nf">_buildMatrix3x3</span><span class="p">(</span><span class="n">meta</span><span class="p">):</span>
+    <span class="n">iop</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">iop</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+    <span class="n">iop</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">][</span><span class="mi">3</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span>
+    <span class="n">iop</span><span class="p">[:,</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">iop</span><span class="p">[:,</span><span class="mi">1</span><span class="p">],</span> <span class="n">iop</span><span class="p">[:,</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">mat</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkMatrix3x3</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+            <span class="n">mat</span><span class="o">.</span><span class="n">SetElement</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">iop</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">mat</span>
+
+<span class="c1"># ===================================================================================================</span>
+<span class="k">def</span> <span class="nf">__writerWrite</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="n">writer</span><span class="o">.</span><span class="n">SetFileName</span><span class="p">(</span><span class="n">fileName</span><span class="p">)</span>
+    <span class="n">writer</span><span class="o">.</span><span class="n">SetInputData</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">writer</span><span class="o">.</span><span class="n">Write</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">fileName</span>
+
+
+<div class="viewcode-block" id="writeNII">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeNII">[docs]</a>
+<span class="k">def</span> <span class="nf">writeNII</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkNIFTIImageWriter</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">__writerWrite</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="writeMHA">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeMHA">[docs]</a>
+<span class="k">def</span> <span class="nf">writeMHA</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkMetaImageWriter</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">__writerWrite</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="writeVTS">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeVTS">[docs]</a>
+<span class="k">def</span> <span class="nf">writeVTS</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLStructuredGridWriter</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">__writerWrite</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="writeVTI">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeVTI">[docs]</a>
+<span class="k">def</span> <span class="nf">writeVTI</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLImageDataWriter</span><span class="p">()</span>
+    <span class="n">writer</span><span class="o">.</span><span class="n">SetDataModeToBinary</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">__writerWrite</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="nii2vti">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.nii2vti">[docs]</a>
+<span class="k">def</span> <span class="nf">nii2vti</span><span class="p">(</span><span class="n">fullFileName</span><span class="p">):</span>
+    <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkNIFTIImageReader</span><span class="p">()</span>
+    <span class="n">reader</span><span class="o">.</span><span class="n">SetFileName</span><span class="p">(</span><span class="n">fullFileName</span><span class="p">)</span>
+    <span class="n">reader</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span>
+    <span class="c1">## TRANSFORM</span>
+    <span class="n">qFormMatrix</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">GetQFormMatrix</span><span class="p">()</span>
+    <span class="n">trans</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkTransform</span><span class="p">()</span>
+    <span class="n">trans</span><span class="o">.</span><span class="n">SetMatrix</span><span class="p">(</span><span class="n">qFormMatrix</span><span class="p">)</span>
+    <span class="n">transFilter</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkTransformFilter</span><span class="p">()</span>
+    <span class="n">transFilter</span><span class="o">.</span><span class="n">SetTransform</span><span class="p">(</span><span class="n">trans</span><span class="p">)</span>
+    <span class="n">transFilter</span><span class="o">.</span><span class="n">SetInputData</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">transFilter</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="n">dataT</span> <span class="o">=</span> <span class="n">transFilter</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span>
+    <span class="c1">## RESAMPLE BACK TO VTI</span>
+    <span class="n">rif</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkResampleToImage</span><span class="p">()</span>
+    <span class="n">rif</span><span class="o">.</span><span class="n">SetInputDataObject</span><span class="p">(</span><span class="n">dataT</span><span class="p">)</span>
+    <span class="n">d1</span><span class="p">,</span><span class="n">d2</span><span class="p">,</span><span class="n">d3</span> <span class="o">=</span> <span class="n">dataT</span><span class="o">.</span><span class="n">GetDimensions</span><span class="p">()</span>
+    <span class="n">rif</span><span class="o">.</span><span class="n">SetSamplingDimensions</span><span class="p">(</span><span class="n">d1</span><span class="p">,</span><span class="n">d2</span><span class="p">,</span><span class="n">d3</span><span class="p">)</span>
+    <span class="n">rif</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">rif</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span>
+    <span class="c1">## WRITE</span>
+    <span class="n">dd</span><span class="p">,</span> <span class="n">ff</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fullFileName</span><span class="p">)</span>
+    <span class="n">ff</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">ff</span><span class="p">)</span>
+    <span class="n">fOut</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dd</span><span class="p">,</span> <span class="n">ff</span><span class="o">+</span><span class="s1">&#39;.vti&#39;</span><span class="p">)</span>
+    <span class="n">writeVTI</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fOut</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">fOut</span></div>
+
+
+<div class="viewcode-block" id="writeVtkFile">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeVtkFile">[docs]</a>
+<span class="k">def</span> <span class="nf">writeVtkFile</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.vti&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">writeVTI</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.vts&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">writeVTS</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.mha&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">writeMHA</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="readVTKFile">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.readVTKFile">[docs]</a>
+<span class="k">def</span> <span class="nf">readVTKFile</span><span class="p">(</span><span class="n">fileName</span><span class="p">):</span>
+    <span class="c1"># --- CHECK EXTENSTION - READ FILE ---</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">fileName</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="s1">&#39;## ERROR: </span><span class="si">%s</span><span class="s1"> file not found&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">fileName</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vtp&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLPolyDataReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vts&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLStructuredGridReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vtu&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLUnstructuredGridReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;stl&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkSTLReader</span><span class="p">()</span>
+        <span class="n">reader</span><span class="o">.</span><span class="n">ScalarTagsOn</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;nii&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkNIFTIImageReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vti&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLImageDataReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vtk&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkPolyDataReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;vtm&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkXMLMultiBlockDataReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;nrrd&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkNrrdReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;mha&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;mhd&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkMetaImageReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;png&#39;</span><span class="p">):</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkPNGReader</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">fileName</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;pvd&#39;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="s1">&#39; PVD - should use readPVD()&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="n">fileName</span> <span class="o">+</span> <span class="s1">&#39; not correct extension&#39;</span><span class="p">)</span>
+    <span class="n">reader</span><span class="o">.</span><span class="n">SetFileName</span><span class="p">(</span><span class="n">fileName</span><span class="p">)</span>
+    <span class="n">reader</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">reader</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span></div>
+
+
+
+<span class="c1"># =========================================================================</span>
+<span class="c1">##          PVD Stuff</span>
+<span class="c1"># =========================================================================</span>
+<div class="viewcode-block" id="checkIfExtnPresent">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.checkIfExtnPresent">[docs]</a>
+<span class="k">def</span> <span class="nf">checkIfExtnPresent</span><span class="p">(</span><span class="n">fileName</span><span class="p">,</span> <span class="n">extn</span><span class="p">):</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">extn</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;.&#39;</span><span class="p">):</span>
+        <span class="n">extn</span> <span class="o">=</span> <span class="n">extn</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="n">le</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">extn</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">fileName</span><span class="p">[</span><span class="o">-</span><span class="n">le</span><span class="p">:]</span> <span class="o">!=</span> <span class="n">extn</span><span class="p">):</span>
+        <span class="n">fileName</span> <span class="o">=</span> <span class="n">fileName</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">extn</span>
+    <span class="k">return</span> <span class="n">fileName</span></div>
+
+
+<span class="k">def</span> <span class="nf">_writePVD</span><span class="p">(</span><span class="n">rootDirectory</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">outputSummary</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param rootDirectory:</span>
+<span class="sd">    :param filePrefix:</span>
+<span class="sd">    :param outputSummary: dict of dicts : { timeID : {TrueTime : float, FileName : str}</span>
+<span class="sd">    :return: full file name</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fileOut</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDirectory</span><span class="p">,</span> <span class="n">filePrefix</span> <span class="o">+</span> <span class="s1">&#39;.pvd&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fileOut</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;?xml version=&quot;1.0&quot;?&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;VTKFile type=&quot;Collection&quot; version=&quot;0.1&quot; byte_order=&quot;LittleEndian&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;Collection&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">timeId</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">outputSummary</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="n">sTrueTime</span> <span class="o">=</span> <span class="n">outputSummary</span><span class="p">[</span><span class="n">timeId</span><span class="p">][</span><span class="s1">&#39;TrueTime&#39;</span><span class="p">]</span>
+            <span class="n">tFileName</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">outputSummary</span><span class="p">[</span><span class="n">timeId</span><span class="p">][</span><span class="s1">&#39;FileName&#39;</span><span class="p">])</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;DataSet timestep=&quot;</span><span class="si">%7.5f</span><span class="s1">&quot; file=&quot;</span><span class="si">%s</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sTrueTime</span><span class="p">,</span> <span class="n">tFileName</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;/Collection&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&lt;/VTKFile&gt;&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">fileOut</span>
+
+
+<span class="k">def</span> <span class="nf">_makePvdOutputDict</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">,</span> <span class="n">subDir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+    <span class="n">outputSummary</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">myKeys</span> <span class="o">=</span> <span class="n">vtkDict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+    <span class="n">myKeys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">myKeys</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">timeId</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">myKeys</span><span class="p">)):</span>
+        <span class="n">fileName</span> <span class="o">=</span> <span class="n">__buildFileName</span><span class="p">(</span><span class="n">filePrefix</span><span class="p">,</span> <span class="n">timeId</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">)</span>
+        <span class="n">trueTime</span> <span class="o">=</span> <span class="n">myKeys</span><span class="p">[</span><span class="n">timeId</span><span class="p">]</span>
+        <span class="n">outputMeta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;FileName&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">subDir</span><span class="p">,</span> <span class="n">fileName</span><span class="p">),</span> <span class="s1">&#39;TimeID&#39;</span><span class="p">:</span> <span class="n">timeId</span><span class="p">,</span> <span class="s1">&#39;TrueTime&#39;</span><span class="p">:</span> <span class="n">trueTime</span><span class="p">}</span>
+        <span class="n">outputSummary</span><span class="p">[</span><span class="n">timeId</span><span class="p">]</span> <span class="o">=</span> <span class="n">outputMeta</span>
+    <span class="k">return</span> <span class="n">outputSummary</span>
+
+<span class="k">def</span> <span class="nf">__writePvdData</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">rootDir</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">,</span> <span class="n">subDir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+    <span class="n">myKeys</span> <span class="o">=</span> <span class="n">vtkDict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+    <span class="n">myKeys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">myKeys</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">timeId</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">myKeys</span><span class="p">)):</span>
+        <span class="n">fileName</span> <span class="o">=</span> <span class="n">__buildFileName</span><span class="p">(</span><span class="n">filePrefix</span><span class="p">,</span> <span class="n">timeId</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">)</span>
+        <span class="n">fileOut</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">subDir</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">[</span><span class="n">myKeys</span><span class="p">[</span><span class="n">timeId</span><span class="p">]])</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">[</span><span class="n">myKeys</span><span class="p">[</span><span class="n">timeId</span><span class="p">]],</span> <span class="n">fileOut</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">writeVtkFile</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">[</span><span class="n">myKeys</span><span class="p">[</span><span class="n">timeId</span><span class="p">]],</span> <span class="n">fileOut</span><span class="p">)</span>
+
+<div class="viewcode-block" id="writeVtkPvdDict">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.writeVtkPvdDict">[docs]</a>
+<span class="k">def</span> <span class="nf">writeVtkPvdDict</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">rootDir</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">,</span> <span class="n">BUILD_SUBDIR</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Write dict of time:vtkObj to pvd file</span>
+<span class="sd">        If dict is time:fileName then will copy files</span>
+<span class="sd">    :param vtkDict: python dict - time:vtkObj</span>
+<span class="sd">    :param rootDir: directory</span>
+<span class="sd">    :param filePrefix: make filePrefix.pvd</span>
+<span class="sd">    :param fileExtn: file extension (e.g. vtp, vti, vts etc)</span>
+<span class="sd">    :param BUILD_SUBDIR: bool - to build subdir (filePrefix.pvd in root, then data in root/filePrefix/</span>
+<span class="sd">    :return: full file name</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">filePrefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filePrefix</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">subDir</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="n">fullPVD</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">checkIfExtnPresent</span><span class="p">(</span><span class="n">filePrefix</span><span class="p">,</span> <span class="s1">&#39;pvd&#39;</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">fullPVD</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">vtkDict</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="mi">0</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">deleteFilesByPVD</span><span class="p">(</span><span class="n">fullPVD</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">BUILD_SUBDIR</span><span class="p">:</span>
+        <span class="n">subDir</span> <span class="o">=</span> <span class="n">filePrefix</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">subDir</span><span class="p">)):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">subDir</span><span class="p">))</span>
+    <span class="n">outputSummary</span> <span class="o">=</span> <span class="n">_makePvdOutputDict</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">,</span> <span class="n">subDir</span><span class="p">)</span>
+    <span class="n">__writePvdData</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">,</span> <span class="n">rootDir</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">fileExtn</span><span class="p">,</span> <span class="n">subDir</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_writePVD</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">filePrefix</span><span class="p">,</span> <span class="n">outputSummary</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="deleteFilesByPVD">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.deleteFilesByPVD">[docs]</a>
+<span class="k">def</span> <span class="nf">deleteFilesByPVD</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">,</span> <span class="n">FILE_ONLY</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Will Read pvdFile - delete all files from hard drive that pvd refs</span>
+<span class="sd">        Then delete pvdFile</span>
+<span class="sd">    :param pvdFile:</span>
+<span class="sd">    :param FILE_ONLY:</span>
+<span class="sd">    :param QUIET:</span>
+<span class="sd">    :return:</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">FILE_ONLY</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">IOError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    warning - file not found </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">pvdFile</span><span class="p">))</span>
+            <span class="k">return</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">pvdDict</span> <span class="o">=</span> <span class="n">readPVDFileName</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">iKey</span> <span class="ow">in</span> <span class="n">pvdDict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">pvdDict</span><span class="p">[</span><span class="n">iKey</span><span class="p">])</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">pvdDict</span><span class="p">[</span><span class="n">iKey</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+                <span class="k">pass</span>  <span class="c1"># ignore this as may be shared by and deleted by another pvd</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">IOError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">QUIET</span><span class="p">)</span><span class="o">&amp;</span><span class="p">(</span><span class="s2">&quot;pvd&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pvdFile</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    warning - file not found </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">pvdFile</span><span class="p">))</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">head</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">rmdir</span><span class="p">(</span><span class="n">head</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">IOError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">QUIET</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    warning - dir not found </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">pvdFile</span><span class="p">)[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="mi">0</span></div>
+
+
+<span class="k">def</span> <span class="nf">__buildFileName</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">idNumber</span><span class="p">,</span> <span class="n">extn</span><span class="p">):</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%05d</span><span class="s1">&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">idNumber</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">extn</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;.&#39;</span><span class="p">:</span>
+        <span class="n">extn</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">extn</span>
+    <span class="n">fileName</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span> <span class="o">+</span> <span class="n">ids</span> <span class="o">+</span> <span class="n">extn</span>
+    <span class="k">return</span> <span class="n">fileName</span>
+
+<div class="viewcode-block" id="readPVDFileName">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.readPVDFileName">[docs]</a>
+<span class="k">def</span> <span class="nf">readPVDFileName</span><span class="p">(</span><span class="n">fileIn</span><span class="p">,</span> <span class="n">vtpTime</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">timeIDs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">RETURN_OBJECTS_DICT</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read PVD file, return dictionary of fullFileNames - keys = time</span>
+<span class="sd">    So DOES NOT read file</span>
+<span class="sd">    If not pvd - will return dict of {0.0 : fileName}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">timeIDs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">timeIDs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">fileIn</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ext</span> <span class="o">!=</span> <span class="s1">&#39;.pvd&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">RETURN_OBJECTS_DICT</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">vtpTime</span><span class="p">:</span> <span class="n">readVTKFile</span><span class="p">(</span><span class="n">fileIn</span><span class="p">)}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">vtpTime</span><span class="p">:</span> <span class="n">fileIn</span><span class="p">}</span>
+    <span class="c1">#</span>
+    <span class="n">vtkDict</span> <span class="o">=</span> <span class="n">pvdGetDict</span><span class="p">(</span><span class="n">fileIn</span><span class="p">,</span> <span class="n">timeIDs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">RETURN_OBJECTS_DICT</span><span class="p">:</span>
+        <span class="n">kk</span> <span class="o">=</span> <span class="n">vtkDict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">kk</span><span class="p">,</span> <span class="p">[</span><span class="n">readVTKFile</span><span class="p">(</span><span class="n">vtkDict</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">kk</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">vtkDict</span></div>
+
+
+<div class="viewcode-block" id="readPVD">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.readPVD">[docs]</a>
+<span class="k">def</span> <span class="nf">readPVD</span><span class="p">(</span><span class="n">fileIn</span><span class="p">,</span> <span class="n">timeIDs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">timeIDs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">timeIDs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">return</span> <span class="n">readPVDFileName</span><span class="p">(</span><span class="n">fileIn</span><span class="p">,</span> <span class="n">timeIDs</span><span class="o">=</span><span class="n">timeIDs</span><span class="p">,</span> <span class="n">RETURN_OBJECTS_DICT</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="pvdGetDict">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.pvdGetDict">[docs]</a>
+<span class="k">def</span> <span class="nf">pvdGetDict</span><span class="p">(</span><span class="n">pvd</span><span class="p">,</span> <span class="n">timeIDs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">timeIDs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">timeIDs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">pvd</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">pvd</span><span class="p">)</span><span class="o">.</span><span class="n">getroot</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">pvd</span><span class="p">)</span> <span class="o">==</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pvd</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">pvd</span>
+    <span class="n">nTSteps</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">timeIDs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">timeIDs</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">nTSteps</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">timeIDs</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">timeIDs</span><span class="p">[</span><span class="n">k1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">timeIDs</span><span class="p">[</span><span class="n">k1</span><span class="p">]</span> <span class="o">=</span> <span class="n">nTSteps</span> <span class="o">+</span> <span class="n">timeIDs</span><span class="p">[</span><span class="n">k1</span><span class="p">]</span>
+    <span class="n">pvdTimesFilesDict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">rootDir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">pvd</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nTSteps</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">timeIDs</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">attrib</span>
+        <span class="n">fullVtkFileName</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;file&#39;</span><span class="p">])</span>
+        <span class="n">pvdTimesFilesDict</span><span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;timestep&#39;</span><span class="p">])]</span> <span class="o">=</span> <span class="n">fullVtkFileName</span>
+    <span class="k">return</span> <span class="n">pvdTimesFilesDict</span></div>
+
+
+
+
+<span class="c1"># =========================================================================</span>
+<span class="c1"># =========================================================================</span>
+<span class="c1">## HELPFUL FILTERS</span>
+<span class="c1"># =========================================================================</span>
+<div class="viewcode-block" id="vtkfilterFlipImageData">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.vtkfilterFlipImageData">[docs]</a>
+<span class="k">def</span> <span class="nf">vtkfilterFlipImageData</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+    <span class="n">flipper</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkImageFlip</span><span class="p">()</span>
+    <span class="n">flipper</span><span class="o">.</span><span class="n">SetFilteredAxes</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+    <span class="n">flipper</span><span class="o">.</span><span class="n">SetInputData</span><span class="p">(</span><span class="n">vtiObj</span><span class="p">)</span>
+    <span class="n">flipper</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">flipper</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="getScalarsAsNumpy">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getScalarsAsNumpy">[docs]</a>
+<span class="k">def</span> <span class="nf">getScalarsAsNumpy</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">aS</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">GetPointData</span><span class="p">()</span><span class="o">.</span><span class="n">GetScalars</span><span class="p">()</span>
+    <span class="n">aName</span> <span class="o">=</span> <span class="n">aS</span><span class="o">.</span><span class="n">GetName</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">getArrayAsNumpy</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">aName</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="getArrayAsNumpy">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getArrayAsNumpy">[docs]</a>
+<span class="k">def</span> <span class="nf">getArrayAsNumpy</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">arrayName</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">vtk_to_numpy</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">GetPointData</span><span class="p">()</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="n">arrayName</span><span class="p">))</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="addArrayFromNumpy">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.addArrayFromNumpy">[docs]</a>
+<span class="k">def</span> <span class="nf">addArrayFromNumpy</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">npArray</span><span class="p">,</span> <span class="n">arrayName</span><span class="p">):</span>
+    <span class="n">aArray</span> <span class="o">=</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">numpy_to_vtk</span><span class="p">(</span><span class="n">npArray</span><span class="p">,</span> <span class="n">deep</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">aArray</span><span class="o">.</span><span class="n">SetName</span><span class="p">(</span><span class="n">arrayName</span><span class="p">)</span>
+    <span class="n">data</span><span class="o">.</span><span class="n">GetPointData</span><span class="p">()</span><span class="o">.</span><span class="n">AddArray</span><span class="p">(</span><span class="n">aArray</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="addFieldData">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.addFieldData">[docs]</a>
+<span class="k">def</span> <span class="nf">addFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">,</span> <span class="n">fieldVal</span><span class="p">,</span> <span class="n">fieldName</span><span class="p">):</span>
+    <span class="n">tagArray</span> <span class="o">=</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">numpy_to_vtk</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">fieldVal</span><span class="p">)]))</span>
+    <span class="n">tagArray</span><span class="o">.</span><span class="n">SetName</span><span class="p">(</span><span class="n">fieldName</span><span class="p">)</span>
+    <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetFieldData</span><span class="p">()</span><span class="o">.</span><span class="n">AddArray</span><span class="p">(</span><span class="n">tagArray</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="getFieldData">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getFieldData">[docs]</a>
+<span class="k">def</span> <span class="nf">getFieldData</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">,</span> <span class="n">fieldName</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">vtk_to_numpy</span><span class="p">(</span><span class="n">vtkObj</span><span class="o">.</span><span class="n">GetFieldData</span><span class="p">()</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="n">fieldName</span><span class="p">))</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="addFieldDataFromDcmDataSet">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.addFieldDataFromDcmDataSet">[docs]</a>
+<span class="k">def</span> <span class="nf">addFieldDataFromDcmDataSet</span><span class="p">(</span><span class="n">vtkObj</span><span class="p">,</span> <span class="n">ds</span><span class="p">):</span>
+    <span class="n">tagsDict</span> <span class="o">=</span> <span class="n">dcmTools</span><span class="o">.</span><span class="n">getDicomTagsDict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">iTag</span> <span class="ow">in</span> <span class="n">tagsDict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">ds</span><span class="p">[</span><span class="n">iTag</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="n">dicom</span><span class="o">.</span><span class="n">multival</span><span class="o">.</span><span class="n">MultiValue</span><span class="p">,</span> <span class="n">dicom</span><span class="o">.</span><span class="n">valuerep</span><span class="o">.</span><span class="n">DSfloat</span><span class="p">,</span> <span class="n">dicom</span><span class="o">.</span><span class="n">valuerep</span><span class="o">.</span><span class="n">IS</span><span class="p">]:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">tagArray</span> <span class="o">=</span> <span class="n">numpy_support</span><span class="o">.</span><span class="n">numpy_to_vtk</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+                <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span> <span class="c1"># multivalue - but prob strings</span>
+                    <span class="n">tagArray</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkStringArray</span><span class="p">()</span>
+                    <span class="n">tagArray</span><span class="o">.</span><span class="n">SetNumberOfValues</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+                    <span class="k">for</span> <span class="n">k1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">val</span><span class="p">)):</span>
+                        <span class="n">tagArray</span><span class="o">.</span><span class="n">SetValue</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">[</span><span class="n">k1</span><span class="p">]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">tagArray</span> <span class="o">=</span> <span class="n">vtk</span><span class="o">.</span><span class="n">vtkStringArray</span><span class="p">()</span>
+                <span class="n">tagArray</span><span class="o">.</span><span class="n">SetNumberOfValues</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">tagArray</span><span class="o">.</span><span class="n">SetValue</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+            <span class="n">tagArray</span><span class="o">.</span><span class="n">SetName</span><span class="p">(</span><span class="n">iTag</span><span class="p">)</span>
+            <span class="n">vtkObj</span><span class="o">.</span><span class="n">GetFieldData</span><span class="p">()</span><span class="o">.</span><span class="n">AddArray</span><span class="p">(</span><span class="n">tagArray</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">continue</span> <span class="c1"># tag not found</span></div>
+
+
+
+<div class="viewcode-block" id="getPatientMatrixDict">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.getPatientMatrixDict">[docs]</a>
+<span class="k">def</span> <span class="nf">getPatientMatrixDict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">patMat</span><span class="p">):</span>
+    <span class="n">dx</span><span class="p">,</span><span class="n">dy</span><span class="p">,</span><span class="n">dz</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">GetSpacing</span><span class="p">()</span>
+    <span class="n">oo</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">GetOrigin</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span> <span class="c1"># Try from passed Matrix first , else field data, else axis aligned</span>
+        <span class="n">iop</span> <span class="o">=</span> <span class="n">getFieldData</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="n">iop</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]</span>
+    <span class="n">iop</span> <span class="o">=</span> <span class="n">patMat</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">,</span> <span class="n">iop</span><span class="p">)</span>
+    <span class="n">patMat</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;PixelSpacing&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">dx</span><span class="o">*</span><span class="mf">1000.0</span><span class="p">,</span> <span class="n">dy</span><span class="o">*</span><span class="mf">1000.0</span><span class="p">],</span>
+                         <span class="s1">&#39;ImagePositionPatient&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">i</span><span class="o">*</span><span class="mf">1000.0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">oo</span><span class="p">],</span>
+                         <span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">:</span> <span class="n">iop</span><span class="p">,</span>
+                         <span class="s1">&#39;SpacingBetweenSlices&#39;</span><span class="p">:</span> <span class="n">dz</span><span class="o">*</span><span class="mf">1000.0</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">patMat</span></div>
+
+
+
+<div class="viewcode-block" id="testVTK">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.testVTK">[docs]</a>
+<span class="k">def</span> <span class="nf">testVTK</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">VTK_AVAILABLE</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NoVtkError</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="NoVtkError">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmVTKTK.NoVtkError">[docs]</a>
+<span class="k">class</span> <span class="nc">NoVtkError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39; NoVtkError</span>
+<span class="sd">            If VTK import fails &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;NoVtkError: VTK not found. Run: &quot;pip install vtk&quot;&#39;</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Fraser M. Callaghan.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
