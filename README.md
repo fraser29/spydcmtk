@@ -10,8 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.1.4 Release. 
+Current is VERSION 1.1.5 Release. 
 
+1.1.5: Add option to retrieve tag value from commandline. Small bug fix on safe naming. 
 1.1.4: Additional configuration moved to config file. DCM2VTI active. 
 1.1.1: Add option to keep private tags when running anonymisation. Dcm2nii path configurable from config file. 
 1.1.0: Some bug fixes and restrict the use of dicom to vti (WIP)
@@ -19,7 +20,7 @@ Current is VERSION 1.1.4 Release.
 
 ## Installation
 
-Using [pip](https://pip.pypa.io/en/stable/):
+Using [pip](https://pypi.org/project/spydcmtk/):
 ```
 pip install spydcmtk
 ```
@@ -40,8 +41,10 @@ If you would like to incorporate spydcmtk into your python project, then import 
 import spydcmtk
 
 listOfStudies = spydcmtk.dcmTK.ListOfDicomStudies.setFromDirectory(MY_DICOM_DIRECTORY)
+# Example filtering
 dcmStudy = listOfStudies.getStudyByDate('20230429') # Dates in dicom standard string format: YYYYMMDD
 dcmSeries = dcmStudy.getSeriesBySeriesNumber(1)
+# Example writing new dicom files with anonymisation
 dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
 
 ```
@@ -69,29 +72,4 @@ For information on files found and variables used run:
 ## Documentation
 
 Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
-
-For detailed documentation please see [wiki](https://github.com/fraser29/spydcmtk/wiki)
-
-Some format conversions are provided by this package:
-
-### Dicom to Nifti
-
-Relies on [*dcm2niix*](https://github.com/rordenlab/dcm2niix), which must be installed and in path (or set in config file).
-
-### Dicom to HTML
-
-Will build a standalone .html file to display dicom series in [*ParaView Glance*](https://www.kitware.com/exporting-paraview-scenes-to-paraview-glance/) renderer. 
-
-
-### Dicom to VTK
-
-A dicom to vtk format conversion is provided. See VTK format documentation [*here*](https://examples.vtk.org/site/VTKFileFormats/). 
-
-Format conversions are: 
-
-- dicom to image data (vti format). Suitable for 3D image volumes. This format is axis aligned (there is no embedded transformation). But "Field Data" embedded in the file are included as "ImageOrientationPatient" which, along with the Image Origin and Image Spacing methods can be used to construct a transformation matrix allowing conversion form image to real world coordinate space. 
-
-- *WORK IN PROGRESS*: dicom to structured dataset (vts format). 
-
-- *WORK IN PROGRESS*: dicom to planar dataset (vtp format).
-
+For detailed documentation please see [spydcmtk-documnetation](https://fraser29.github.io/spydcmtk/)
