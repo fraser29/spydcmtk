@@ -33,6 +33,7 @@ class DicomTags(object):
     SliceThickness = 0x0018, 0x0050
     RepetitionTime = 0x0018, 0x0080
     EchoTime = 0x0018, 0x0081
+    InversionTime = 0x0018, 0x0082
     NumberOfAverages = 0x0018, 0x0083
     MagneticFieldStrength = 0x0018, 0x0087
     SpacingBetweenSlices = 0x0018, 0x0088
