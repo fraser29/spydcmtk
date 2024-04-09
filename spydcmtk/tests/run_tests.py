@@ -53,7 +53,8 @@ class TestDicomSeries(unittest.TestCase):
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp1')
         cleanMakeDirs(tmpDir)
         dcmSeries.writeToOrganisedFileStructure(tmpDir)
-        dcmSeries.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
+        dcmStudy.anonymise(anonName='Not A Name', anonPatientID='12345')
+        dcmSeries.writeToOrganisedFileStructure(tmpDir)
         if not DEBUG:
             shutil.rmtree(tmpDir)
         
@@ -76,7 +77,9 @@ class TestDicomStudy(unittest.TestCase):
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp2')
         cleanMakeDirs(tmpDir)
         dcmStudy.writeToOrganisedFileStructure(tmpDir)
-        dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
+        dcmStudy.anonymise(anonName='Not A Name', anonPatientID='')
+        dcmStudy.resetUIDs()
+        dcmStudy.writeToOrganisedFileStructure(tmpDir)
         if not DEBUG:
             shutil.rmtree(tmpDir)
 

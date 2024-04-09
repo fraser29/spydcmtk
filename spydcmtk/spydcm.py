@@ -405,12 +405,16 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.outputFolder is not None:
+                if args.anonName is not None:
+                    if not args.QUIET:
+                        print(f"ANONYMISING...")
+                    ListDicomStudies.anonymise(anonName=args.anonName, 
+                                               anonPatientID=args.anonID, 
+                                               removePrivateTags=args.REMOVE_PRIVATE_TAGS)
+                    ListDicomStudies.resetUIDs()
                 if not args.QUIET:
                     print(f"WRITTING...")
-                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, 
-                                                                            anonName=args.anonName, 
-                                                                            anonID=args.anonID,
-                                                                            REMOVE_PRIVATE_TAGS=args.REMOVE_PRIVATE_TAGS)
+                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
                 res = 0 if allDirsPresent else 1
                 ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
