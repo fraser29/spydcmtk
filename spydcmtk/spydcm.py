@@ -105,7 +105,7 @@ def anonymiseInPlace(dicomDirectory, anonName=None):
         ds = returnFirstDicomFound(dicomDirectory)
         if ds is None:
             return # Nothing to anonymise... 
-        anonName = ds.get("StudyInstanceUID", "ANON")
+        anonName = ""
     #
     tmpDir = dicomDirectory+".WORKING"
     os.rename(dicomDirectory, tmpDir)
