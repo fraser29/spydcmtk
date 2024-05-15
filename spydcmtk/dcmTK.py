@@ -126,7 +126,7 @@ class DicomSeries(list):
         except KeyError:
             return ifNotFound
 
-    def setTag(self, tag, value):
+    def setTags_all(self, tag, value):
         for ds in self:
             ds.data_element(tag).value = value
 
@@ -223,21 +223,61 @@ class DicomSeries(list):
             return SE_RENAME[thisSeNum]
         return dcmTools.cleanString(f"SE{thisSeNum}{suffix}")
 
-    def resetUIDs(self, studyUID=None):
+    def resetUIDs(self, studyUID):
+        """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass last)
+
+        Args:
+            studyUID (str): UID - can use str(generate_uid())
         """
-            Reset UIDs - helpful for case of anon for analysis - but going back into PACS 
-        """
-        if studyUID is None:
-            studyUID = str(generate_uid())
         seriesUID = str(generate_uid())
         for k1 in range(len(self)):
             self[k1].SOPInstanceUID = str(generate_uid())
             self[k1].SeriesInstanceUID = seriesUID
             self[k1].StudyInstanceUID = studyUID
 
+    def anonymise(self, anonName, anonPatientID, anon_birthdate=True, remove_private_tags=True):
+        """Anonymise series inplace
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', UIDupdateDict={}, SE_RENAME={}, 
-                                      LIKE_ORIG=True, SAFE_NAMING_CHECK=True, REMOVE_PRIVATE_TAGS=False):
+        Args:
+            anonName (str): New anonymise name (can be empty str)
+            anonPatientID (str): New anon patient ID, if None then no action taken.
+            anon_birthdate (bool, optional): To remove birthdate from tags. Defaults to True.
+            remove_private_tags (bool, optional): To remove private tags from dataset. Defaults to True. 
+                In some cases this will need to be set False to keep tags necessary for post processing (e.g. some DTI tags). 
+                It is up to the user to confirm complete anonymisation in these cases. 
+        """
+        def PN_callback(ds, data_element):
+            """Called from the dataset "walk" recursive function for all data elements."""
+            if data_element.VR == "PN":
+                data_element.value = 'anonymous'
+            if "Institution" in data_element.name:
+                data_element.value = 'anonymous'
+            if data_element.name == "Patient's Name":
+                data_element.value = anonName
+            if (data_element.name == "Patient ID") and (anonPatientID is not None):
+                data_element.value = anonPatientID
+
+        # Remove patient name and any other person names using a callback to walk over data elements for each ds
+        for dataset in self:
+            try:
+                dataset.walk(PN_callback)
+            except TypeError: 
+                pass
+            # Other Tags
+            for name in ['OtherPatientIDs', 'OtherPatientIDsSequence', 'PatientAddress']:
+                if name in dataset:
+                    delattr(dataset, name)
+            if anon_birthdate:
+                for name in ['PatientBirthDate']:
+                    if name in dataset:
+                        dataset.data_element(name).value = ''
+            if remove_private_tags:
+                try:
+                    dataset.remove_private_tags()
+                except TypeError:
+                    pass
+
+    def writeToOrganisedFileStructure(self, studyOutputDir, SAFE_NAMING_CHECK=True):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure
             SE_RENAME = dict of SE# and Name to rename the SE folder    
@@ -248,17 +288,14 @@ class DicomSeries(list):
             self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
         LIKE_ORIG = True
-        destFile = None
-        seriesOutDirName = self.getSeriesOutDirName(SE_RENAME)
-        print('SERIES OUT: ', seriesOutDirName)
+        seriesOutDirName = self.getSeriesOutDirName()
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
         seriesOutputDirTemp = seriesOutputDir+".WORKING"
         if os.path.isdir(seriesOutputDir):
             os.rename(seriesOutputDir, seriesOutputDirTemp)
         if self.FORCE_READ:
-            ADD_TRANSFERSYNTAX = True ## THIS IS A BESPOKE CHANGE
+            ADD_TRANSFERSYNTAX = True # need to add if required force read. 
         TO_DECOMPRESS = self.isCompressed()
-        UIDupdateDict['SeriesInstanceUID'] = dicom.uid.generate_uid()
         for ds in tqdm(self.yieldDataset(), total=len(self), disable=self.HIDE_PROGRESSBAR):
             if TO_DECOMPRESS:
                 try:
@@ -269,8 +306,8 @@ class DicomSeries(list):
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
                 LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, anonName, anonID, UIDupdateDict, 
-                                            WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, WRITE_LIKE_ORIG=LIKE_ORIG, 
+                                            SAFE_NAMING=self.SAFE_NAME_MODE)
         # ON COMPLETION RENAME OUTPUTDIR
         os.rename(seriesOutputDirTemp, seriesOutputDir)
         return seriesOutputDir
@@ -496,6 +533,14 @@ class DicomSeries(list):
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
+        """Checks is should name dicoms based on UIDs or if a SE-number, Instace-number naming convention is possible.
+        Basically checks if there would be any overlaps. 
+
+        Args:
+            se_instance_set (set, optional): A set of instance file names (without extension). Defaults to None.
+        """
+        if self.SAFE_NAME_MODE:
+            return
         if se_instance_set is None:
             se_instance_set = set()
         for k1 in range(len(self)):
@@ -507,19 +552,23 @@ class DicomSeries(list):
                 break
             se_instance_set.add(se_instance_str)
 
-    def getStudyOutputDir(self, rootDir='', anonName=None, studyPrefix=''):
-        # 'AccessionNumber' 'StudyID'
+    def getStudyOutputDir(self, rootDir='', studyPrefix=''):
+        """Generate a study output directory name based on config setting STUDY_NAMINF_TAG_LIST
+
+        Args:
+            rootDir (str, optional): The root directory to build study directory in. Defaults to ''.
+            studyPrefix (str, optional): Optional prefix to add to naming. Defaults to ''.
+
+        Returns:
+            str: Path to directory at Study level where dicoms will be written
+        """
         suffix = ''
         if self.SAFE_NAME_MODE:
             suffix += f"{self.getTag('StudyInstanceUID')}"
         for iTag in SpydcmTK_config.STUDY_NAMING_TAG_LIST:
-            if (anonName is not None) and ('name' in iTag.lower()):
-                continue
             iVal = self.getTag(iTag, ifNotFound='', convertToType=str)
             if len(iVal) > 0:
                 suffix += '_'+iVal
-        if anonName is not None:
-            suffix = f'{anonName}_{suffix}'
         return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
 class DicomStudy(list):
@@ -561,6 +610,16 @@ class DicomStudy(list):
     def setSafeNameMode(self):
         for iSeries in self:
             iSeries.SAFE_NAME_MODE = True
+
+    def resetUIDs(self, studyUID=None):
+        if studyUID is None:
+            studyUID = str(generate_uid())
+        for i in self:
+            i.resetUIDs(studyUID)
+
+    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
+        for i in self:
+            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
 
     def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
         return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
@@ -659,23 +718,20 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', REMOVE_PRIVATE_TAGS=False):
+    def writeToOrganisedFileStructure(self, patientOutputDir, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
-        studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
+        studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
         studyOutputDirTemp = studyOutputDir+".WORKING"
         if os.path.isdir(studyOutputDir):
             os.rename(studyOutputDir, studyOutputDirTemp)
-        UIDupdateDict = {'StudyInstanceUID': dicom.uid.generate_uid()}
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, anonName=anonName, anonID=anonID, 
-                                                  UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, 
-                                                  SAFE_NAMING_CHECK=False, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, 
+                                                  SAFE_NAMING_CHECK=False)
         os.rename(studyOutputDirTemp, studyOutputDir)
         return studyOutputDir
 
-    def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True, REMOVE_PRIVATE_TAGS=False):
-        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, anonID, SE_RENAME, studyPrefix, 
-                                                            REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+    def writeToZipArchive(self, patientOutputDir, CLEAN_UP=True):
+        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir)
         r, f = os.path.split(studyOutputDir)
         shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
         fileOut = studyOutputDir+'.zip'
@@ -763,19 +819,25 @@ class ListOfDicomStudies(list):
             for iSeries in iStudy:
                 iSeries.SAFE_NAME_MODE = True
 
+    def resetUIDs(self):
+        for i in self:
+            i.resetUIDs()
+
+    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
+        for i in self:
+            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
+
     def isCompressed(self):
         return self[0].isCompressed()
 
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
 
-    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, REMOVE_PRIVATE_TAGS=False):
+    def writeToOrganisedFileStructure(self, outputRootDir):
         outDirs = []
         for iStudy in self:
             suffix = ''
             for iTag in SpydcmTK_config.SUBJECT_NAMING_TAG_LIST:
-                if (anonName is not None) and ('name' in iTag.lower()):
-                    continue
                 iVal = iStudy.getTag(iTag, ifNotFound='', convertToType=str)
                 if len(iVal) > 0:
                     suffix += '_'+iVal
@@ -784,8 +846,7 @@ class ListOfDicomStudies(list):
             else:
                 ioutputRootDir = outputRootDir
 
-            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir, anonName=anonName, anonID=anonID, 
-                                                       SE_RENAME=SE_RENAME, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir)
             outDirs.append(ooD)
         return outDirs
 
