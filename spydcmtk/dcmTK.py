@@ -286,17 +286,56 @@ class DicomSeries(list):
         return fileName+extn
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        fileName = self._generateFileName(outputNamingTags, '.nii.gz')
+        """Will write DicomSeries as nii.gz file (uses dcm2niix found on local system)
+
+        Args:
+            outputPath (str): Directory where to save output (if full pathname, with extn, is given then this is used)
+            outputNamingTags (tuple, optional): Tags to use to name output. If outputPath contains extension then not used. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
+
+        Returns:
+            str: Name of files saved
+        """
+        if outputPath.endswith('nii.gz'):
+            outputPath, fileName = os.path.split(outputPath)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
-    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
-        fileName = self._generateFileName(outputNamingTags, '')
+    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=False):
+        """Write DicomSeries as VTK ImageData (*.vti)
+
+        Args:
+            outputPath (str): Directory to save in or full filename to save
+            outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
+            INCLUDE_MATRIX (bool, optional): To apply matrix to VTI data. Defaults to False.
+
+        Returns:
+            str: Name of file saved
+        """
+        if outputPath.endswith('vti'):
+            outputPath, fileName = os.path.split(outputPath)
+            fileName, _ = os.path.splitext(fileName)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '')
         vtiDict = self.buildVTIDict(INCLUDE_MATRIX=INCLUDE_MATRIX)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
+        """Write DicomSeries as VTK StructuredImageData (*.vts)
+
+        Args:
+            outputPath (str): Directory to save in or full filename to save.
+            outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
+
+        Returns:
+            str: Name of file saved
+        """
+        if outputPath.endswith('vts'):
+            outputPath, fileName = os.path.split(outputPath)
+            fileName, _ = os.path.splitext(fileName)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '')
         vtsDict = self.buildVTSDict()
-        fileName = self._generateFileName(outputNamingTags, '')
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self):
@@ -306,7 +345,7 @@ class DicomSeries(list):
             vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
         return vtsDict
 
-    def buildVTIDict(self, INCLUDE_MATRIX=True):
+    def buildVTIDict(self, INCLUDE_MATRIX=False):
         A, meta = self.getPixelDataAsNumpy()
         return dcmVTKTK.arrToVTI(A, meta, self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
 
@@ -337,21 +376,25 @@ class DicomSeries(list):
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
             Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
+
+        Returns:
+            tuple: Array as numpy sahpe [nRow, nCol, nSlice, nTime], meta data dictionary describing: Spacing, Origin, ImageOrientationPatient, PatientPosition
         """
-        I,J,K = int(self.getTag('Columns')), int(self.getTag('Rows')), int(self.getNumberOfSlicesPerVolume())
+        I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
         self.sortBySlice_InstanceNumber()
         N = self.getNumberOfTimeSteps()
         A = np.zeros((I, J, K, N))
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
-                iA = self[c0].pixel_array.T
+                iA = self[c0].pixel_array
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()
         meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
                 'Origin': [i*0.001 for i in self.getImagePositionPatient_np(0)], 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
+                'PatientPosition': self.getTag('PatientPosition'), 
                 'Times': [dt*n*0.001 for n in range(N)]}
         return A, meta
 
@@ -771,10 +814,15 @@ class ListOfDicomStudies(list):
         for i in overviewList:
             print(','.join(i))
 
-
     def getStudyByDate(self, date_str):
+        return self.getStudyByTag('StudyDate', date_str)
+
+    def getStudyByPID(self, PID):
+        return self.getStudyByTag('PatientID', PID)
+
+    def getStudyByTag(self, tagName, tagValue):
         for i in self:
-            if i.getTag('StudyDate') == date_str:
+            if i.getTag(tagName) == tagValue:
                 return i
 
     def buildMSTable(self, DICOM_TAGS=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):

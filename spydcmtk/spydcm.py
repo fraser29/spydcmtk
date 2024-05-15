@@ -156,7 +156,7 @@ def getTag(pathToDicoms, tagName):
 
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
-                   QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
+                   QUITE=True, FORCE=False, INCLUDE_MATRIX=False):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
 
@@ -196,7 +196,7 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=False, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
@@ -397,7 +397,7 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=args.VTI_MATRIX)
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
@@ -451,7 +451,7 @@ def main():
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
-    ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
+    ap.add_argument('-VTI_MATRIX', dest='VTI_MATRIX', help='Add transform matrix to vti files', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     #
