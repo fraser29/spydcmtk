@@ -59,7 +59,10 @@ class DicomSeries(list):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
-        dStudy = dStudyList[0]
+        try:
+            dStudy = dStudyList[0]
+        except IndexError:
+            raise ValueError('No DICOMS found - please check your inputs')
         if len(dStudy) > 1:
             raise ValueError('More than one series found - use DicomStudy class')
         return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
