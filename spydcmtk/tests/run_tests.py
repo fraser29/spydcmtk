@@ -119,7 +119,43 @@ class TestDicom2MSTable(unittest.TestCase):
         self.assertTrue(os.path.isfile(fOut), msg='Written MS csv file does not exist')
         if not DEBUG:
             shutil.rmtree(tmpDir)
-        
+
+class TestDicomPixDataArray(unittest.TestCase):
+    def runTest(self):
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByTag('StudyInstanceUID', '1.2.826.0.1.3680043.8.498.46701999696935009211199968005189443301')
+        dcmSeries = dcmStudy.getSeriesBySeriesNumber(99)
+        A, meta = dcmSeries.getPixelDataAsNumpy()
+        self.assertEquals(A[17,13,0], 1935, msg='Pixel1 data not matching expected') 
+        self.assertEquals(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
+        self.assertEquals(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
+        self.assertEquals(meta['Origin'][2], 0.0003, msg='Origin data not matching expected') 
+        if DEBUG:
+            import matplotlib.pyplot as plt
+            for k1 in range(A.shape[-1]):
+                for k2 in range(A.shape[-2]):
+                    plt.imshow(A[:,:,k2, k1])
+                    plt.show()
+
+class TestDicomPixDataMeta(unittest.TestCase):
+
+    def runTest(self):
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByTag('StationName', 'AWP45557')
+        dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
+        A, meta = dcmSeries.getPixelDataAsNumpy()
+        print(A.shape)
+        print(meta)
+        self.assertEquals(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
+        self.assertAlmostEquals(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
+        self.assertAlmostEquals(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
+        self.assertEquals(meta['PatientPosition'], 'HFS', msg='PatientPosition data not matching expected') 
+        # if DEBUG:
+        #     import matplotlib.pyplot as plt
+        #     for k1 in range(A.shape[-1]):
+        #         for k2 in range(A.shape[-2]):
+        #             plt.imshow(A[:,:,k2, k1])
+        #             plt.show()
 
 class TestDicom2HTML(unittest.TestCase):
     def runTest(self):

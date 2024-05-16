@@ -46,6 +46,7 @@ class DicomTags(object):
     AcquisitionMatrix = 0x0018, 0x1310
     FlipAngle = 0x0018, 0x1314
     PatientPosition = 0x0018, 0x5100
+    PatientOrientation = 0x0020, 0x0020
     ImagePositionPatient = 0x0020, 0x0032
     ImageOrientationPatient = 0x0020, 0x0037
     StudyInstanceUID = 0x0020, 0x000d

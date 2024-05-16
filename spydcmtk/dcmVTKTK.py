@@ -29,7 +29,7 @@ import spydcmtk.dcmTools as dcmTools
 # EXPOSED METHODS
 # ===================================================================================================
 
-def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=True):
+def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=False):
     """Convert array (+meta) to VTI dict (keys=times, values=VTI volumes). 
 
     Args:
@@ -40,7 +40,7 @@ def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=True):
                     'ImageOrientationPatient': list_6 -> ImageOrientationPatient, 
                     'Times': list_nTime -> times (can be missing if nTime=1)}
         ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
-        INCLUDE_MATRIX (bool [True]) : Boolean to include transform matrix (from ImageOrientationPatient) 
+        INCLUDE_MATRIX (bool [False]) : Boolean to include transform matrix (from ImageOrientationPatient) 
                                         in the image data (as DirectionMatrix). 
     
     Returns:
@@ -84,7 +84,7 @@ def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=True):
     return vtkDict
 
 
-def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None, INCLUDE_MATRIX=True):
+def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None, INCLUDE_MATRIX=False):
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
 
     Args:
