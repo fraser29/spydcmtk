@@ -786,8 +786,13 @@ class ListOfDicomStudies(list):
                     raise IOError("ERROR READING DICOMS: SPDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, extn_filter=None):
+        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, 
+                                                         HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                         FORCE_READ=FORCE_READ, 
+                                                         ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, 
+                                                         OVERVIEW=OVERVIEW,
+                                                         extn_filter=extn_filter)
         return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod

@@ -428,11 +428,14 @@ def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
         dsDict[studyUID][seriesUID] = []
     dsDict[studyUID][seriesUID].append(dataset)
 
-def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
+def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
     dsDict = {}
     successReadDirs = set()
     nFiles = countFilesInDir(rootDir)
     for thisFile in tqdm(walkdir(rootDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
+        if extn_filter is not None:
+            if not thisFile.endswith(extn_filter):
+                continue
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
             continue
         if thisFile.endswith('json'):
