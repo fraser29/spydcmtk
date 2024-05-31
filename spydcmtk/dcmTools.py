@@ -417,8 +417,6 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
             continue
 
 def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
-    # Reading specific tags is actually slower. 
-    # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
     dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
     studyUID = str(dataset.StudyInstanceUID)
     seriesUID = str(dataset.SeriesInstanceUID)
@@ -429,6 +427,20 @@ def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
     dsDict[studyUID][seriesUID].append(dataset)
 
 def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
+    """Find all dicoms under "rootDir" and organise based upon UIDs
+
+    Args:
+        rootDir (str): Directory path under which to search
+        HIDE_PROGRESSBAR (bool, optional): To hide tqdm progress bar. Defaults to False.
+        FORCE_READ (bool, optional): Will tell pydicom to force read files that do not conform to dicom standard. Defaults to False.
+        ONE_FILE_PER_DIR (bool, optional): For a fast summary, will read only first file found per subdirectory (if one knows that dicoms are already organised in such a format). Defaults to False.
+        OVERVIEW (bool, optional): Will not read pixel data. Defaults to False.
+        extn_filter (str, optional): For faster reading of large multi data directory trees pass an extension to filter upon (e.g. dcm) then will only read files ending in this extension. Defaults to None.
+        DEBUG (bool, optional): Set true for debugging actions. Defaults to False.
+
+    Returns:
+        dict: A larger dictionary structure of {studyUID: {seriesUID: [list of pydicom datasets]}}
+    """
     dsDict = {}
     successReadDirs = set()
     nFiles = countFilesInDir(rootDir)
@@ -458,7 +470,22 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
             continue
     return dsDict
 
-def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
+def writeDirectoryToNII(dcmDir, outputPath, fileName):
+    """Write directory of dicom files to nifti file.
+        Requires dcm2nii which must be in path or provided via config. 
+        Also writes json sidecar. s
+
+    Args:
+        dcmDir (str): Directory under which to find DICOMS
+        outputPath (str): Directory where to save output
+        fileName (str): Filename for output
+
+    Raises:
+        OSError: If dcm2nii path is not found
+
+    Returns:
+        str: full filename of new nifti file
+    """
     if not os.path.isfile(SpydcmTK_config.dcm2nii_path):
         res = shutil.which(SpydcmTK_config.dcm2nii_path) # Maybe command name and in path
         if res is None:
@@ -467,16 +494,15 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
     extn = '.nii.gz' if '-z y' in SpydcmTK_config.dcm2nii_options else '.nii'
-    if FORCE_FILENAME or (len(SpydcmTK_config.dcm2nii_options) == 0):
-        list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
-        latest_file = max(list_of_files, key=os.path.getctime)
-        newFileName = os.path.join(outputPath, fileName)
-        os.rename(latest_file, newFileName)
-        print(f"Renamed {latest_file} --> as {newFileName}")
-        latest_json = latest_file.replace(extn, '.json')
-        if os.path.isfile(latest_json):
-            os.rename(latest_json, newFileName.replace(extn, '.json'))
-        return newFileName
+    list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
+    latest_file = max(list_of_files, key=os.path.getctime)
+    newFileName = os.path.join(outputPath, fileName)
+    os.rename(latest_file, newFileName)
+    print(f"Renamed {latest_file} --> as {newFileName}")
+    latest_json = latest_file.replace(extn, '.json')
+    if os.path.isfile(latest_json):
+        os.rename(latest_json, newFileName.replace(extn, '.json'))
+    return newFileName
 
 def buildFakeDS():
     meta = dicom.dataset.FileMetaDataset()
