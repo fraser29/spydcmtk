@@ -10,17 +10,20 @@ Dicom to VTK conversion toolkit
 import os
 import numpy as np
 import pydicom as dicom
+from pydicom.sr.codedict import codes
+from pydicom.uid import generate_uid
+from highdicom.seg.content import SegmentDescription
+from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
+from highdicom.content import AlgorithmIdentificationSequence
+from highdicom.seg.sop import Segmentation
+
 try:
     import xml.etree.cElementTree as ET
 except ImportError:
     import xml.etree.ElementTree as ET
 
-VTK_AVAILABLE = True
-try:
-    import vtk
-    from vtk.util import numpy_support # type: ignore
-except ImportError:
-    VTK_AVAILABLE = False
+import vtk
+from vtk.util import numpy_support # type: ignore
 
 import spydcmtk.dcmTools as dcmTools
 
@@ -49,8 +52,6 @@ def arrToVTI(arr, meta, ds=None, INCLUDE_MATRIX=False):
     Raises:
         ValueError: If VTK import not available
     """
-    if not VTK_AVAILABLE:
-        raise NoVtkError()
     dims = arr.shape
     vtkDict = {}
     timesUsed = []
@@ -538,9 +539,59 @@ def getPatientMatrixDict(data, patMat):
     return patMat
 
 
-def testVTK():
-    if not VTK_AVAILABLE:
-        raise NoVtkError()
+def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    fullLabelMap = arr.astype(np.ushort) # .T
+    sSeg = sorted(set(fullLabelMap.flatten()))
+    sSeg.remove(0)
+    sSegDict = {}
+    for k1, segID in enumerate(sSeg):
+        sSegDict[k1+1] = f"Segment{k1+1}"
+        fullLabelMap[fullLabelMap==segID] = k1+1
+
+    # if fullLabelMap.shape[0] != len(source_dicom_ds_list):
+    #     print('Writing labelMap size %s with source images size %d'%(str(fullLabelMap.shape), len(source_dicom_ds_list))) # FIXME raise error
+
+    # Describe the algorithm that created the segmentation if not given
+    if algorithm_identification is None:
+        algorithm_identification = AlgorithmIdentificationSequence(
+            name='Spydcmtk',
+            version='1.0',
+            family="ML"
+        )
+    segDesc_list = []
+    # Describe the segment
+    for segID, segName in sSegDict.items():
+        description_segment = SegmentDescription(
+            segment_number=segID,
+            segment_label=segName,
+            segmented_property_category=codes.cid7150.Tissue,
+            segmented_property_type=codes.cid7154.Kidney,
+            algorithm_type=SegmentAlgorithmTypeValues.AUTOMATIC,
+            algorithm_identification=algorithm_identification,
+            tracking_uid=generate_uid(),
+            tracking_id='spydcmtk %s'%(segName)
+        )
+        segDesc_list.append(description_segment)
+    # Create the Segmentation instance
+    seg_dataset = Segmentation(
+        source_images=source_dicom_ds_list,
+        pixel_array=fullLabelMap,
+        segmentation_type=SegmentationTypeValues.BINARY,
+        segment_descriptions=segDesc_list,
+        series_instance_uid=generate_uid(), #source_dicom_ds_list[0].SeriesInstanceUID,
+        series_number=2,
+        sop_instance_uid=generate_uid(), #source_dicom_ds_list[0].SOPInstanceUID,
+        instance_number=1,
+        manufacturer='Manufacturer',
+        manufacturer_model_name='Model',
+        software_versions='v1',
+        device_serial_number='Device XYZ',
+    )
+    if dcmSegFileOut is not None:
+        seg_dataset.save_as(dcmSegFileOut) 
+        return dcmSegFileOut
+    return seg_dataset
+
 
 class NoVtkError(Exception):
     ''' NoVtkError
