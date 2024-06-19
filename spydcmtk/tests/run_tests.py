@@ -14,6 +14,7 @@ this_dir = os.path.split(os.path.realpath(__file__))[0]
 TEST_DIRECTORY = os.path.join(this_dir, 'TEST_DATA')
 TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
+dcmSegTestD = os.path.join(TEST_DIRECTORY, "SE10_CTA_3.0_CE")
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = SpydcmTK_config.DEBUG
@@ -147,8 +148,8 @@ class TestDicomPixDataMeta(unittest.TestCase):
         print(A.shape)
         print(meta)
         self.assertEquals(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
-        self.assertAlmostEquals(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
-        self.assertAlmostEquals(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
+        self.assertAlmostEqual(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
+        self.assertAlmostEqual(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
         self.assertEquals(meta['PatientPosition'], 'HFS', msg='PatientPosition data not matching expected') 
         # if DEBUG:
         #     import matplotlib.pyplot as plt
@@ -251,6 +252,41 @@ class TestImageToDicom(unittest.TestCase):
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
+class TestArrToDCMSeg(unittest.TestCase):
+    def runTest(self):
+        if os.path.isfile(os.path.join(dcmSegTestD, f'IM-00010-00001.dcm')):
+            tmpDir = os.path.join(TEST_OUTPUT, 'tmp10')
+
+            dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-00010-{i:05d}.dcm') for i in range(1,51)])
+            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
+            print(pixArray.shape, len(dsList))
+            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+            cleanMakeDirs(tmpDir)
+            labelMap = np.array(pixArray > 200).astype(int)
+            dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
+            self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
+            if not DEBUG:
+                shutil.rmtree(tmpDir)
+
+class TestDCMSegToVTI(unittest.TestCase):
+    def runTest(self):
+        if os.path.isfile(os.path.join(dcmSegTestD, f'IM-00010-00001.dcm')):
+            tmpDir = os.path.join(TEST_OUTPUT, 'tmp11')
+            dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-00010-{i:05d}.dcm') for i in range(1,51)])
+            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
+            print(pixArray.shape, len(dsList))
+            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+            vtiOutA = os.path.join(tmpDir, 'dcm.vti')
+            dsList.writeToVTI(vtiOutA)
+            print(vtiOutA, os.path.isfile(vtiOutA))
+            vtiOutB = os.path.join(tmpDir, 'dcmSeg.vti')
+            cleanMakeDirs(tmpDir)
+            labelMap = np.array(pixArray > 200).astype(int)
+            dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
+            dcmTK.dcmVTKTK.dicom_seg_to_vti(dcmSegOut, vtiOutB)
+            self.assertTrue(os.path.isfile(vtiOutB), msg='VTI from DCMSEG file does not exist')
+            if not DEBUG:
+                shutil.rmtree(tmpDir)
 
 if __name__ == '__main__':
     unittest.main()

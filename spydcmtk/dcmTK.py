@@ -114,6 +114,9 @@ class DicomSeries(list):
     def getRootDir(self):
         return os.path.split(self[0].filename)[0]
 
+    def getDicomFullFileName(self, dsID=0):
+        return self[dsID].filename
+
     def sortByInstanceNumber(self):
         self.sort(key=dcmTools.instanceNumberSortKey)
 

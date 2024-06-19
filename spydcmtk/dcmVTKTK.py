@@ -12,10 +12,14 @@ import numpy as np
 import pydicom as dicom
 from pydicom.sr.codedict import codes
 from pydicom.uid import generate_uid
-from highdicom.seg.content import SegmentDescription
-from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
-from highdicom.content import AlgorithmIdentificationSequence
-from highdicom.seg.sop import Segmentation
+try:
+    from highdicom.seg.content import SegmentDescription
+    from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
+    from highdicom.content import AlgorithmIdentificationSequence
+    from highdicom.seg.sop import Segmentation
+    HIGHDCM = True
+except ImportError:
+    HIGHDCM = False
 
 try:
     import xml.etree.cElementTree as ET
@@ -540,6 +544,8 @@ def getPatientMatrixDict(data, patMat):
 
 
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    if not HIGHDCM:
+        raise ImportError("Missing highdicom\n Please run: pip install highdicom")
     fullLabelMap = arr.astype(np.ushort) # .T
     sSeg = sorted(set(fullLabelMap.flatten()))
     sSeg.remove(0)
@@ -556,7 +562,7 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
         algorithm_identification = AlgorithmIdentificationSequence(
             name='Spydcmtk',
             version='1.0',
-            family="ML"
+            family=codes.cid7162.ArtificialIntelligence
         )
     segDesc_list = []
     # Describe the segment
@@ -591,6 +597,21 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
         seg_dataset.save_as(dcmSegFileOut) 
         return dcmSegFileOut
     return seg_dataset
+
+def dicom_seg_to_vti(dicom_seg_path, vti_output_path):
+    ds = dicom.dcmread(dicom_seg_path)
+    seg_data = ds.pixel_array
+    seg_data = np.transpose(seg_data, axes=[1,2,0])
+    sliceThick = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
+    pixSpace = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
+    oo = ds.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
+    image_data = vtk.vtkImageData()
+    image_data.SetOrigin(oo[0], oo[1], oo[2])
+    image_data.SetDimensions(seg_data.shape)
+    image_data.SetSpacing(pixSpace[0], pixSpace[1], sliceThick)
+    vtk_array = numpy_support.numpy_to_vtk(num_array=seg_data.flatten('F'), deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
+    image_data.GetPointData().SetScalars(vtk_array)
+    writeVTI(image_data, vti_output_path)
 
 
 class NoVtkError(Exception):
