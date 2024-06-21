@@ -344,13 +344,13 @@ class DicomSeries(list):
             fileName = self._generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
-    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=False):
+    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False):
         """Write DicomSeries as VTK ImageData (*.vti)
 
         Args:
             outputPath (str): Directory to save in or full filename to save
             outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
-            INCLUDE_MATRIX (bool, optional): To apply matrix to VTI data. Defaults to False.
+            TRUE_ORIENTATION (bool, optional): To apply matrix to VTI data. Defaults to False.
 
         Returns:
             str: Name of file saved
@@ -360,7 +360,7 @@ class DicomSeries(list):
             fileName, _ = os.path.splitext(fileName)
         else:
             fileName = self._generateFileName(outputNamingTags, '')
-        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=INCLUDE_MATRIX)
+        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
@@ -382,15 +382,15 @@ class DicomSeries(list):
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self):
-        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=False)
+        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=False)
         vtsDict = {}
         for ikey in vtiDict.keys():
             vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
         return vtsDict
 
-    def buildVTIDict(self, INCLUDE_MATRIX=False):
+    def buildVTIDict(self, TRUE_ORIENTATION=False):
         A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, meta, self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
+        return dcmVTKTK.arrToVTI(A, meta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION)
 
     @property
     def sliceLocations(self):

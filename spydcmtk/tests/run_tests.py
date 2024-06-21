@@ -14,10 +14,11 @@ this_dir = os.path.split(os.path.realpath(__file__))[0]
 TEST_DIRECTORY = os.path.join(this_dir, 'TEST_DATA')
 TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
-dcmSegTestD = os.path.join(TEST_DIRECTORY, "SE10_CTA_3.0_CE")
+dcmSegTestD = os.path.join(TEST_DIRECTORY, "TEST_BBONE")
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = SpydcmTK_config.DEBUG
+BBThres = 1300
 
 if DEBUG: 
     print('')
@@ -131,12 +132,12 @@ class TestDicomPixDataArray(unittest.TestCase):
         self.assertEquals(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
         self.assertEquals(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
         self.assertEquals(meta['Origin'][2], 0.0003, msg='Origin data not matching expected') 
-        if DEBUG:
-            import matplotlib.pyplot as plt
-            for k1 in range(A.shape[-1]):
-                for k2 in range(A.shape[-2]):
-                    plt.imshow(A[:,:,k2, k1])
-                    plt.show()
+        # if DEBUG:
+        #     import matplotlib.pyplot as plt
+        #     for k1 in range(A.shape[-1]):
+        #         for k2 in range(A.shape[-2]):
+        #             plt.imshow(A[:,:,k2, k1])
+        #             plt.show()
 
 class TestDicomPixDataMeta(unittest.TestCase):
 
@@ -145,8 +146,6 @@ class TestDicomPixDataMeta(unittest.TestCase):
         dcmStudy = listOfStudies.getStudyByTag('StationName', 'AWP45557')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         A, meta = dcmSeries.getPixelDataAsNumpy()
-        print(A.shape)
-        print(meta)
         self.assertEquals(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
         self.assertAlmostEqual(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
         self.assertAlmostEqual(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
@@ -252,41 +251,71 @@ class TestImageToDicom(unittest.TestCase):
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
+def getTestVolDS():
+    dsList = []
+    if os.path.isfile(os.path.join(dcmSegTestD, f'IM-26100-00002.dcm')):
+        dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-26100-{i:05d}.dcm') for i in range(2,182)])
+    return dsList
+
 class TestArrToDCMSeg(unittest.TestCase):
     def runTest(self):
-        if os.path.isfile(os.path.join(dcmSegTestD, f'IM-00010-00001.dcm')):
+        dsList = getTestVolDS()
+        if len(dsList) > 0:
             tmpDir = os.path.join(TEST_OUTPUT, 'tmp10')
-
-            dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-00010-{i:05d}.dcm') for i in range(1,51)])
-            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
-            print(pixArray.shape, len(dsList))
-            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
             cleanMakeDirs(tmpDir)
-            labelMap = np.array(pixArray > 200).astype(int)
+            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
+            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+            labelMap = np.array(pixArray > BBThres).astype(int)
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
             self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 
+def _scaleVTI(ff):
+    ii = dcmTK.dcmVTKTK.readVTKFile(ff)
+    dcmTK.dcmVTKTK.scaleVTI(ii, 1000.0)
+    oo = ii.GetOrigin()
+    dcmTK.dcmVTKTK.writeVTI(ii, ff)
+    return oo
+
 class TestDCMSegToVTI(unittest.TestCase):
     def runTest(self):
-        if os.path.isfile(os.path.join(dcmSegTestD, f'IM-00010-00001.dcm')):
+        dsList = getTestVolDS()
+        if len(dsList) > 0:
             tmpDir = os.path.join(TEST_OUTPUT, 'tmp11')
-            dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-00010-{i:05d}.dcm') for i in range(1,51)])
+            cleanMakeDirs(tmpDir)
             pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
-            print(pixArray.shape, len(dsList))
             dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
             vtiOutA = os.path.join(tmpDir, 'dcm.vti')
-            dsList.writeToVTI(vtiOutA)
-            print(vtiOutA, os.path.isfile(vtiOutA))
+            vtiOutA2 = os.path.join(tmpDir, 'dcm2.vti')
+            vtsA = os.path.join(tmpDir, 'dcm.vts')
+            dsList.writeToVTI(vtiOutA, TRUE_ORIENTATION=False)
+            dsList.writeToVTS(vtsA)
+            dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
+
             vtiOutB = os.path.join(tmpDir, 'dcmSeg.vti')
-            cleanMakeDirs(tmpDir)
-            labelMap = np.array(pixArray > 200).astype(int)
+            labelMap = np.array(pixArray > BBThres).astype(int)
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
             dcmTK.dcmVTKTK.dicom_seg_to_vti(dcmSegOut, vtiOutB)
-            self.assertTrue(os.path.isfile(vtiOutB), msg='VTI from DCMSEG file does not exist')
+
+            ii = dcmTK.dcmVTKTK.readVTKFile(vtiOutB)
+            # Manual fix spacing as takes slice thickness but does not account for overlapping slices
+            ss = ii.GetSpacing()
+            ii.SetSpacing(ss[0], ss[1], 0.0009)
+            # Set origin - is a bit complicated to grab from segmentation
+            ii.SetOrigin(dcmTK.dcmVTKTK.readVTKFile(vtiOutA).GetOrigin())
+            # ii.SetDirectionMatrix(mm)
+            dcmTK.dcmVTKTK.writeVTI(ii, vtiOutB)
+
+            self.assertTrue(os.path.isfile(vtiOutA), msg='VTI from DCMSEG file does not exist')
+            self.assertTrue(os.path.isfile(vtiOutB), msg='VTI-SEG from DCMSEG file does not exist')
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 
 if __name__ == '__main__':
     unittest.main()
+
+    # suite = unittest.TestSuite()
+    # suite.addTest(TestDCMSegToVTI('runTest'))
+    # runner = unittest.TextTestRunner()
+    # runner.run(suite)

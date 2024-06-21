@@ -156,7 +156,7 @@ def getTag(pathToDicoms, tagName):
 
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
-                   QUITE=True, FORCE=False, INCLUDE_MATRIX=False):
+                   QUITE=True, FORCE=False, TRUE_ORIENTATION=False):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
 
@@ -172,7 +172,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
         list: List of output file names written
     """
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
-    return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+    return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
 
 
 def directoryToVTS(dcmDirectory, outputFolder,
@@ -196,7 +196,7 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=False, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, TRUE_ORIENTATION=False, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
@@ -204,7 +204,7 @@ def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=Spyd
                 print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
                 # fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             else:
-                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
             outputFiles.append(fOut)
             if not QUIET:
                 print(f'Written {fOut}')
@@ -261,7 +261,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
             FILE_TO_VTK_LIST.append(iPath)
         else:
             if os.path.isdir(iPath): # If path to dicoms
-                dcmToVTKPath = directoryToVTI(iPath, outputDir, INCLUDE_MATRIX=False)
+                dcmToVTKPath = directoryToVTI(iPath, outputDir, TRUE_ORIENTATION=False)
                 for ifile in dcmToVTKPath:
                     if ifile.endswith('.pvd'):
                         FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.readPVDFileName(ifile).values())
@@ -397,7 +397,7 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=args.VTI_MATRIX)
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, TRUE_ORIENTATION=args.TRUE_VTI_ORIENTATION)
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
@@ -455,7 +455,7 @@ def main():
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
-    ap.add_argument('-VTI_MATRIX', dest='VTI_MATRIX', help='Add transform matrix to vti files', action='store_true')
+    ap.add_argument('-TRUE_VTI_ORIENTATION', dest='TRUE_VTI_ORIENTATION', help='Will resample vti data at true location (output different dimensiuons)', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     #
