@@ -65,21 +65,27 @@ def arrToVTI(arr, meta, ds=None, TRUE_ORIENTATION=False):
         # Silently catch error and write without DirectionMatrix
         TRUE_ORIENTATION = False
     for k1 in range(dims[-1]):
+        A3 = arr[:,:,:,k1]
+        ###
         newImg = vtk.vtkImageData()
         newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
         newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
         newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
-        A3 = arr[:,:,:,k1]
+        A3 = np.swapaxes(A3, 0, 1)
         npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int16)
         aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
         aArray.SetName('PixelData')
         newImg.GetPointData().SetScalars(aArray)
+        if TRUE_ORIENTATION:
+            # DEBUG print(writeVtkFile(newImg, "/home/fraser/temp/temp.vti"))
+            oo = newImg.GetOrigin()
+            orientation = np.array(meta['ImageOrientationPatient']).reshape(2, 3)
+            normal = np.cross(orientation[0], orientation[1])
+            directions = np.vstack((orientation, normal)).T
+            vts_data = vtiToVts_viaTransform(newImg, build_vtkTransform(oo, directions))
+            newImg = filterResampleToImage(vts_data, np.min(meta['Spacing']))
         if ds is not None:
             addFieldDataFromDcmDataSet(newImg, ds)
-        if TRUE_ORIENTATION:
-            # newImg.SetDirectionMatrix(mat3x3)
-            vts_data = vtiToVts_viaTransform(newImg)
-            newImg = filterResampleToImage(vts_data, np.min(meta['Spacing']))
         try:
             thisTime = meta['Times'][k1]
         except KeyError:
@@ -123,60 +129,43 @@ def scaleVTI(vti_data, factor):
     vti_data.SetOrigin([i*factor for i in vti_data.GetOrigin()])
     vti_data.SetSpacing([i*factor for i in vti_data.GetSpacing()])
 
-def __transformMfromFieldData(vtkObj):
-    iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
-    vecC = np.cross(iop[3:6], iop[:3])
-    iop += vecC.tolist()
-    ipp = vtkObj.GetOrigin()
-    matrix = [iop[0], iop[3], iop[6], ipp[0],
-              iop[1], iop[4], iop[7], ipp[1],
-              iop[2], iop[5], iop[8], ipp[2],
-              0,0,0,1]
-    return matrix
 
-
-def getTransFormMatrixFromFieldData(vtkObj):
-    matrix = __transformMfromFieldData(vtkObj)
+def build_vtkTransform(oo, directions):
+    matrix4x4 = vtk.vtkMatrix4x4()
+    matrix4x4.SetElement(0,0, directions[0,0])
+    matrix4x4.SetElement(1,0, directions[1,0])
+    matrix4x4.SetElement(2,0, directions[2,0])
+    #
+    matrix4x4.SetElement(0,1, directions[0,1])
+    matrix4x4.SetElement(1,1, directions[1,1])
+    matrix4x4.SetElement(2,1, directions[2,1])
+    #
+    matrix4x4.SetElement(0,2, directions[0,2])
+    matrix4x4.SetElement(1,2, directions[1,2])
+    matrix4x4.SetElement(2,2, directions[2,2])
+    #
+    matrix4x4.SetElement(0,3, oo[0])
+    matrix4x4.SetElement(1,3, oo[1])
+    matrix4x4.SetElement(2,3, oo[2])
+    #
+    matrix4x4.SetElement(3,0, 0.0)
+    matrix4x4.SetElement(3,1, 0.0)
+    matrix4x4.SetElement(3,2, 0.0)
+    matrix4x4.SetElement(3,3, 1.0)
+    #
     transFormMatrix = vtk.vtkTransform()
-    transFormMatrix.SetMatrix(matrix)
+    transFormMatrix.SetMatrix(matrix4x4)
     return transFormMatrix
 
 
-def getTransFormMatrixFromVTIObjDirectionMatrix(vtkObj):
-    transFormMatrix = vtk.vtkTransform()
-    oo = vtkObj.GetOrigin()
-    matrix = [vtkObj.GetDirectionMatrix().GetElement(0,0), vtkObj.GetDirectionMatrix().GetElement(1,0), vtkObj.GetDirectionMatrix().GetElement(2,0), oo[0],
-                vtkObj.GetDirectionMatrix().GetElement(0,1), vtkObj.GetDirectionMatrix().GetElement(1,1), vtkObj.GetDirectionMatrix().GetElement(2,1), oo[1],
-                vtkObj.GetDirectionMatrix().GetElement(0,2), vtkObj.GetDirectionMatrix().GetElement(1,2), vtkObj.GetDirectionMatrix().GetElement(2,2), oo[2],
-                0,0,0,1]
-    transFormMatrix.SetMatrix(matrix)
-    return transFormMatrix
-
-
-def __matrixToDicomTagFieldData(vtiObj, matrix):
-    iop = [matrix[0], matrix[4], matrix[8], matrix[1], 
-           matrix[5], matrix[9], matrix[2], matrix[6], 
-           matrix[10]] # TODO check this
-    ipp = [matrix[3], matrix[7], matrix[11]]
-    addFieldData(vtkObj=vtiObj, fieldVal=iop, fieldName='ImageOrientationPatient')
-    addFieldData(vtkObj=vtiObj, fieldVal=ipp, fieldName='ImagePositionPatient')
-
-
-def vtiToVts_viaTransform(vtiObj, transMatrix=None):
+def vtiToVts_viaTransform(vtiObj, transMatrix):
     """
     Uses field data: ImageOrientationPatient, ImagePositionPatient
     :param vtiObj:
     :param transMatrix: can pass or grab from field data
     :return:
     """
-    if vtiObj.GetDirectionMatrix().IsIdentity():
-        if transMatrix is None:
-            transMatrix = getTransFormMatrixFromFieldData(vtiObj)
-            # As we took IPP from field data, explicitlly set VTI origin to 0,0,0
-            vtiObj.SetOrigin(0.0,0.0,0.0)
-    else:
-        transMatrix = getTransFormMatrixFromVTIObjDirectionMatrix(vtiObj)
-        vtiObj.SetOrigin(0.0,0.0,0.0)
+    vtiObj.SetOrigin(0.0,0.0,0.0)
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
     tfilterMatrix.SetTransform(transMatrix)

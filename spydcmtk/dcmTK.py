@@ -419,6 +419,7 @@ class DicomSeries(list):
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
             Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
+            NOTE: Origin taken from last slice in convention with VTK orientation
 
         Returns:
             tuple: Array as numpy sahpe [nRow, nCol, nSlice, nTime], meta data dictionary describing: Spacing, Origin, ImageOrientationPatient, PatientPosition
@@ -435,7 +436,7 @@ class DicomSeries(list):
                 c0 += 1
         dt = self.getTemporalResolution()
         meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
-                'Origin': [i*0.001 for i in self.getImagePositionPatient_np(0)], 
+                'Origin': [i*0.001 for i in self.getImagePositionPatient_np(len(self)-1)], 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
                 'PatientPosition': self.getTag('PatientPosition'), 
                 'Times': [dt*n*0.001 for n in range(N)]}
