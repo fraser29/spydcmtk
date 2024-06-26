@@ -10,8 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.1.5 Release. 
+Current is VERSION 1.1.7 Release. 
 
+1.1.7: Add basic DCM-SEG read/write/conversion functionality. Rewrote dcm2vtk routines for improved consistency in some edge cases. 
 1.1.5: Add option to retrieve tag value from commandline. Small bug fix on safe naming. 
 1.1.4: Additional configuration moved to config file. DCM2VTI active. 
 1.1.1: Add option to keep private tags when running anonymisation. Dcm2nii path configurable from config file. 

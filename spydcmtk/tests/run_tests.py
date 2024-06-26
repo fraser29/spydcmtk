@@ -14,11 +14,12 @@ this_dir = os.path.split(os.path.realpath(__file__))[0]
 TEST_DIRECTORY = os.path.join(this_dir, 'TEST_DATA')
 TEST_OUTPUT = os.path.join(this_dir, 'TEST_OUTPUT')
 dcm001 = os.path.join(TEST_DIRECTORY, 'IM-00041-00001.dcm')
-dcmSegTestD = os.path.join(TEST_DIRECTORY, "TEST_BBONE")
+MISC_DIR = os.path.join(TEST_DIRECTORY, "MISC")
+zipF = os.path.join(TEST_DIRECTORY, 'dicoms.zip')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = SpydcmTK_config.DEBUG
-BBThres = 1300
+Thres = 66
 
 if DEBUG: 
     print('')
@@ -128,10 +129,10 @@ class TestDicomPixDataArray(unittest.TestCase):
         dcmStudy = listOfStudies.getStudyByTag('StudyInstanceUID', '1.2.826.0.1.3680043.8.498.46701999696935009211199968005189443301')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(99)
         A, meta = dcmSeries.getPixelDataAsNumpy()
-        self.assertEquals(A[17,13,0], 1935, msg='Pixel1 data not matching expected') 
-        self.assertEquals(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
-        self.assertEquals(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
-        self.assertEquals(meta['Origin'][2], 0.0003, msg='Origin data not matching expected') 
+        self.assertEqual(A[17,13,0], 1935, msg='Pixel1 data not matching expected') 
+        self.assertEqual(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
+        self.assertEqual(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
+        self.assertEqual(meta['Origin'][2], 0.0003, msg='Origin data not matching expected') 
         # if DEBUG:
         #     import matplotlib.pyplot as plt
         #     for k1 in range(A.shape[-1]):
@@ -146,10 +147,10 @@ class TestDicomPixDataMeta(unittest.TestCase):
         dcmStudy = listOfStudies.getStudyByTag('StationName', 'AWP45557')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         A, meta = dcmSeries.getPixelDataAsNumpy()
-        self.assertEquals(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
+        self.assertEqual(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
         self.assertAlmostEqual(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
         self.assertAlmostEqual(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
-        self.assertEquals(meta['PatientPosition'], 'HFS', msg='PatientPosition data not matching expected') 
+        self.assertEqual(meta['PatientPosition'], 'HFS', msg='PatientPosition data not matching expected') 
         # if DEBUG:
         #     import matplotlib.pyplot as plt
         #     for k1 in range(A.shape[-1]):
@@ -170,9 +171,12 @@ class TestDicom2VTI(unittest.TestCase):
     def runTest(self):
         tmpDir = os.path.join(TEST_OUTPUT, 'tmpDCM2VIT')
         cleanMakeDirs(tmpDir)
-        fOut = spydcm.directoryToVTI(dcm001, tmpDir)
-        for iFOut in fOut:
-            self.assertTrue(os.path.isfile(iFOut), msg='Written vti file does not exist')
+        vtiOutA = os.path.join(tmpDir, 'A.vti')
+        vtiOutB = os.path.join(tmpDir, 'B.vti')
+        fOut = spydcm.directoryToVTI(MISC_DIR, vtiOutA)
+        fOut = spydcm.directoryToVTI(MISC_DIR, vtiOutB, TRUE_ORIENTATION=True)
+        self.assertTrue(os.path.isfile(vtiOutA), msg='Written vtiA file does not exist')
+        self.assertTrue(os.path.isfile(vtiOutB), msg='Written vtiB file does not exist')
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -197,24 +201,26 @@ class TestStream(unittest.TestCase):
 
 class TestZipAndUnZip(unittest.TestCase):
     def runTest(self):
-        zipF = "/Volume/TEST/zipped.zip"
         if not os.path.isfile(zipF):
             print(f"WARNING: UnZip test not run - {zipF} not found")
             return # Don't have data - can not run test
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpzip')
         LDS = dcmTK.ListOfDicomStudies.setFromInput(zipF)
-        self.assertTrue(len(LDS[0].getSeriesBySeriesNumber(8))==5, msg='Incorrect number of images for series 8')
-        self.assertTrue(len(LDS[0].getSeriesBySeriesNumber(9))==6, msg='Incorrect number of images for series 9')
-        
-        tempTestDir = os.path.split(zipF)[0]
-        outputs = LDS.writeToZipArchive(tempTestDir, CLEAN_UP=False)
-        self.assertTrue(os.path.isfile(outputs[0]), msg='Written zip file does not exist')
-        self.assertTrue(os.path.isdir(outputs[0][:-4]), msg='Written zip temp directory does not exist')
-        shutil.rmtree(outputs[0][:-4])
-        os.unlink(outputs[0])
-        outputs = LDS.writeToZipArchive(tempTestDir, CLEAN_UP=True)
-        self.assertTrue(os.path.isfile(outputs[0]), msg='Written zip file does not exist')
-        self.assertFalse(os.path.isdir(outputs[0][:-4]), msg='Written zip temp directory does exist - should have been cleaned up')
-        os.unlink(outputs[0])
+        studyA = LDS.getStudyByTag("StudyID", "1088")
+        studyB = LDS.getStudyByTag("StudyInstanceUID", "1.2.826.0.1.3680043.8.498.46701999696935009211199968005189443301")
+        self.assertTrue(len(studyA.getSeriesBySeriesNumber(88))==3, msg='Incorrect number of images for series 88')
+        self.assertTrue(len(studyB.getSeriesBySeriesNumber(99))==3, msg='Incorrect number of images for series 99')
+        outputs = LDS.writeToZipArchive(tmpDir, CLEAN_UP=False)
+        resFileA = os.path.join(tmpDir, "TEST-DATA_1088_20000101.zip")
+        self.assertTrue(os.path.isfile(resFileA), msg='Written zip file does not exist')
+        self.assertTrue(os.path.isdir(resFileA[:-4]), msg='Written zip temp directory does not exist')
+        shutil.rmtree(resFileA[:-4])
+        os.unlink(resFileA)
+        outputs = LDS.writeToZipArchive(tmpDir, CLEAN_UP=True)
+        self.assertTrue(os.path.isfile(resFileA), msg='Written zip file does not exist')
+        self.assertFalse(os.path.isdir(resFileA[:-4]), msg='Written zip temp directory does exist - should have been cleaned up')
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 
 class TestImageToDicom(unittest.TestCase):
@@ -253,8 +259,8 @@ class TestImageToDicom(unittest.TestCase):
 
 def getTestVolDS():
     dsList = []
-    if os.path.isfile(os.path.join(dcmSegTestD, f'IM-26100-00002.dcm')):
-        dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(dcmSegTestD, f'IM-26100-{i:05d}.dcm') for i in range(2,182)])
+    if os.path.isfile(os.path.join(MISC_DIR, f'IM-26100-00002.dcm')):
+        dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(MISC_DIR, f'IM-26100-{i:05d}.dcm') for i in range(2,182)])
     return dsList
 
 class TestArrToDCMSeg(unittest.TestCase):
@@ -265,7 +271,7 @@ class TestArrToDCMSeg(unittest.TestCase):
             cleanMakeDirs(tmpDir)
             pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
             dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
-            labelMap = np.array(pixArray > BBThres).astype(int)
+            labelMap = np.array(pixArray > Thres).astype(int)
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
             self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
             if not DEBUG:
@@ -294,9 +300,9 @@ class TestDCMSegToVTI(unittest.TestCase):
             dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
 
             vtiOutB = os.path.join(tmpDir, 'dcmSeg.vti')
-            labelMap = np.array(pixArray > BBThres).astype(int)
+            labelMap = np.array(pixArray > Thres).astype(int)
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
-            dcmTK.dcmVTKTK.dicom_seg_to_vti(dcmSegOut, vtiOutB)
+            dcmTK.dcmVTKTK.dicom_seg_to_vtk(dcmSegOut, vtiOutB)
 
             ii = dcmTK.dcmVTKTK.readVTKFile(vtiOutB)
             # Manual fix spacing as takes slice thickness but does not account for overlapping slices

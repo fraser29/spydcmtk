@@ -54,6 +54,14 @@ class DicomSeries(list):
         """
         return ' '.join([str(i) for i in self.getSeriesOverview()[1]])
 
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            result = super().__getitem__(item)
+            return DicomSeries(result)
+        else:
+            return super().__getitem__(item)
+
     @classmethod
     def _setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
@@ -229,6 +237,22 @@ class DicomSeries(list):
             return SE_RENAME[thisSeNum]
         return dcmTools.cleanString(f"SE{thisSeNum}{suffix}")
 
+    # ----------------------------------------------------------------------------------------------------
+    def removeTimes(self, timesIDs_ToRemove):
+        K = int(self.getNumberOfSlicesPerVolume())
+        self.sortBySlice_InstanceNumber()
+        N = self.getNumberOfTimeSteps()
+        c0 = 0
+        dsToRm = []
+        for k1 in range(K):
+            for k2 in range(N):
+                if k2 in timesIDs_ToRemove:
+                    dsToRm.append(self[c0])
+                c0 += 1
+        for iDS in dsToRm:
+            self.remove(iDS)
+
+    # ----------------------------------------------------------------------------------------------------
     def resetUIDs(self, studyUID):
         """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass last)
 
@@ -381,12 +405,9 @@ class DicomSeries(list):
         vtsDict = self.buildVTSDict()
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
-    def buildVTSDict(self):
-        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=False)
-        vtsDict = {}
-        for ikey in vtiDict.keys():
-            vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
-        return vtsDict
+    def buildVTSDict(self): # TODO write as go
+        A, meta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTS(A, meta, self[0])
 
     def buildVTIDict(self, TRUE_ORIENTATION=False):
         A, meta = self.getPixelDataAsNumpy()
@@ -405,16 +426,22 @@ class DicomSeries(list):
         sliceLocS = set(sliceLoc)
         return sliceLoc.count(sliceLocS.pop())
 
-    def getMatrix(self):
+    def getSliceNormalVector(self):
         self.sortBySlice_InstanceNumber()
-        ipp = self.getImagePositionPatient_np(0)
-        iop = self.getImageOrientationPatient_np()
-        vecC = np.cross(iop[3:6], iop[:3])
-        dx, dy, dz = self.getDeltaCol(), self.getDeltaRow(), self.getDeltaSlice()
-        return np.array([[iop[3]*dx, iop[0]*dy, vecC[0]*dz, iop[0]],
-                         [iop[4]*dx, iop[1]*dy, vecC[1]*dz, iop[1]],
-                         [iop[5]*dx, iop[2]*dy, vecC[2]*dz, iop[2]],
-                         [0,0,0,1]])
+        sliceVec = self.getImagePositionPatient_np(-1) - self.getImagePositionPatient_np(0)
+        if np.linalg.norm(sliceVec) < 1e-9:
+            iop = self.getTag('ImageOrientationPatient')
+            sliceVec = np.cross(iop[:3], iop[3:6])
+        else:
+            sliceVec = sliceVec / np.linalg.norm(sliceVec)
+        return sliceVec
+
+    def doesSliceLocationsMatchingIOPNormal(self):
+        iop = self.getTag('ImageOrientationPatient')
+        iopN = np.cross(iop[:3], iop[3:6])
+        sliceLocN = self.getSliceNormalVector()
+        tf = [i*j>=0.0 for i,j in zip(iopN, sliceLocN)]
+        return all(tf)
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
@@ -435,11 +462,15 @@ class DicomSeries(list):
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()
+        oo = [i*0.001 for i in self.getImagePositionPatient_np(0)]
+        sliceVec = self.getSliceNormalVector()
         meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
-                'Origin': [i*0.001 for i in self.getImagePositionPatient_np(len(self)-1)], 
+                'Origin': oo, 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
                 'PatientPosition': self.getTag('PatientPosition'), 
-                'Times': [dt*n*0.001 for n in range(N)]}
+                'Times': [dt*n*0.001 for n in range(N)],
+                'Dimensions': A.shape,
+                'SliceVector': sliceVec}
         return A, meta
 
     def getScanDuration_secs(self):
@@ -862,10 +893,10 @@ class ListOfDicomStudies(list):
             outDirs.append(ooD)
         return outDirs
 
-    def writeToZipArchive(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, CLEAN_UP=True):
+    def writeToZipArchive(self, outputRootDir, CLEAN_UP=True):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToZipArchive(outputRootDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME, CLEAN_UP=CLEAN_UP)
+            ooD = iStudy.writeToZipArchive(outputRootDir, CLEAN_UP=CLEAN_UP)
             outDirs.append(ooD)
         return outDirs
 
@@ -1034,7 +1065,7 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.rot90(A)
     A = np.flipud(A)
     print(A.shape, type(A), A.dtype)
-    patientMatrixDict = dcmVTKTK.getPatientMatrixDict(vti, patientMatrixDict)
+    patientMatrixDict = dcmVTKTK.getPatientMatrixDictFromVTI(vti, patientMatrixDict)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
 
 

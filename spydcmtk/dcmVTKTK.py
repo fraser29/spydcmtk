@@ -59,33 +59,19 @@ def arrToVTI(arr, meta, ds=None, TRUE_ORIENTATION=False):
     dims = arr.shape
     vtkDict = {}
     timesUsed = []
-    try:
-        mat3x3 = _buildMatrix3x3(meta)
-    except KeyError:
-        # Silently catch error and write without DirectionMatrix
-        TRUE_ORIENTATION = False
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]
         ###
-        newImg = vtk.vtkImageData()
-        newImg.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
-        newImg.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
-        newImg.SetDimensions(dims[0] ,dims[1] ,dims[2])
         A3 = np.swapaxes(A3, 0, 1)
-        npArray = np.reshape(A3, np.prod(arr.shape[:3]), 'F').astype(np.int16)
-        aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
-        aArray.SetName('PixelData')
-        newImg.GetPointData().SetScalars(aArray)
+        newImg = _arrToImagedata(A3, meta)
         if TRUE_ORIENTATION:
-            # DEBUG print(writeVtkFile(newImg, "/home/fraser/temp/temp.vti"))
-            oo = newImg.GetOrigin()
-            orientation = np.array(meta['ImageOrientationPatient']).reshape(2, 3)
-            normal = np.cross(orientation[0], orientation[1])
-            directions = np.vstack((orientation, normal)).T
-            vts_data = vtiToVts_viaTransform(newImg, build_vtkTransform(oo, directions))
+            vts_data = _vti2vts(newImg, meta)
             newImg = filterResampleToImage(vts_data, np.min(meta['Spacing']))
+            delAllCellArrays(newImg)
+            delArraysExcept(newImg, ['PixelData'])
         if ds is not None:
-            addFieldDataFromDcmDataSet(newImg, ds)
+            addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": meta['SliceVector'],
+                                                                "Time": meta.get('Times', [0.0])[0]})
         try:
             thisTime = meta['Times'][k1]
         except KeyError:
@@ -96,6 +82,50 @@ def arrToVTI(arr, meta, ds=None, TRUE_ORIENTATION=False):
         vtkDict[thisTime] = newImg
     return vtkDict
 
+def _arrToImagedata(A3, meta):
+    newImg = _buildVTIImage(meta)
+    npArray = np.reshape(A3, np.prod(A3.shape), 'F').astype(np.int16)
+    aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
+    aArray.SetName('PixelData')
+    newImg.GetPointData().SetScalars(aArray)
+    return newImg
+
+def _vti2vts(vti_image, meta):
+    return vtiToVts_viaTransform(vti_image, build_vtkTransform_meta(meta))
+    
+def _buildVTIImage(meta):
+    vti_image = vtk.vtkImageData()
+    vti_image.SetSpacing(meta['Spacing'][0] ,meta['Spacing'][1] ,meta['Spacing'][2])
+    vti_image.SetOrigin(meta['Origin'][0], meta['Origin'][1], meta['Origin'][2])
+    vti_image.SetDimensions(meta['Dimensions'][1], meta['Dimensions'][0], meta['Dimensions'][2])
+    return vti_image
+
+def _buildVTSGrid_xform(meta): # VTK IMAGE + TRANSFORM (faster than matrix calc)
+    vti_image = _buildVTIImage(meta)
+    return _vti2vts(vti_image, meta)
+    
+
+def arrToVTS(arr, meta, ds=None):
+    dims = arr.shape
+    vtkDict = {}
+    timesUsed = []
+    for k1 in range(dims[-1]):
+        A3 = arr[:,:,:,k1]
+        A3 = np.swapaxes(A3, 0, 1)
+        ii = _arrToImagedata(A3, meta)
+        vts_data = _vti2vts(ii, meta)
+        if ds is not None:
+            addFieldDataFromDcmDataSet(vts_data, ds, extra_tags={"SliceVector": meta['SliceVector'],
+                                                                "Time": meta.get('Times', [0.0])[0]})
+        try:
+            thisTime = meta['Times'][k1]
+        except KeyError:
+            thisTime = k1
+        if thisTime in timesUsed:
+            thisTime = k1
+        timesUsed.append(thisTime)
+        vtkDict[thisTime] = vts_data
+    return vtkDict
 
 def writeArrToVTI(arr, meta, filePrefix, outputPath, ds=None, TRUE_ORIENTATION=False):
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
@@ -130,7 +160,23 @@ def scaleVTI(vti_data, factor):
     vti_data.SetSpacing([i*factor for i in vti_data.GetSpacing()])
 
 
-def build_vtkTransform(oo, directions):
+def build_vtkTransform_fieldData(vtkObj):
+    iop = [vtkObj.GetFieldData().GetArray('ImageOrientationPatient').GetTuple(i)[0] for i in range(6)]
+    SliceVector = [vtkObj.GetFieldData().GetArray('SliceVector').GetTuple(i)[0] for i in range(3)]
+    oo = [vtkObj.GetFieldData().GetArray('ImagePositionPatient').GetTuple(i)[0] for i in range(3)]
+    orientation = np.array(iop).reshape(2, 3)
+    directions = np.vstack((orientation, SliceVector)).T
+    return _build_vtkTransform(oo, directions)
+
+
+def build_vtkTransform_meta(meta):
+    oo = meta['Origin']
+    orientation = np.array(meta['ImageOrientationPatient']).reshape(2, 3)
+    directions = np.vstack((orientation, meta['SliceVector'])).T
+    return _build_vtkTransform(oo, directions)
+
+
+def _build_vtkTransform(oo, directions):
     matrix4x4 = vtk.vtkMatrix4x4()
     matrix4x4.SetElement(0,0, directions[0,0])
     matrix4x4.SetElement(1,0, directions[1,0])
@@ -162,10 +208,10 @@ def vtiToVts_viaTransform(vtiObj, transMatrix):
     """
     Uses field data: ImageOrientationPatient, ImagePositionPatient
     :param vtiObj:
-    :param transMatrix: can pass or grab from field data
+    :param transMatrix: vtk.vtkMatrix4x4: see build_vtkTransform_*
     :return:
     """
-    vtiObj.SetOrigin(0.0,0.0,0.0)
+    vtiObj.SetOrigin(0.0,0.0,0.0) # Origin should be in the transMatrix
     ##
     tfilterMatrix = vtk.vtkTransformFilter()
     tfilterMatrix.SetTransform(transMatrix)
@@ -191,17 +237,6 @@ def filterResampleToImage(vtsObj, target_spacing):
     rif.Update()
     return rif.GetOutput()
 
-
-def _buildMatrix3x3(meta):
-    iop = np.zeros((3,3))
-    iop[:,0] = meta['ImageOrientationPatient'][0:3]
-    iop[:,1] = meta['ImageOrientationPatient'][3:6]
-    iop[:,2] = np.cross(iop[:,1], iop[:,0])
-    mat = vtk.vtkMatrix3x3()
-    for i in range(3):
-        for j in range(3):
-            mat.SetElement(i, j, iop[i,j])
-    return mat
 
 # ===================================================================================================
 def __writerWrite(writer, data, fileName):
@@ -518,7 +553,7 @@ def getFieldData(vtkObj, fieldName):
     return numpy_support.vtk_to_numpy(vtkObj.GetFieldData().GetArray(fieldName)).copy()
 
 
-def addFieldDataFromDcmDataSet(vtkObj, ds):
+def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
     tagsDict = dcmTools.getDicomTagsDict()
     for iTag in tagsDict.keys():
         try:
@@ -539,9 +574,31 @@ def addFieldDataFromDcmDataSet(vtkObj, ds):
             vtkObj.GetFieldData().AddArray(tagArray)
         except KeyError:
             continue # tag not found
+    for iTag in extra_tags:
+        val = extra_tags[iTag]
+        tagArray = numpy_support.numpy_to_vtk(np.array(val))
+        tagArray.SetName(iTag)
+        vtkObj.GetFieldData().AddArray(tagArray)
 
 
-def getPatientMatrixDict(data, patMat):
+def delArray(data, arrayName):
+    data.GetPointData().RemoveArray(arrayName)
+
+
+def delArraysExcept(data, arrayNamesToKeep_list):
+    aList = [data.GetPointData().GetArrayName(i) for i in range(data.GetPointData().GetNumberOfArrays())]
+    for ia in aList:
+        if ia not in arrayNamesToKeep_list:
+            data.GetPointData().RemoveArray(ia)
+    return data
+
+
+def delAllCellArrays(data):
+    for i in range(data.GetCellData().GetNumberOfArrays()):
+        data.GetCellData().RemoveArray(data.GetCellData().GetArrayName(i))
+
+
+def getPatientMatrixDictFromVTI(data, patMat):
     dx,dy,dz = data.GetSpacing()
     oo = data.GetOrigin()
     try: # Try from passed Matrix first , else field data, else axis aligned
@@ -556,19 +613,20 @@ def getPatientMatrixDict(data, patMat):
     return patMat
 
 
+# =========================================================================
+# =========================================================================
+## DICOM-SEG
+# =========================================================================
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
     if not HIGHDCM:
         raise ImportError("Missing highdicom\n Please run: pip install highdicom")
-    fullLabelMap = arr.astype(np.ushort) # .T
-    sSeg = sorted(set(fullLabelMap.flatten()))
+    fullLabelMap = arr.astype(np.ushort)
+    sSeg = sorted(set(fullLabelMap.flatten('F')))
     sSeg.remove(0)
     sSegDict = {}
     for k1, segID in enumerate(sSeg):
         sSegDict[k1+1] = f"Segment{k1+1}"
         fullLabelMap[fullLabelMap==segID] = k1+1
-
-    # if fullLabelMap.shape[0] != len(source_dicom_ds_list):
-    #     print('Writing labelMap size %s with source images size %d'%(str(fullLabelMap.shape), len(source_dicom_ds_list))) # FIXME raise error
 
     # Describe the algorithm that created the segmentation if not given
     if algorithm_identification is None:
@@ -611,20 +669,43 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
         return dcmSegFileOut
     return seg_dataset
 
-def dicom_seg_to_vti(dicom_seg_path, vti_output_path):
+
+def getDcmSeg_meta(dcmseg):
+    sliceThick = dcmseg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
+    pixSpace = dcmseg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
+    ffgs = dcmseg.PerFrameFunctionalGroupsSequence
+    ipp = [i.PlanePositionSequence[0].ImagePositionPatient for i in dcmseg.PerFrameFunctionalGroupsSequence]
+    oo = np.array(ipp[0])
+    normalVector = np.array(ipp[-1]) - oo 
+    normalVector = normalVector / np.linalg.norm(normalVector)
+    oo = dcmseg.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
+    iop = dcmseg.SharedFunctionalGroupsSequence[0].PlaneOrientationSequence[0].ImageOrientationPatient
+    seg_data = dcmseg.pixel_array
+    seg_data = np.transpose(seg_data, axes=[2,1,0])
+    return {"Origin": [oo[0]*0.001, oo[1]*0.001, oo[2]*0.001], 
+            "Spacing": [pixSpace[0]*0.001, pixSpace[1]*0.001, sliceThick*0.001],
+            "Dimensions": seg_data.shape,
+            "ImageOrientationPatient": iop, 
+            "SliceVector": normalVector   
+            }
+
+
+def dicom_seg_to_vtk(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
     ds = dicom.dcmread(dicom_seg_path)
+    meta = getDcmSeg_meta(ds)
     seg_data = ds.pixel_array
-    seg_data = np.transpose(seg_data, axes=[1,2,0])
-    sliceThick = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
-    pixSpace = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
-    oo = ds.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
+    seg_data = np.transpose(seg_data, axes=[2,1,0])
     image_data = vtk.vtkImageData()
-    image_data.SetOrigin(oo[0]*0.001, oo[1]*0.001, oo[2]*0.001)
-    image_data.SetDimensions(seg_data.shape)
-    image_data.SetSpacing(pixSpace[0]*0.001, pixSpace[1]*0.001, sliceThick*0.001)
+    image_data.SetOrigin(meta["Origin"])
+    image_data.SetDimensions(meta["Dimensions"])
+    image_data.SetSpacing(meta["Spacing"])
     vtk_array = numpy_support.numpy_to_vtk(num_array=seg_data.flatten('F'), deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
     image_data.GetPointData().SetScalars(vtk_array)
-    writeVTI(image_data, vti_output_path)
+    if TRUE_ORIENTATION:
+        writeVTS(_vti2vts(image_data, meta), vtk_output_path)
+    else:
+        writeVTI(image_data, vtk_output_path)
+    return vtk_output_path
 
 
 class NoVtkError(Exception):
@@ -634,3 +715,33 @@ class NoVtkError(Exception):
         pass
     def __str__(self):
         return 'NoVtkError: VTK not found. Run: "pip install vtk"'
+
+
+
+## ---------------------------------------
+def buildImage2PatientCoordinateMatrix(meta):
+    dx, dy, dz = meta['Spacing']
+    oo = meta['Origin']
+    orientation = np.array(meta['ImageOrientationPatient'])
+    iop = np.hstack((orientation, meta['SliceVector']))
+    matrix = np.array([[iop[0]*dx, iop[3]*dy, iop[6]*dz, oo[0]], 
+                        [iop[1]*dx, iop[4]*dy, iop[7]*dz, oo[1]], 
+                        [iop[2]*dx, iop[5]*dy, iop[8]*dz, oo[2]], 
+                        [0, 0, 0, 1]])
+    return matrix
+def _buildVTSGrid_mat(meta): # MATRIX CALC OF POINTS - ALTERNATIVE METHOD - NOT USED
+    mat = buildImage2PatientCoordinateMatrix(meta)
+    dims = meta['Dimensions']
+    xv, yv, zv = np.meshgrid(np.arange(dims[0]), np.arange(dims[1]), np.arange(dims[2]), indexing='ij')
+    coordinates = np.stack((xv, yv, zv), axis=-1)
+    coordinates = coordinates.reshape(-1, 3, order='F')
+    coordinates = np.hstack((coordinates, np.ones([coordinates.shape[0], 1])))
+    npPts = coordinates @ mat.T
+    vts_data = vtk.vtkStructuredGrid()
+    vts_data.SetDimensions(dims[:3])
+    vtk_points = vtk.vtkPoints()
+    double_array = numpy_support.numpy_to_vtk(npPts[:, :3], 1)
+    vtk_points.SetData(double_array)
+    vts_data.SetPoints(vtk_points)
+    return vts_data
+## ---------------------------------------
