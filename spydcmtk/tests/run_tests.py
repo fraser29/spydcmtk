@@ -19,7 +19,8 @@ zipF = os.path.join(TEST_DIRECTORY, 'dicoms.zip')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
 imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = SpydcmTK_config.DEBUG
-Thres = 66
+ThresL = 300
+ThresH = 400
 
 if DEBUG: 
     print('')
@@ -169,7 +170,7 @@ class TestDicom2HTML(unittest.TestCase):
 
 class TestDicom2VTI(unittest.TestCase):
     def runTest(self):
-        tmpDir = os.path.join(TEST_OUTPUT, 'tmpDCM2VIT')
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpDCM2VTI')
         cleanMakeDirs(tmpDir)
         vtiOutA = os.path.join(tmpDir, 'A.vti')
         vtiOutB = os.path.join(tmpDir, 'B.vti')
@@ -259,8 +260,8 @@ class TestImageToDicom(unittest.TestCase):
 
 def getTestVolDS():
     dsList = []
-    if os.path.isfile(os.path.join(MISC_DIR, f'IM-26100-00002.dcm')):
-        dsList = dcmTK.DicomSeries.setFromFileList([os.path.join(MISC_DIR, f'IM-26100-{i:05d}.dcm') for i in range(2,182)])
+    if os.path.isdir(MISC_DIR):
+        dsList = dcmTK.DicomSeries.setFromDirectory(MISC_DIR, HIDE_PROGRESSBAR=True)
     return dsList
 
 class TestArrToDCMSeg(unittest.TestCase):
@@ -269,9 +270,11 @@ class TestArrToDCMSeg(unittest.TestCase):
         if len(dsList) > 0:
             tmpDir = os.path.join(TEST_OUTPUT, 'tmp10')
             cleanMakeDirs(tmpDir)
-            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
+            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
             dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
-            labelMap = np.array(pixArray > Thres).astype(int)
+            lHigh = pixArray > ThresL
+            lLow = pixArray < ThresH
+            labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
             self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
             if not DEBUG:
@@ -290,31 +293,28 @@ class TestDCMSegToVTI(unittest.TestCase):
         if len(dsList) > 0:
             tmpDir = os.path.join(TEST_OUTPUT, 'tmp11')
             cleanMakeDirs(tmpDir)
-            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[-1,0,1])
-            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
             vtiOutA = os.path.join(tmpDir, 'dcm.vti')
-            vtiOutA2 = os.path.join(tmpDir, 'dcm2.vti')
-            vtsA = os.path.join(tmpDir, 'dcm.vts')
+            vtiOutA2 = os.path.join(tmpDir, 'dcm_TRUEORIENTATION.vti')
+            vtsA = os.path.join(tmpDir, 'dcm_TRUEORIENTATION_VTS.vts')
             dsList.writeToVTI(vtiOutA, TRUE_ORIENTATION=False)
             dsList.writeToVTS(vtsA)
             dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
 
-            vtiOutB = os.path.join(tmpDir, 'dcmSeg.vti')
-            labelMap = np.array(pixArray > Thres).astype(int)
+            vtk_DcmSegOutA = os.path.join(tmpDir, 'dcmSeg.vts')
+            lHigh = pixArray > ThresL
+            lLow = pixArray < ThresH
+            labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
+            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
-            dcmTK.dcmVTKTK.dicom_seg_to_vtk(dcmSegOut, vtiOutB)
+            dcmTK.dcmVTKTK.dicom_seg_to_vtk(dcmSegOut, vtk_DcmSegOutA, TRUE_ORIENTATION=True)
 
-            ii = dcmTK.dcmVTKTK.readVTKFile(vtiOutB)
-            # Manual fix spacing as takes slice thickness but does not account for overlapping slices
-            ss = ii.GetSpacing()
-            ii.SetSpacing(ss[0], ss[1], 0.0009)
-            # Set origin - is a bit complicated to grab from segmentation
-            ii.SetOrigin(dcmTK.dcmVTKTK.readVTKFile(vtiOutA).GetOrigin())
-            # ii.SetDirectionMatrix(mm)
-            dcmTK.dcmVTKTK.writeVTI(ii, vtiOutB)
+            vtk_DcmSegOutB = os.path.join(tmpDir, 'dcmSegB.vts')
+            dcmTK.dcmVTKTK.dicom_seg_to_vtk(os.path.join(TEST_DIRECTORY, "example_seg.dcm"), vtk_DcmSegOutB, TRUE_ORIENTATION=True)
 
             self.assertTrue(os.path.isfile(vtiOutA), msg='VTI from DCMSEG file does not exist')
-            self.assertTrue(os.path.isfile(vtiOutB), msg='VTI-SEG from DCMSEG file does not exist')
+            self.assertTrue(os.path.isfile(vtk_DcmSegOutA), msg='VTI-SEG-A from DCMSEG file does not exist')
+            self.assertTrue(os.path.isfile(vtk_DcmSegOutB), msg='VTI-SEG-B from DCMSEG file does not exist')
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 
