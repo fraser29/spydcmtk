@@ -1057,6 +1057,8 @@ def studySummary(pathToDicoms):
 def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMatrixDict={}):
     if type(vtiFile) == str:
         vti = dcmVTKTK.readVTKFile(vtiFile)
+    else:
+        vti = vtiFile
     if arrayName is None:
         A = dcmVTKTK.getScalarsAsNumpy(vti)
     else:
@@ -1064,7 +1066,6 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
-    print(A.shape, type(A), A.dtype)
     patientMatrixDict = dcmVTKTK.getPatientMatrixDictFromVTI(vti, patientMatrixDict)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
 
@@ -1125,9 +1126,11 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.WindowCenter = int(mx / 2)
         ds.WindowWidth = int(mx / 2)
         ds.PixelSpacing = list(patientMatrixDict['PixelSpacing'])
-        kVec = np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
-                        patientMatrixDict['ImageOrientationPatient'][3:])
-        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*kVec*ds.SpacingBetweenSlices
+
+        sliceVec = np.array(patientMatrixDict.get("SliceVector", 
+                            np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
+                                    patientMatrixDict['ImageOrientationPatient'][3:]))) 
+        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*sliceVec*ds.SpacingBetweenSlices
         ds.ImagePositionPatient = list(ImagePositionPatient)
         # try:
         sliceLoc = slice0 + k*ds.SpacingBetweenSlices
@@ -1147,6 +1150,17 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
     dcmSeries.writeToOrganisedFileStructure(outputDir)
 
+def writeImageStackToDicom(images_sortedList, meta, dcmTemplateFile_or_ds, 
+                            outputDir, tagUpdateDict=None, patientMatrixDict={}):
+
+    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, meta, CONVERT_TO_GREYSCALE=True)
+    combinedImage = dcmVTKTK.vtkfilterFlipImageData(combinedImage, 1)
+    writeVTIToDicoms(combinedImage, 
+                        dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
+                        outputDir=outputDir,
+                        arrayName='PixelData',
+                        tagUpdateDict=tagUpdateDict,
+                        patientMatrixDict=patientMatrixDict)
 
 
 def getResolution(dataVts):
@@ -1165,9 +1179,3 @@ def getResolution(dataVts):
 def distBetweenTwoPts(a, b):
     return np.sqrt(np.sum((np.asarray(a) - np.asarray(b)) ** 2))
 
-def printPoints(vtsD):
-    dd = vtsD.GetDimensions()
-    ijks = [[0,0,0],[0,0,1],[0,0,2],[0,0,3],[0,0,4]]
-    for ii in ijks:
-        ID = np.ravel_multi_index(ii, dd, order='F')
-        print(ii, ID, vtsD.GetPoint(ID))

@@ -330,6 +330,8 @@ def readVTKFile(fileName):
         reader = vtk.vtkMetaImageReader()
     elif fileName.endswith('png'):
         reader = vtk.vtkPNGReader()
+    elif fileName.endswith('jpg'):
+        reader = vtk.vtkJPEGReader()
     elif fileName.endswith('pvd'):
         raise IOError(' PVD - should use readPVD()')
     else:
@@ -338,6 +340,22 @@ def readVTKFile(fileName):
     reader.Update()
     return reader.GetOutput()
 
+def readImageStackToVTI(imageFileNames, meta, arrayName='PixelData', CONVERT_TO_GREYSCALE=False):
+    append_filter = vtk.vtkImageAppend()
+    append_filter.SetAppendAxis(2)  # Combine images along the Z axis
+    for file_name in imageFileNames:
+        thisImage = readVTKFile(file_name)
+        append_filter.AddInputData(thisImage)
+    append_filter.Update()
+    combinedImage = append_filter.GetOutput()
+    combinedImage.SetOrigin(meta.get('Origin', [0.0,0.0,0.0]))
+    combinedImage.SetSpacing(meta.get('Spacing', meta.get('Resolution', [1.0,1.0,1.0])))
+    a = getScalarsAsNumpy(combinedImage)
+    if CONVERT_TO_GREYSCALE:
+        a = np.mean(a, 1)
+    addArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True)
+    delArraysExcept(combinedImage, [arrayName])
+    return combinedImage
 
 # =========================================================================
 ##          PVD Stuff
@@ -537,10 +555,13 @@ def getArrayAsNumpy(data, arrayName):
     return numpy_support.vtk_to_numpy(data.GetPointData().GetArray(arrayName)).copy()
 
 
-def addArrayFromNumpy(data, npArray, arrayName):
+def addArrayFromNumpy(data, npArray, arrayName, SET_SCALAR=False):
     aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
     aArray.SetName(arrayName)
-    data.GetPointData().AddArray(aArray)
+    if SET_SCALAR:
+        data.GetPointData().SetScalars(aArray)
+    else:
+        data.GetPointData().AddArray(aArray)
 
 
 def addFieldData(vtkObj, fieldVal, fieldName):
@@ -549,8 +570,11 @@ def addFieldData(vtkObj, fieldVal, fieldName):
     vtkObj.GetFieldData().AddArray(tagArray)
 
 
-def getFieldData(vtkObj, fieldName):
-    return numpy_support.vtk_to_numpy(vtkObj.GetFieldData().GetArray(fieldName)).copy()
+def getFieldData(vtkObj, fieldName, default=None):
+    try:
+        return numpy_support.vtk_to_numpy(vtkObj.GetFieldData().GetArray(fieldName)).copy()
+    except AttributeError:
+        return default
 
 
 def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
@@ -601,15 +625,20 @@ def delAllCellArrays(data):
 def getPatientMatrixDictFromVTI(data, patMat):
     dx,dy,dz = data.GetSpacing()
     oo = data.GetOrigin()
-    try: # Try from passed Matrix first , else field data, else axis aligned
-        iop = getFieldData(data, 'ImageOrientationPatient')
-    except AttributeError:
-        iop = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-    iop = patMat.get('ImageOrientationPatient', iop)
+    # 1st option from meta, then fielddata then default
+    iop = patMat.get('ImageOrientationPatient', 
+                        getFieldData(data, 
+                                    'ImageOrientationPatient', 
+                                    default=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0]))
+    sliceVec = patMat.get('SliceVector', 
+                        getFieldData(data, 
+                                    'SliceVector', 
+                                    default=[0.0, 0.0, 1.0]))
     patMat = {'PixelSpacing': [dx*1000.0, dy*1000.0],
                          'ImagePositionPatient': [i*1000.0 for i in oo],
                          'ImageOrientationPatient': iop,
-                         'SpacingBetweenSlices': dz*1000.0}
+                         'SpacingBetweenSlices': dz*1000.0,
+                         'SliceVector': sliceVec}
     return patMat
 
 
