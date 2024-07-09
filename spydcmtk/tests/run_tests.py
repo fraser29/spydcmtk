@@ -319,41 +319,77 @@ class TestDCMSegToVTI(unittest.TestCase):
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 
+def buildImages(outDir, seNum):
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print(f"WARNING: no matplotlib - Images not built")
+        return False
+    filelist = [os.path.join(TEST_DIRECTORY, i) for i in os.listdir(TEST_DIRECTORY) if i.startswith(f"IM-{seNum:05d}")]
+    dsSeries = spydcm.dcmTK.DicomSeries.setFromFileList(filelist, HIDE_PROGRESSBAR=True)
+    arr, meta = dsSeries.getPixelDataAsNumpy()
+    m,n,o,_ = arr.shape
+    for k1 in range(o):
+        arr2D = arr[:,:,k1]
+        fig, axs = plt.subplots(1,1)
+        axs.imshow(arr2D, cmap='gray')
+        axs.axis('off')
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.savefig(os.path.join(outDir, f"IM-{k1:04d}.jpg"), bbox_inches='tight', pad_inches=0)
+        plt.close()
+    return True
 
 class TestImagesToVTI(unittest.TestCase):
     def runTest(self):
-        fileList = [os.path.join(TEST_DIRECTORY, i) for i in os.listdir(TEST_DIRECTORY) if i.endswith('jpg')]
-        fileList = sorted(fileList)
-        if len(fileList) > 0:
-            tmpDir = os.path.join(TEST_OUTPUT, 'tmpImg2VTI')
-            cleanMakeDirs(tmpDir)
-            meta = {'Origin': [0.0,0.0,0.0],
-                    'Spacing': [0.001, 0.001, 0.02]}
-            ii = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta, CONVERT_TO_GREYSCALE=True)
-            emojivti = os.path.join(tmpDir, 'emoji.vti')
-            dcmTK.dcmVTKTK.writeVTI(ii, emojivti)
-            self.assertTrue(os.path.isfile(emojivti), msg='emoji.vti file does not exist')
-            #
-            ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta={}, CONVERT_TO_GREYSCALE=False)
-            emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
-            dcmTK.dcmVTKTK.writeVTI(ii2, emojivti2)
-            self.assertTrue(os.path.isfile(emojivti2), msg='emoji2.vti file does not exist')
-            if not DEBUG:
-                shutil.rmtree(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpImg2VTI')
+        cleanMakeDirs(tmpDir)
+        res = buildImages(tmpDir, 99)
+        if res:
+            fileList = [os.path.join(tmpDir, i) for i in os.listdir(tmpDir) if i.endswith('jpg')]
+            fileList = sorted(fileList)
+            if len(fileList) > 0:
+                meta = {'Origin': [0.0,0.0,0.0],
+                        'Spacing': [0.001, 0.001, 0.02]}
+                ii = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta, CONVERT_TO_GREYSCALE=True)
+                emojivti = os.path.join(tmpDir, 'emoji.vti')
+                dcmTK.dcmVTKTK.writeVTI(ii, emojivti)
+                self.assertTrue(os.path.isfile(emojivti), msg='emoji.vti file does not exist')
+                valA = ii.GetPointData().GetArray("PixelData").GetTuple(192648)[0]
+                IDB = ii.ComputePointId([173,51,2])
+                valB = ii.GetPointData().GetArray("PixelData").GetTuple(IDB)[0]
+                self.assertEqual(valA, 227, "Image to VTI data incorrect")
+                self.assertEqual(valB, 224, "Image to VTI data incorrect")
+                #
+                ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta={}, CONVERT_TO_GREYSCALE=False)
+                emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
+                dcmTK.dcmVTKTK.writeVTI(ii2, emojivti2)
+                self.assertTrue(os.path.isfile(emojivti2), msg='emoji2.vti file does not exist')
+                valA = ii2.GetPointData().GetArray("PixelData").GetTuple(485453)[2]
+                IDB = ii2.ComputePointId([168,401,0])
+                valB = ii2.GetPointData().GetArray("PixelData").GetTuple(IDB)[2]
+                self.assertEqual(valA, 224, "Image to VTI data incorrect")
+                self.assertEqual(valB, 227, "Image to VTI data incorrect")
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 class TestImagesToDCM(unittest.TestCase):
     def runTest(self):
-        fileList = [os.path.join(TEST_DIRECTORY, i) for i in os.listdir(TEST_DIRECTORY) if i.endswith('jpg')]
-        fileList = sorted(fileList)
-        if len(fileList) > 0:
-            tmpDir = os.path.join(TEST_OUTPUT, 'tmpImg2DCM')
-            cleanMakeDirs(tmpDir)
-            meta = {'Origin': [0.0,0.0,0.0],
-                    'Spacing': [0.001, 0.001, 0.02]}
-            dcmTK.writeImageStackToDicom(fileList, meta=meta, dcmTemplateFile_or_ds=dcm00T,
-                                            outputDir=tmpDir)
-            if not DEBUG:
-                shutil.rmtree(tmpDir)
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpImg2DCM')
+        cleanMakeDirs(tmpDir)
+        res = buildImages(tmpDir, 88)
+        if res:
+            fileList = [os.path.join(tmpDir, i) for i in os.listdir(tmpDir) if i.endswith('jpg')]
+            fileList = sorted(fileList)
+            if len(fileList) > 0:
+                meta = {'Origin': [0.0,0.0,0.0],
+                        'Spacing': [0.001, 0.001, 0.02]}
+                dcmTK.writeImageStackToDicom(fileList, meta=meta, dcmTemplateFile_or_ds=dcm00T,
+                                                outputDir=tmpDir)
+                imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
+                arr, meta = imageDS.getPixelDataAsNumpy()
+                self.assertEqual(arr[179,153,0,0], 5236, "Dicom orientation for imge2DCM wrong")
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
 
 
 class TestDCM2VTI2DCM(unittest.TestCase):
@@ -378,7 +414,8 @@ class TestDCM2VTI2DCM(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+    # DEBUG = True
     # suite = unittest.TestSuite()
-    # suite.addTest(TestImagesToDCM('runTest'))
+    # suite.addTest(TestImagesToVTI('runTest'))
     # runner = unittest.TextTestRunner()
     # runner.run(suite)
