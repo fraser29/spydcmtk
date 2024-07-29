@@ -201,8 +201,8 @@ def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=Spyd
     for iDS in ListDicomStudies:
         for iSeries in iDS:
             if VTS:
-                print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
-                # fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
+                # print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
+                fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             else:
                 fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
             outputFiles.append(fOut)
@@ -398,6 +398,8 @@ def runActions(args, ap):
                             print(f'Written {fOut}')
             elif args.vti:
                 _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, TRUE_ORIENTATION=args.TRUE_VTI_ORIENTATION)
+            elif args.vts:
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, VTS=True)
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
@@ -456,6 +458,8 @@ def main():
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
     ap.add_argument('-TRUE_VTI_ORIENTATION', dest='TRUE_VTI_ORIENTATION', help='Will resample vti data at true location (output different dimensiuons)', action='store_true')
+    ap.add_argument('-vts', dest='vts',
+        help='Will convert each series to vts. Naming: {PName}_{SE#}_{SEDesc}.vts', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     #
