@@ -35,7 +35,7 @@ Access via:
 ```bash
 spydcmtk -h
 ```
-to see the commandline useage available to you.
+to see the commandline usage available to you.
 
 
 If you would like to incorporate spydcmtk into your python project, then import as:
@@ -65,7 +65,7 @@ By default spydcmtk.conf files are search for in the following locations:
 5. Full file path defined at environment variable: "SPYDCMTK_CONF"
 6. Full path passed as commandline argument to `spydcmtk`
 
-Files are read in the above order with each subsequent variable present overwritting any previously defined. 
+Files are read in the above order with each subsequent variable present over writing any previously defined. 
 For information on files found and variables used run:
 
 `spydcmtk -INFO` 
