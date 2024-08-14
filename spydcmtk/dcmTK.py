@@ -142,7 +142,7 @@ class DicomSeries(list):
 
     def setTags_all(self, tag, value):
         for ds in self:
-            ds.data_element(tag).value = value
+            ds[tag].value = value
 
     def getTagObj(self, tag, dsID=0):
         try:
@@ -307,18 +307,16 @@ class DicomSeries(list):
                 except TypeError:
                     pass
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, SAFE_NAMING_CHECK=True):
+    def writeToOrganisedFileStructure(self, studyOutputDir, SAFE_NAMING_CHECK=True, seriesOutDirName=None):
         """ Recurse down directory tree - grab dicoms and move to new
-            hierarchical folder structure
-            SE_RENAME = dict of SE# and Name to rename the SE folder    
-            LIKE_ORIG - set to False if updated some tags
-            REMOVE_PRIVATE_TAGS - remove private tags on anonymisation - default False
+            hierarchical folder structure rooted at 'studyOutputDir'
         """
         if SAFE_NAMING_CHECK:
             self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
         LIKE_ORIG = True
-        seriesOutDirName = self.getSeriesOutDirName()
+        if seriesOutDirName is None:
+            seriesOutDirName = self.getSeriesOutDirName()
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
         seriesOutputDirTemp = seriesOutputDir+".WORKING"
         if os.path.isdir(seriesOutputDir):
@@ -665,6 +663,10 @@ class DicomStudy(list):
     def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
         return self[seriesID].getTagListAndNames(tagList, dsID=instanceID)
 
+    def setTags_all(self, tag, value):
+        for i in self:
+            i.setTags_all(tag, value)
+
     def isCompressed(self):
         return self[0].isCompressed()
 
@@ -703,6 +705,7 @@ class DicomStudy(list):
         return self.getTagListAndNames(tagList)
 
     def getSeriesByID(self, ID):
+        ID = int(ID)
         for iSeries in self:
             try:
                 if int(iSeries.getTag('SeriesNumber')) == ID:

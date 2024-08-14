@@ -10,8 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.1.8 Release. 
+Current is VERSION 1.1.9 Release. 
 
+- 1.1.9: Permit user naming of series directory when writing at series level. Assistance for modifying tag values. 
 - 1.1.8: Added improved functionality for dicom to: VTK image data; and VTK structured grid data conversion
 - 1.1.7: Add basic DCM-SEG read/write/conversion functionality. Rewrote dcm2vtk routines for improved consistency in some edge cases. 
 - 1.1.5: Add option to retrieve tag value from commandline. Small bug fix on safe naming. 

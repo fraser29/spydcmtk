@@ -411,11 +411,43 @@ class TestDCM2VTI2DCM(unittest.TestCase):
                 shutil.rmtree(tmpDir)
 
 
+
+class Test_SetTagValues(unittest.TestCase):
+    def runTest(self):
+        # METHOD A
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByDate('20140409')
+        dcmStudy.setTags_all(0x00080020, "19901231") # change date of study
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpSetTags')
+        cleanMakeDirs(tmpDir)
+        listOfStudies.writeToOrganisedFileStructure(tmpDir)
+
+        listOfStudies2 = dcmTK.ListOfDicomStudies.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
+        dcmStudy2 = listOfStudies2.getStudyByDate('19901231')
+        self.assertEqual(len(dcmStudy2), 1, "Incorrect number series in dcmStudy")
+        
+        # METHOD B
+        listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
+        dcmStudy = listOfStudies.getStudyByDate('20140409')
+        dcmStudy.setTags_all("StudyDate", "19901231") # change date of study
+        tmpDir = os.path.join(TEST_OUTPUT, 'tmpSetTags')
+        cleanMakeDirs(tmpDir)
+        listOfStudies.writeToOrganisedFileStructure(tmpDir)
+
+        listOfStudies2 = dcmTK.ListOfDicomStudies.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
+        dcmStudy2 = listOfStudies2.getStudyByDate('19901231')
+        self.assertEqual(len(dcmStudy2), 1, "Incorrect number series in dcmStudy")
+        
+        if not DEBUG:
+            shutil.rmtree(tmpDir)
+
+
+
 if __name__ == '__main__':
     unittest.main()
 
     # DEBUG = True
     # suite = unittest.TestSuite()
-    # suite.addTest(TestImagesToVTI('runTest'))
+    # suite.addTest(Test_SetTagValues('runTest'))
     # runner = unittest.TextTestRunner()
     # runner.run(suite)
