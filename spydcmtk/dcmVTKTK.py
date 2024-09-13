@@ -644,6 +644,69 @@ def getPatientMatrixDictFromVTI(data, patMat):
 
 # =========================================================================
 # =========================================================================
+## PATIENT MATRIX HELPER
+# =========================================================================
+class PatientMatrix():
+    """A class that manages all spatial / geometric information for 
+        DICOM and VKT conversion
+
+        Convention: 
+        
+    """
+    def __init__(self) -> None:
+        self.units = "SI"
+        self._meta = {}
+
+    def initFromDicomSeries(self, dicomSeries):
+        I,J,K = int(dicomSeries.getTag('Rows')), int(dicomSeries.getTag('Columns')), int(dicomSeries.getNumberOfSlicesPerVolume())
+        dicomSeries.sortBySlice_InstanceNumber()
+        N = dicomSeries.getNumberOfTimeSteps()
+        A = np.zeros((I, J, K, N))
+        c0 = 0
+        for k1 in range(K):
+            for k2 in range(N):
+                iA = dicomSeries[c0].pixel_array
+                A[:, :, k1, k2] = iA
+                c0 += 1
+        dt = dicomSeries.getTemporalResolution()
+        ipp = dicomSeries.getImagePositionPatient_np(0)
+        oo = [i*0.001 for i in ipp]
+        sliceVec = dicomSeries.getSliceNormalVector()
+        self._meta = {'Spacing':[dicomSeries.getDeltaCol()*0.001, dicomSeries.getDeltaRow()*0.001, dicomSeries.getDeltaSlice()*0.001], 
+                'PixelSpacing': [dicomSeries.getDeltaCol()*0.001, dicomSeries.getDeltaRow()*0.001],
+                'SpacingBetweenSlices': dicomSeries.getDeltaSlice()*0.001,
+                'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice())*0.001,
+                'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*0.001,
+                'Origin': oo, 
+                'ImagePositionPatient': oo, 
+                'ImageOrientationPatient': dicomSeries.getTag('ImageOrientationPatient'), 
+                'PatientPosition': dicomSeries.getTag('PatientPosition'), 
+                'Times': [dt*n*0.001 for n in range(N)],
+                'Dimensions': A.shape,
+                'SliceVector': sliceVec,
+                'units': 'SI'}
+
+    def initFromVTI(self, vtiObj, scaleFactor=1.0):
+        dx,dy,dz = vtiObj.GetSpacing()
+        oo = vtiObj.GetOrigin()
+        # 1st option from meta, then fielddata then default
+        iop = getFieldData(vtiObj, 
+                            'ImageOrientationPatient', 
+                            default=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+        sliceVec = getFieldData(vtiObj, 
+                                'SliceVector', 
+                                default=[0.0, 0.0, 1.0])
+        self._meta = {'PixelSpacing': [dx*scaleFactor, dy*scaleFactor],
+                            'ImagePositionPatient': [i*scaleFactor for i in oo],
+                            'ImageOrientationPatient': iop,
+                            'SpacingBetweenSlices': dz*scaleFactor,
+                            'SliceVector': sliceVec}
+
+    def getMatrixForVTK(self):
+        pass
+
+# =========================================================================
+# =========================================================================
 ## DICOM-SEG
 # =========================================================================
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):

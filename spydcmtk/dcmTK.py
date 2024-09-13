@@ -395,7 +395,7 @@ class DicomSeries(list):
         Returns:
             str: Name of file saved
         """
-        if outputPath.endswith('vts'):
+        if outputPath.endswith('vts') or outputPath.endswith('pvd'):
             outputPath, fileName = os.path.split(outputPath)
             fileName, _ = os.path.splitext(fileName)
         else:
@@ -444,10 +444,12 @@ class DicomSeries(list):
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
             Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
-            NOTE: Origin taken from last slice in convention with VTK orientation
+            NOTE: Some data is repeated to serve VTK and DICOM conventions
 
         Returns:
-            tuple: Array as numpy sahpe [nRow, nCol, nSlice, nTime], meta data dictionary describing: Spacing, Origin, ImageOrientationPatient, PatientPosition
+            tuple: 
+                numpy array - shape [nRow, nCol, nSlice, nTime], 
+                dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
         I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
         self.sortBySlice_InstanceNumber()
@@ -460,15 +462,21 @@ class DicomSeries(list):
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = self.getTemporalResolution()
-        oo = [i*0.001 for i in self.getImagePositionPatient_np(0)]
+        ipp = self.getImagePositionPatient_np(0)
+        oo = [i*0.001 for i in ipp]
         sliceVec = self.getSliceNormalVector()
         meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
+                'PixelSpacing': [self.getDeltaCol()*0.001, self.getDeltaRow()*0.001],
+                'SliceThickness': self.getDeltaSlice()*0.001,
+                'SliceLocation0': self.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*0.001,
                 'Origin': oo, 
+                'ImagePositionPatient': oo, 
                 'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
                 'PatientPosition': self.getTag('PatientPosition'), 
                 'Times': [dt*n*0.001 for n in range(N)],
                 'Dimensions': A.shape,
-                'SliceVector': sliceVec}
+                'SliceVector': sliceVec,
+                'units': 'SI'}
         return A, meta
 
     def getScanDuration_secs(self):
@@ -1095,6 +1103,11 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
         slice0 = 0.0
+    try:
+        sliceThick = patientMatrixDict["SliceThickness"]
+    except KeyError: # FIXME
+        sliceThick = patientMatrixDict["SpacingBetweenSlices"]
+    ipp = np.array(patientMatrixDict['ImagePositionPatient'])
 
     SeriesUID = dicom.uid.generate_uid()
     try:
@@ -1122,8 +1135,8 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.BitsAllocated = 16
         ds.BitsStored = 16
         ds.HighBit = 15
-        ds.SliceThickness = patientMatrixDict['SpacingBetweenSlices'] # Can no longer claim overlapping slices if have modified
-        ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
+        ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
+        ds.SpacingBetweenSlices = sliceThick
         ds.SmallestImagePixelValue = int(mn)
         ds.LargestImagePixelValue = int(mx)
         ds.WindowCenter = int(mx / 2)
@@ -1133,10 +1146,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         sliceVec = np.array(patientMatrixDict.get("SliceVector", 
                             np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
                                     patientMatrixDict['ImageOrientationPatient'][3:]))) 
-        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*sliceVec*ds.SpacingBetweenSlices
+        ImagePositionPatient = ipp + k*sliceVec*sliceThick
         ds.ImagePositionPatient = list(ImagePositionPatient)
         # try:
-        sliceLoc = slice0 + k*ds.SpacingBetweenSlices
+        sliceLoc = slice0 + k*sliceThick
         # except KeyError:
         #     sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
         ds.SliceLocation = sliceLoc
@@ -1151,7 +1164,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
-    dcmSeries.writeToOrganisedFileStructure(outputDir)
+    return dcmSeries.writeToOrganisedFileStructure(outputDir)
 
 def writeImageStackToDicom(images_sortedList, meta, dcmTemplateFile_or_ds, 
                             outputDir, tagUpdateDict=None, patientMatrixDict={}):
