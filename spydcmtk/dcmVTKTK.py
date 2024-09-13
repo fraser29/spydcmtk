@@ -621,41 +621,71 @@ def delAllCellArrays(data):
     for i in range(data.GetCellData().GetNumberOfArrays()):
         data.GetCellData().RemoveArray(data.GetCellData().GetArrayName(i))
 
-
-def getPatientMatrixDictFromVTI(data, patMat):
-    dx,dy,dz = data.GetSpacing()
-    oo = data.GetOrigin()
-    # 1st option from meta, then fielddata then default
-    iop = patMat.get('ImageOrientationPatient', 
-                        getFieldData(data, 
-                                    'ImageOrientationPatient', 
-                                    default=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0]))
-    sliceVec = patMat.get('SliceVector', 
-                        getFieldData(data, 
-                                    'SliceVector', 
-                                    default=[0.0, 0.0, 1.0]))
-    patMat = {'PixelSpacing': [dx*1000.0, dy*1000.0],
-                         'ImagePositionPatient': [i*1000.0 for i in oo],
-                         'ImageOrientationPatient': iop,
-                         'SpacingBetweenSlices': dz*1000.0,
-                         'SliceVector': sliceVec}
-    return patMat
-
-
 # =========================================================================
 # =========================================================================
 ## PATIENT MATRIX HELPER
 # =========================================================================
-class PatientMatrix():
-    """A class that manages all spatial / geometric information for 
-        DICOM and VKT conversion
+class PatientMatrix:
+    """A class that manages spatial / geometric information for DICOM and VTK conversion"""
 
-        Convention: 
-        
-    """
-    def __init__(self) -> None:
+    def __init__(self):
         self.units = "SI"
         self._meta = {}
+        self._matrix = None
+
+    # Properties
+    @property
+    def PixelSpacing(self):
+        try:
+            return self._meta['PixelSpacing']
+        except KeyError:
+            return self._meta['Spacing']
+    
+    @property
+    def ImagePositionPatient(self):
+        try:
+            return self._meta['ImagePositionPatient']
+        except KeyError:
+            return self._meta['Origin']
+    
+    @property
+    def ImageOrientationPatient(self):
+        return self._meta['ImageOrientationPatient']
+    
+    @property
+    def SliceVector(self):
+        try:
+            return self._meta['SliceVector']
+        except KeyError:
+            return np.cross(self._meta['ImageOrientationPatient'][:3], self._meta['ImageOrientationPatient'][3:6])
+    
+    @property
+    def SpacingBetweenSlices(self):
+        try:
+            return self._meta['SpacingBetweenSlices']
+        except KeyError:
+            return self._meta['Spacing'][2]
+    
+    @property
+    def SliceThickness(self):
+        try:
+            return self._meta['SliceThickness']
+        except KeyError:
+            return self._meta['Spacing'][2]
+    
+    @property
+    def SliceLocation0(self):
+        try:
+            return self._meta['SliceLocation0']
+        except KeyError:
+            return 0.0
+    
+    @property
+    def Dimensions(self):
+        try:
+            return self._meta['Dimensions']
+        except KeyError:
+            return None
 
     def initFromDicomSeries(self, dicomSeries):
         I,J,K = int(dicomSeries.getTag('Rows')), int(dicomSeries.getTag('Columns')), int(dicomSeries.getNumberOfSlicesPerVolume())
@@ -684,7 +714,8 @@ class PatientMatrix():
                 'Times': [dt*n*0.001 for n in range(N)],
                 'Dimensions': A.shape,
                 'SliceVector': sliceVec,
-                'units': 'SI'}
+                }
+        self._updateMatrix()
 
     def initFromVTI(self, vtiObj, scaleFactor=1.0):
         dx,dy,dz = vtiObj.GetSpacing()
@@ -701,9 +732,108 @@ class PatientMatrix():
                             'ImageOrientationPatient': iop,
                             'SpacingBetweenSlices': dz*scaleFactor,
                             'SliceVector': sliceVec}
+        self._updateMatrix()
 
-    def getMatrixForVTK(self):
-        pass
+    def initFromDicomSeg(self, dicomSeg):
+        sliceThick = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
+        pixSpace = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
+        ipp = [i.PlanePositionSequence[0].ImagePositionPatient for i in dicomSeg.PerFrameFunctionalGroupsSequence]
+        oo = np.array(ipp[0])
+        normalVector = np.array(ipp[-1]) - oo 
+        normalVector = normalVector / np.linalg.norm(normalVector)
+        oo = dicomSeg.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
+        iop = dicomSeg.SharedFunctionalGroupsSequence[0].PlaneOrientationSequence[0].ImageOrientationPatient
+        seg_data = dicomSeg.pixel_array
+        seg_data = np.transpose(seg_data, axes=[2,1,0])
+        self._meta = {"Origin": [oo[0]*0.001, oo[1]*0.001, oo[2]*0.001], 
+                "Spacing": [pixSpace[0]*0.001, pixSpace[1]*0.001, sliceThick*0.001],
+                "Dimensions": seg_data.shape,
+                "ImageOrientationPatient": iop, 
+                "SliceVector": normalVector   
+                }
+        self._updateMatrix()
+
+    def _updateMatrix(self):
+        self._matrix = self.buildImage2PatientCoordinateMatrix()
+
+    def buildImage2PatientCoordinateMatrix(self):
+        dx, dy, dz = self._meta['Spacing']
+        oo = self._meta['Origin']
+        orientation = np.array(self._meta['ImageOrientationPatient'])
+        iop = np.hstack((orientation.reshape(2, 3), self._meta['SliceVector']))
+        matrix = np.array([
+            [iop[0,0]*dx, iop[0,1]*dy, iop[0,2]*dz, oo[0]], 
+            [iop[1,0]*dx, iop[1,1]*dy, iop[1,2]*dz, oo[1]], 
+            [iop[2,0]*dx, iop[2,1]*dy, iop[2,2]*dz, oo[2]], 
+            [0, 0, 0, 1]
+        ])
+        return matrix
+
+    def getMatrix(self):
+        return self._matrix
+
+    def getMetaForVTK(self):
+        return {
+            'Origin': self.Origin,
+            'Spacing': self.Spacing,
+            'ImageOrientationPatient': self.ImageOrientationPatient,
+            'SliceVector': self.SliceVector,
+            'Dimensions': self.Dimensions[:3]
+        }
+
+    def getMetaForDICOM(self):
+        """
+        Returns a dictionary with the meta data for DICOM
+        Keys are: 
+        'ImagePositionPatient', 'PixelSpacing', 'ImageOrientationPatient', 'SliceVector', 'SliceThickness', 'SliceLocation0', 'SpacingBetweenSlices'
+        All in mm
+        """
+        return {
+            'ImagePositionPatient': np.array([i*1000.0 for i in self.ImagePositionPatient]),
+            'PixelSpacing': np.array([i*1000.0 for i in self.PixelSpacing]),
+            'ImageOrientationPatient': self.ImageOrientationPatient,
+            'SliceVector': self.SliceVector,
+            'SliceThickness': self.SliceThickness*1000.0,
+            'SliceLocation0': self.SliceLocation0*1000.0,
+            'SpacingBetweenSlices': self.SpacingBetweenSlices*1000.0
+        }   
+
+    def imageToPatientCoordinates(self, imageCoords):
+        homogeneous_coords = np.hstack((imageCoords, np.ones((imageCoords.shape[0], 1))))
+        return (self._matrix @ homogeneous_coords.T).T[:, :3]
+
+    def patientToImageCoordinates(self, patientCoords):
+        homogeneous_coords = np.hstack((patientCoords, np.ones((patientCoords.shape[0], 1))))
+        return (np.linalg.inv(self._matrix) @ homogeneous_coords.T).T[:, :3]
+
+    def getVTKTransform(self):
+        vtkMatrix = vtk.vtkMatrix4x4()
+        for i in range(4):
+            for j in range(4):
+                vtkMatrix.SetElement(i, j, self._matrix[i, j])
+        
+        vtkTransform = vtk.vtkTransform()
+        vtkTransform.SetMatrix(vtkMatrix)
+        return vtkTransform
+
+    def applyToVTKData(self, vtkData):
+        transform = self.getVTKTransform()
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetInputData(vtkData)
+        transformFilter.SetTransform(transform)
+        transformFilter.Update()
+        return transformFilter.GetOutput()
+
+    def getMeta(self):
+        return self._meta
+
+    def setMeta(self, key, value):
+        self._meta[key] = value
+        self._updateMatrix()
+
+    def updateFromMeta(self, metaDict):
+        self._meta.update(metaDict)
+        self._updateMatrix()
 
 # =========================================================================
 # =========================================================================
@@ -784,7 +914,9 @@ def getDcmSeg_meta(dcmseg):
 
 def dicom_seg_to_vtk(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
     ds = dicom.dcmread(dicom_seg_path)
-    meta = getDcmSeg_meta(ds)
+    patMat = PatientMatrix()
+    patMat.initFromDicomSeg(ds)
+    meta = patMat.getMetaForVTK()
     seg_data = ds.pixel_array
     seg_data = np.transpose(seg_data, axes=[2,1,0])
     image_data = vtk.vtkImageData()

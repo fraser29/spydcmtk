@@ -461,22 +461,9 @@ class DicomSeries(list):
                 iA = self[c0].pixel_array
                 A[:, :, k1, k2] = iA
                 c0 += 1
-        dt = self.getTemporalResolution()
-        ipp = self.getImagePositionPatient_np(0)
-        oo = [i*0.001 for i in ipp]
-        sliceVec = self.getSliceNormalVector()
-        meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
-                'PixelSpacing': [self.getDeltaCol()*0.001, self.getDeltaRow()*0.001],
-                'SliceThickness': self.getDeltaSlice()*0.001,
-                'SliceLocation0': self.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*0.001,
-                'Origin': oo, 
-                'ImagePositionPatient': oo, 
-                'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
-                'PatientPosition': self.getTag('PatientPosition'), 
-                'Times': [dt*n*0.001 for n in range(N)],
-                'Dimensions': A.shape,
-                'SliceVector': sliceVec,
-                'units': 'SI'}
+        patMat = dcmVTKTK.PatientMatrix()
+        patMat.initFromDicomSeries(self)
+        meta = patMat.getMeta()
         return A, meta
 
     def getScanDuration_secs(self):
@@ -728,6 +715,24 @@ class DicomStudy(list):
         for iSeries in self:
             if iSeries.getTag('SeriesInstanceUID') == UID:
                 return iSeries
+
+    def getSeriesByTag(self, tag, value, convertToType=None):
+        for iSeries in self:
+            if iSeries.getTag(tag, convertToType=convertToType) == value:
+                return iSeries
+
+    def mergeSeriesVolumesWithTime(self):
+        triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(len(self))])
+        sorted_ds_list = [None for _ in range(self.getNumberOfDicoms())]
+        imagesPerVolume = len(self[0])
+        for i in range(len(self)):
+            iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
+            iSeries.sortByInstanceNumber()
+            for iDS in iSeries:
+                sorted_ds_list[iDS.getTag('InstanceNumber', convertToType=int)+triggerTimes.index(triggerTimes[i])*imagesPerVolume] = iDS
+        if sorted_ds_list.find(None) != -1:
+            raise ValueError('Missing some volumes')
+        return DicomSeries(sorted_ds_list)
 
     def getStudySummaryDict(self, FORCE_STRING_KEYS=False):
         pt,pv = self.getPatientOverview()
@@ -1077,7 +1082,9 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
-    patientMatrixDict = dcmVTKTK.getPatientMatrixDictFromVTI(vti, patientMatrixDict)
+    patMat = dcmVTKTK.PatientMatrix()
+    patMat.initFromVTI(vti)
+    patientMatrixDict = patMat.getMetaForDICOM()
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
 
 
@@ -1102,11 +1109,9 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
-        slice0 = 0.0
-    try:
-        sliceThick = patientMatrixDict["SliceThickness"]
-    except KeyError: # FIXME
-        sliceThick = patientMatrixDict["SpacingBetweenSlices"]
+        slice0 = patientMatrixDict["SliceLocation0"]
+    
+    sliceThick = patientMatrixDict["SliceThickness"]
     ipp = np.array(patientMatrixDict['ImagePositionPatient'])
 
     SeriesUID = dicom.uid.generate_uid()
