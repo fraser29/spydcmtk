@@ -760,7 +760,7 @@ class PatientMatrix:
         dx, dy, dz = self._meta['Spacing']
         oo = self._meta['Origin']
         orientation = np.array(self._meta['ImageOrientationPatient'])
-        iop = np.hstack((orientation.reshape(2, 3), self._meta['SliceVector']))
+        iop = np.vstack((orientation.reshape(2, 3), self._meta['SliceVector']))
         matrix = np.array([
             [iop[0,0]*dx, iop[0,1]*dy, iop[0,2]*dz, oo[0]], 
             [iop[1,0]*dx, iop[1,1]*dy, iop[1,2]*dz, oo[1]], 

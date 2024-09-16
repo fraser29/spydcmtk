@@ -724,13 +724,18 @@ class DicomStudy(list):
     def mergeSeriesVolumesWithTime(self):
         triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(len(self))])
         sorted_ds_list = [None for _ in range(self.getNumberOfDicoms())]
-        imagesPerVolume = len(self[0])
+        c0 = 0
         for i in range(len(self)):
             iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
             iSeries.sortByInstanceNumber()
+            c1 = 0
             for iDS in iSeries:
-                sorted_ds_list[iDS.getTag('InstanceNumber', convertToType=int)+triggerTimes.index(triggerTimes[i])*imagesPerVolume] = iDS
-        if sorted_ds_list.find(None) != -1:
+                thisID = int(iDS['InstanceNumber'].value) + c1*(len(triggerTimes)-1) + c0 -1 # change to 0 index
+                iDS.InstanceNumber = thisID
+                sorted_ds_list[thisID] = iDS
+                c1 += 1
+            c0 += 1
+        if sorted_ds_list.count(None) != 0:
             raise ValueError('Missing some volumes')
         return DicomSeries(sorted_ds_list)
 
@@ -1160,11 +1165,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.SliceLocation = sliceLoc
         ds.ImageOrientationPatient = list(patientMatrixDict['ImageOrientationPatient'])
         for iKey in tagUpdateDict.keys():
-            try:
-                ds[iKey] = tagUpdateDict[iKey]
-            except (ValueError, TypeError):
+            if len(tagUpdateDict[iKey]) == 3:
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
-        # ds.PixelData = pixelArray[:,:,k].tostring()
+            else:
+                ds[iKey] = tagUpdateDict[iKey]
         ds.PixelData = pixelArray[:,:,k].tobytes()
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
