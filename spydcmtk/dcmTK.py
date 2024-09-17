@@ -94,7 +94,7 @@ class DicomSeries(list):
         Returns:
             DicomSeries: An instance of DicomSeries class.
         """
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
@@ -404,12 +404,12 @@ class DicomSeries(list):
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self): # TODO write as go
-        A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTS(A, meta, self[0])
+        A, patientMeta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTS(A, patientMeta, self[0])
 
     def buildVTIDict(self, TRUE_ORIENTATION=False):
-        A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, meta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION)
+        A, patientMeta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION)
 
     @property
     def sliceLocations(self):
@@ -443,7 +443,7 @@ class DicomSeries(list):
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
-            Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
+            Also return a PatientMatrix object containing meta
             NOTE: Some data is repeated to serve VTK and DICOM conventions
 
         Returns:
@@ -461,10 +461,9 @@ class DicomSeries(list):
                 iA = self[c0].pixel_array
                 A[:, :, k1, k2] = iA
                 c0 += 1
-        patMat = dcmVTKTK.PatientMatrix()
-        patMat.initFromDicomSeries(self)
-        meta = patMat.getMeta()
-        return A, meta
+        patientMeta = dcmVTKTK.PatientMeta()
+        patientMeta.initFromDicomSeries(self)
+        return A, patientMeta
 
     def getScanDuration_secs(self):
         try:
@@ -627,7 +626,7 @@ class DicomStudy(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
@@ -843,7 +842,7 @@ class ListOfDicomStudies(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, extn_filter=None):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, 
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, 
                                                          HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
                                                          FORCE_READ=FORCE_READ, 
                                                          ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, 
@@ -1075,7 +1074,7 @@ def studySummary(pathToDicoms):
 ## =====================================================================================================================
 ##   WRITE DICOMS
 ## =====================================================================================================================
-def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMatrixDict={}):
+def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
     if type(vtiFile) == str:
         vti = dcmVTKTK.readVTKFile(vtiFile)
     else:
@@ -1087,17 +1086,13 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
-    patMat = dcmVTKTK.PatientMatrix()
-    patMat.initFromVTI(vti)
-    patientMatrixDict = patMat.getMetaForDICOM()
-    return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
+    if patientMeta is None:
+        patientMeta = dcmVTKTK.PatientMeta()
+    patientMeta.initFromVTI(vti)
+    return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMeta, outputDir, tagUpdateDict=tagUpdateDict)
 
 
-def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, outputDir, tagUpdateDict=None):
-    """
-    patientMatrixDict = {PixelSpacing: [1,2], ImagePositionPatient: [1,3], ImageOrientationPatient: [1,6], SliceThickness: 1}
-    Note - use "SliceThickness" in patientMatrixDict - with assumption that SliceThickness==SpacingBetweenSlices (explicitely built this way - ndArray can not have otherwise)
-    """
+def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir, tagUpdateDict=None):
     if tagUpdateDict is None:
         tagUpdateDict = {}
     if dcmTemplate_or_ds is None:
@@ -1114,10 +1109,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
-        slice0 = patientMatrixDict["SliceLocation0"]
+        slice0 = patientMeta.SliceLocation0
     
-    sliceThick = patientMatrixDict["SliceThickness"]
-    ipp = np.array(patientMatrixDict['ImagePositionPatient'])
+    sliceThick = patientMeta.SliceThickness
+    ipp = patientMeta.ImagePositionPatient
 
     SeriesUID = dicom.uid.generate_uid()
     try:
@@ -1151,19 +1146,14 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.LargestImagePixelValue = int(mx)
         ds.WindowCenter = int(mx / 2)
         ds.WindowWidth = int(mx / 2)
-        ds.PixelSpacing = list(patientMatrixDict['PixelSpacing'])
+        ds.PixelSpacing = list(patientMeta.PixelSpacing)
 
-        sliceVec = np.array(patientMatrixDict.get("SliceVector", 
-                            np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
-                                    patientMatrixDict['ImageOrientationPatient'][3:]))) 
+        sliceVec = np.array(patientMeta.SliceVector)
         ImagePositionPatient = ipp + k*sliceVec*sliceThick
         ds.ImagePositionPatient = list(ImagePositionPatient)
-        # try:
         sliceLoc = slice0 + k*sliceThick
-        # except KeyError:
-        #     sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
         ds.SliceLocation = sliceLoc
-        ds.ImageOrientationPatient = list(patientMatrixDict['ImageOrientationPatient'])
+        ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
         for iKey in tagUpdateDict.keys():
             if len(tagUpdateDict[iKey]) == 3:
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
@@ -1175,17 +1165,17 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
     return dcmSeries.writeToOrganisedFileStructure(outputDir)
 
-def writeImageStackToDicom(images_sortedList, meta, dcmTemplateFile_or_ds, 
-                            outputDir, tagUpdateDict=None, patientMatrixDict={}):
+def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds, 
+                            outputDir, tagUpdateDict=None):
 
-    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, meta, CONVERT_TO_GREYSCALE=True)
+    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=True)
     combinedImage = dcmVTKTK.vtkfilterFlipImageData(combinedImage, 1)
     writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,
                         arrayName='PixelData',
                         tagUpdateDict=tagUpdateDict,
-                        patientMatrixDict=patientMatrixDict)
+                        patientMeta=patientMeta)
 
 
 def getResolution(dataVts):

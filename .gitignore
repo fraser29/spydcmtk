@@ -130,3 +130,5 @@ dmypy.json
 
 # specific
 sandbox*.py
+
+.vscode

@@ -425,7 +425,7 @@ def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
         dsDict[studyUID][seriesUID] = []
     dsDict[studyUID][seriesUID].append(dataset)
 
-def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
+def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
     """Find all dicoms under "rootDir" and organise based upon UIDs
 
     Args:

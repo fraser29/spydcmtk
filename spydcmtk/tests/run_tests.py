@@ -18,7 +18,7 @@ dcm00T = os.path.join(TEST_DIRECTORY, 'IM-00088-00001.dcm')
 MISC_DIR = os.path.join(TEST_DIRECTORY, "MISC")
 zipF = os.path.join(TEST_DIRECTORY, 'dicoms.zip')
 vti001 = os.path.join(TEST_DIRECTORY, 'temp.vti')
-imnpy = os.path.join(TEST_DIRECTORY, 'image.npy')
+image_npy = os.path.join(TEST_DIRECTORY, 'image.npy')
 DEBUG = SpydcmTK_config.DEBUG
 ThresL = 300
 ThresH = 400
@@ -53,7 +53,7 @@ class TestDicomSeries(unittest.TestCase):
         self.assertAlmostEqual(dcmSeries.getDeltaRow(), 1.875, places=7, msg='deltaRow incorrect')
         self.assertAlmostEqual(dcmSeries.getDeltaCol(), 1.875, places=7, msg='deltaCol incorrect')
         self.assertAlmostEqual(dcmSeries.getTemporalResolution(), 51.92, places=7, msg='deltaTime incorrect')
-        self.assertEqual(dcmSeries.IS_SIEMENS(), True, msg="Incorrect manufactuer")
+        self.assertEqual(dcmSeries.IS_SIEMENS(), True, msg="Incorrect manufacturer")
         self.assertEqual(dcmSeries.getPulseSequenceName(), '*tfi2d1_12', msg="Incorrect sequence name")
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp1')
         cleanMakeDirs(tmpDir)
@@ -130,11 +130,11 @@ class TestDicomPixDataArray(unittest.TestCase):
         listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
         dcmStudy = listOfStudies.getStudyByTag('StudyInstanceUID', '1.2.826.0.1.3680043.8.498.46701999696935009211199968005189443301')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(99)
-        A, meta = dcmSeries.getPixelDataAsNumpy()
+        A, patientMeta = dcmSeries.getPixelDataAsNumpy()
         self.assertEqual(A[17,13,0], 1935, msg='Pixel1 data not matching expected') 
         self.assertEqual(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
         self.assertEqual(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
-        self.assertEqual(meta['Origin'][2], 0.0003, msg='Origin data not matching expected') 
+        self.assertEqual(patientMeta.Origin[2], 0.0003, msg='Origin data not matching expected') 
         # if DEBUG:
         #     import matplotlib.pyplot as plt
         #     for k1 in range(A.shape[-1]):
@@ -148,11 +148,11 @@ class TestDicomPixDataMeta(unittest.TestCase):
         listOfStudies = dcmTK.ListOfDicomStudies.setFromDirectory(TEST_DIRECTORY, HIDE_PROGRESSBAR=True)
         dcmStudy = listOfStudies.getStudyByTag('StationName', 'AWP45557')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
-        A, meta = dcmSeries.getPixelDataAsNumpy()
-        self.assertEqual(meta['Times'][1], 0.05192, msg='Time data not matching expected') 
-        self.assertAlmostEqual(meta['Origin'][1], 0.11668832753047001, msg='Origin data not matching expected') 
-        self.assertAlmostEqual(meta['ImageOrientationPatient'][1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
-        self.assertEqual(meta['PatientPosition'], 'HFS', msg='PatientPosition data not matching expected') 
+        A, patientMeta = dcmSeries.getPixelDataAsNumpy()
+        self.assertEqual(patientMeta.Times[1], 0.05192, msg='Time data not matching expected') 
+        self.assertAlmostEqual(patientMeta.Origin[1], 0.11668832753047001, msg='Origin data not matching expected') 
+        self.assertAlmostEqual(patientMeta.ImageOrientationPatient[1], -0.540900243742, msg='ImageOrientationPatient data not matching expected') 
+        self.assertEqual(patientMeta.PatientPosition, 'HFS', msg='PatientPosition data not matching expected') 
         # if DEBUG:
         #     import matplotlib.pyplot as plt
         #     for k1 in range(A.shape[-1]):
@@ -227,7 +227,7 @@ class TestZipAndUnZip(unittest.TestCase):
 
 class TestImageToDicom(unittest.TestCase):
     def runTest(self):
-        pixArray = np.load(imnpy)
+        pixArray = np.load(image_npy)
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp8')
         cleanMakeDirs(tmpDir)
         patMatrix = {'PixelSpacing': [0.02, 0.02], 
@@ -235,15 +235,17 @@ class TestImageToDicom(unittest.TestCase):
                      'ImageOrientationPatient': [0.0,0.0,1.0,0.0,1.0,0.0], 
                      'SliceThickness': 0.04,
                      'SpacingBetweenSlices': 0.04}
+        patMeta = dcmTK.dcmVTKTK.PatientMeta()
+        patMeta.initFromDictionary(patMatrix)
         tagUpdateDict = {'SeriesNumber': 99, 
                          'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataA"), 
-                         'SerisDescription': ([0x0008,0x103e], 'LO', "SeriesWink"), 
+                         'SeriesDescription': ([0x0008,0x103e], 'LO', "SeriesWink"), 
                          'StudyID': ([0x0020,0x0010], 'SH', '1099')}
-        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,:3], None, patMatrix, tmpDir)
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,:3], None, patMeta, tmpDir)
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
-        pixArray = np.load(imnpy)
+        pixArray = np.load(image_npy)
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp9')
         cleanMakeDirs(tmpDir)
         patMatrix = {'PixelSpacing': [0.02, 0.02], 
@@ -251,11 +253,13 @@ class TestImageToDicom(unittest.TestCase):
                      'ImageOrientationPatient': [0.0,0.0,1.0,0.0,1.0,0.0], 
                      'SliceThickness': 0.04,
                      'SpacingBetweenSlices': 0.04}
+        patMeta = dcmTK.dcmVTKTK.PatientMeta()
+        patMeta.initFromDictionary(patMatrix)
         tagUpdateDict = {'SeriesNumber': 88, 
                          'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataB"), 
-                         'SerisDescription': ([0x0008,0x103e], 'LO', "SeriesLaugh"), 
+                         'SeriesDescription': ([0x0008,0x103e], 'LO', "SeriesLaugh"), 
                          'StudyID': ([0x0020,0x0010], 'SH', '1088')}
-        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,3:], None, patMatrix, tmpDir, tagUpdateDict=tagUpdateDict)
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,3:], None, patMeta, tmpDir, tagUpdateDict=tagUpdateDict)
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -296,8 +300,8 @@ class TestDCMSegToVTI(unittest.TestCase):
             cleanMakeDirs(tmpDir)
             pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
             vtiOutA = os.path.join(tmpDir, 'dcm.vti')
-            vtiOutA2 = os.path.join(tmpDir, 'dcm_TRUEORIENTATION.vti')
-            vtsA = os.path.join(tmpDir, 'dcm_TRUEORIENTATION_VTS.vts')
+            vtiOutA2 = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION.vti')
+            vtsA = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION_VTS.vts')
             dsList.writeToVTI(vtiOutA, TRUE_ORIENTATION=False)
             dsList.writeToVTS(vtsA)
             dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
@@ -327,7 +331,7 @@ def buildImages(outDir, seNum):
         return False
     filelist = [os.path.join(TEST_DIRECTORY, i) for i in os.listdir(TEST_DIRECTORY) if i.startswith(f"IM-{seNum:05d}")]
     dsSeries = spydcm.dcmTK.DicomSeries.setFromFileList(filelist, HIDE_PROGRESSBAR=True)
-    arr, meta = dsSeries.getPixelDataAsNumpy()
+    arr, _ = dsSeries.getPixelDataAsNumpy()
     m,n,o,_ = arr.shape
     for k1 in range(o):
         arr2D = arr[:,:,k1]
@@ -348,9 +352,10 @@ class TestImagesToVTI(unittest.TestCase):
             fileList = [os.path.join(tmpDir, i) for i in os.listdir(tmpDir) if i.endswith('jpg')]
             fileList = sorted(fileList)
             if len(fileList) > 0:
-                meta = {'Origin': [0.0,0.0,0.0],
-                        'Spacing': [0.001, 0.001, 0.02]}
-                ii = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta, CONVERT_TO_GREYSCALE=True)
+                pat_meta = dcmTK.dcmVTKTK.PatientMeta()
+                pat_meta.initFromDictionary({'Origin': [0.0,0.0,0.0],
+                                             'Spacing': [0.001, 0.001, 0.02]})
+                ii = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=pat_meta, CONVERT_TO_GREYSCALE=True)
                 emojivti = os.path.join(tmpDir, 'emoji.vti')
                 dcmTK.dcmVTKTK.writeVTI(ii, emojivti)
                 self.assertTrue(os.path.isfile(emojivti), msg='emoji.vti file does not exist')
@@ -360,7 +365,7 @@ class TestImagesToVTI(unittest.TestCase):
                 self.assertEqual(valA, 227, "Image to VTI data incorrect")
                 self.assertEqual(valB, 224, "Image to VTI data incorrect")
                 #
-                ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, meta={}, CONVERT_TO_GREYSCALE=False)
+                ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=None, CONVERT_TO_GREYSCALE=False)
                 emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
                 dcmTK.dcmVTKTK.writeVTI(ii2, emojivti2)
                 self.assertTrue(os.path.isfile(emojivti2), msg='emoji2.vti file does not exist')
@@ -381,13 +386,14 @@ class TestImagesToDCM(unittest.TestCase):
             fileList = [os.path.join(tmpDir, i) for i in os.listdir(tmpDir) if i.endswith('jpg')]
             fileList = sorted(fileList)
             if len(fileList) > 0:
-                meta = {'Origin': [0.0,0.0,0.0],
-                        'Spacing': [0.001, 0.001, 0.02]}
-                dcmTK.writeImageStackToDicom(fileList, meta=meta, dcmTemplateFile_or_ds=dcm00T,
+                pat_meta = dcmTK.dcmVTKTK.PatientMeta()
+                pat_meta.initFromDictionary({'Origin': [0.0,0.0,0.0],
+                                             'Spacing': [0.001, 0.001, 0.02]})
+                dcmTK.writeImageStackToDicom(fileList, patientMeta=pat_meta, dcmTemplateFile_or_ds=dcm00T,
                                                 outputDir=tmpDir)
                 imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
-                arr, meta = imageDS.getPixelDataAsNumpy()
-                self.assertEqual(arr[179,153,0,0], 5236, "Dicom orientation for imge2DCM wrong")
+                arr, _ = imageDS.getPixelDataAsNumpy()
+                self.assertEqual(arr[179,153,0,0], 5236, "Dicom orientation for image2DCM wrong")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
