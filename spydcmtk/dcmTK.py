@@ -405,6 +405,7 @@ class DicomSeries(list):
 
     def buildVTSDict(self): # TODO write as go
         A, patientMeta = self.getPixelDataAsNumpy()
+        print(patientMeta) # FIXME Debug
         return dcmVTKTK.arrToVTS(A, patientMeta, self[0])
 
     def buildVTIDict(self, TRUE_ORIENTATION=False):

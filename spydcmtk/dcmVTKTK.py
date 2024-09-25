@@ -57,6 +57,9 @@ class PatientMeta:
             }
         self._matrix = None
 
+    def __str__(self):
+        return str(self._meta)
+
     # Properties
     @property
     def PixelSpacing(self):
@@ -108,10 +111,10 @@ class PatientMeta:
     
     @property
     def Spacing(self):
-        if 'SliceThickness' in self._meta:
-            return self._meta['PixelSpacing'][0], self._meta['PixelSpacing'][1], self._meta['SliceThickness']
-        else:
+        if 'SpacingBetweenSlices' in self._meta:
             return self._meta['PixelSpacing'][0], self._meta['PixelSpacing'][1], self._meta['SpacingBetweenSlices']
+        else:
+            return self._meta['PixelSpacing'][0], self._meta['PixelSpacing'][1], self._meta['SliceThickness']
     
     @property
     def PatientPosition(self):
@@ -168,14 +171,14 @@ class PatientMeta:
         oo = [i*0.001 for i in ipp]
         sliceVec = dicomSeries.getSliceNormalVector()
         self._meta = {
-                    'PixelSpacing': [dicomSeries.getDeltaCol()*0.001, dicomSeries.getDeltaRow()*0.001],
-                    'SpacingBetweenSlices': dicomSeries.getDeltaSlice()*0.001,
-                    'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice())*0.001,
-                    'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*0.001,
+                    'PixelSpacing': [dicomSeries.getDeltaCol(), dicomSeries.getDeltaRow()],
+                    'SpacingBetweenSlices': dicomSeries.getDeltaSlice(),
+                    'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice()),
+                    'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float),
                     'ImagePositionPatient': oo, 
                     'ImageOrientationPatient': dicomSeries.getTag('ImageOrientationPatient'), 
                     'PatientPosition': dicomSeries.getTag('PatientPosition'), 
-                    'Times': [dt*n*0.001 for n in range(N)],
+                    'Times': [dt*n*0.001 for n in range(N)], # ms to s
                     'Dimensions': A.shape,
                     'SliceVector': sliceVec,
                 }
