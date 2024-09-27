@@ -400,13 +400,12 @@ class DicomSeries(list):
             fileName, _ = os.path.splitext(fileName)
         else:
             fileName = self._generateFileName(outputNamingTags, '')
-        vtsDict = self.buildVTSDict()
+        vtsDict = self.buildVTSDict(outputPath)
         return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
-    def buildVTSDict(self): # TODO write as go
+    def buildVTSDict(self, outputPath=None):
         A, patientMeta = self.getPixelDataAsNumpy()
-        print(patientMeta) # FIXME Debug
-        return dcmVTKTK.arrToVTS(A, patientMeta, self[0])
+        return dcmVTKTK.arrToVTS(A, patientMeta, self[0], outputPath)
 
     def buildVTIDict(self, TRUE_ORIENTATION=False):
         A, patientMeta = self.getPixelDataAsNumpy()
@@ -1040,12 +1039,6 @@ class BIDS_Directory(object):
         subjIDs = [i for i in os.listdir(self.rootDir) if i.startswith('sub-')]
         return sorted([BIDS_Subject(i, self) for i in subjIDs])
 
-def walkdir(folder):
-    """Walk through each files in a directory"""
-    for dirpath, _, files in os.walk(folder):
-        for filename in files:
-            yield os.path.abspath(os.path.join(dirpath, filename))
-
 
 def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, 
                    HIDE_PROGRESSBAR=False, REMOVE_PRIVATE_TAGS=False):
@@ -1110,10 +1103,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
-        slice0 = patientMeta.SliceLocation0
+        slice0 = patientMeta.SliceLocation0*dcmVTKTK.m_to_mm
     
-    sliceThick = patientMeta.SliceThickness
-    ipp = patientMeta.ImagePositionPatient
+    sliceThick = patientMeta.SliceThickness*dcmVTKTK.m_to_mm
+    ipp = [i*dcmVTKTK.m_to_mm for i in patientMeta.ImagePositionPatient]
 
     SeriesUID = dicom.uid.generate_uid()
     try:
@@ -1147,7 +1140,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.LargestImagePixelValue = int(mx)
         ds.WindowCenter = int(mx / 2)
         ds.WindowWidth = int(mx / 2)
-        ds.PixelSpacing = list(patientMeta.PixelSpacing)
+        ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
 
         sliceVec = np.array(patientMeta.SliceVector)
         ImagePositionPatient = ipp + k*sliceVec*sliceThick

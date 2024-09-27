@@ -31,9 +31,13 @@ import vtk
 from vtk.util import numpy_support # type: ignore
 
 import spydcmtk.dcmTools as dcmTools
+from ngawari import fIO
 
 
-
+mm_to_m = 0.001
+cm_to_m = 0.01
+ms_to_s = 0.001
+m_to_mm = 1000.0
 
 # =========================================================================
 ## PATIENT MATRIX HELPER
@@ -168,17 +172,16 @@ class PatientMeta:
                 c0 += 1
         dt = dicomSeries.getTemporalResolution()
         ipp = dicomSeries.getImagePositionPatient_np(0)
-        oo = [i*0.001 for i in ipp]
         sliceVec = dicomSeries.getSliceNormalVector()
         self._meta = {
-                    'PixelSpacing': [dicomSeries.getDeltaCol(), dicomSeries.getDeltaRow()],
-                    'SpacingBetweenSlices': dicomSeries.getDeltaSlice(),
-                    'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice()),
-                    'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float),
-                    'ImagePositionPatient': oo, 
+                    'PixelSpacing': [dicomSeries.getDeltaRow()*mm_to_m, dicomSeries.getDeltaCol()*mm_to_m],
+                    'SpacingBetweenSlices': dicomSeries.getDeltaSlice()*mm_to_m,
+                    'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice())*mm_to_m,
+                    'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*mm_to_m,
+                    'ImagePositionPatient': [i*mm_to_m for i in ipp], 
                     'ImageOrientationPatient': dicomSeries.getTag('ImageOrientationPatient'), 
                     'PatientPosition': dicomSeries.getTag('PatientPosition'), 
-                    'Times': [dt*n*0.001 for n in range(N)], # ms to s
+                    'Times': [dt*n*ms_to_s for n in range(N)], # ms to s
                     'Dimensions': A.shape,
                     'SliceVector': sliceVec,
                 }
@@ -194,7 +197,7 @@ class PatientMeta:
         sliceVec = getFieldData(vtiObj, 
                                 'SliceVector', 
                                 default=[0.0, 0.0, 1.0])
-        self._meta = {'PixelSpacing': [dx*scaleFactor, dy*scaleFactor],
+        self._meta = {'PixelSpacing': [dy*scaleFactor, dx*scaleFactor],
                             'ImagePositionPatient': [i*scaleFactor for i in oo],
                             'ImageOrientationPatient': iop,
                             'SpacingBetweenSlices': dz*scaleFactor,
@@ -204,39 +207,40 @@ class PatientMeta:
                             'SliceLocation0': 0.0}
         self._updateMatrix()
 
-    def initFromDicomSeg(self, dicomSeg, scaleFactor=1.0):
-        sliceThick = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
-        pixSpace = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
-        ipp = [i.PlanePositionSequence[0].ImagePositionPatient for i in dicomSeg.PerFrameFunctionalGroupsSequence]
-        oo = np.array(ipp[0])
-        normalVector = np.array(ipp[-1]) - oo 
-        normalVector = normalVector / np.linalg.norm(normalVector)
-        oo = dicomSeg.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
-        iop = dicomSeg.SharedFunctionalGroupsSequence[0].PlaneOrientationSequence[0].ImageOrientationPatient
-        seg_data = dicomSeg.pixel_array
-        seg_data = np.transpose(seg_data, axes=[2,1,0])
-        self._meta = {"ImagePositionPatient": [oo[0]*scaleFactor, oo[1]*scaleFactor, oo[2]*scaleFactor], 
-                "PixelSpacing": [pixSpace[0]*scaleFactor, pixSpace[1]*scaleFactor],
-                "SliceThickness": sliceThick*scaleFactor,
-                "SpacingBetweenSlices": sliceThick*scaleFactor,
-                "Dimensions": seg_data.shape,
-                "ImageOrientationPatient": iop, 
-                "SliceVector": normalVector   
-                }
-        self._updateMatrix()
+    def initFromDicomSeg(self, dicomSeg, scaleFactor=1.0): # TODO
+        pass
+        # sliceThick = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
+        # pixSpace = dicomSeg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
+        # ipp = [i.PlanePositionSequence[0].ImagePositionPatient for i in dicomSeg.PerFrameFunctionalGroupsSequence]
+        # oo = np.array(ipp[0])
+        # normalVector = np.array(ipp[-1]) - oo 
+        # normalVector = normalVector / np.linalg.norm(normalVector)
+        # oo = dicomSeg.PerFrameFunctionalGroupsSequence[0].PlanePositionSequence[0].ImagePositionPatient
+        # iop = dicomSeg.SharedFunctionalGroupsSequence[0].PlaneOrientationSequence[0].ImageOrientationPatient
+        # seg_data = dicomSeg.pixel_array
+        # seg_data = np.transpose(seg_data, axes=[2,1,0])
+        # self._meta = {"ImagePositionPatient": [oo[0]*scaleFactor, oo[1]*scaleFactor, oo[2]*scaleFactor], 
+        #         "PixelSpacing": [pixSpace[0]*scaleFactor, pixSpace[1]*scaleFactor],
+        #         "SliceThickness": sliceThick*scaleFactor,
+        #         "SpacingBetweenSlices": sliceThick*scaleFactor,
+        #         "Dimensions": seg_data.shape,
+        #         "ImageOrientationPatient": iop, 
+        #         "SliceVector": normalVector   
+        #         }
+        # self._updateMatrix()
 
     def _updateMatrix(self):
         self._matrix = self.buildImage2PatientCoordinateMatrix()
 
     def buildImage2PatientCoordinateMatrix(self):
-        dx, dy, dz = self.Spacing
+        dr, dc, dz = self.Spacing
         oo = self.ImagePositionPatient
-        orientation = np.array(self.ImageOrientationPatient)
-        iop = np.vstack((orientation.reshape(2, 3), self.SliceVector))
+        iop = np.array(self.ImageOrientationPatient)
+        vZ = self.SliceVector
         matrix = np.array([
-            [iop[0,0]*dx, iop[0,1]*dy, iop[0,2]*dz, oo[0]], 
-            [iop[1,0]*dx, iop[1,1]*dy, iop[1,2]*dz, oo[1]], 
-            [iop[2,0]*dx, iop[2,1]*dy, iop[2,2]*dz, oo[2]], 
+            [iop[3]*dr, iop[0]*dc, vZ[0]*dz, oo[0]], 
+            [iop[4]*dr, iop[1]*dc, vZ[1]*dz, oo[1]], 
+            [iop[5]*dr, iop[2]*dc, vZ[2]*dz, oo[2]], 
             [0, 0, 0, 1]
         ])
         return matrix
@@ -261,13 +265,13 @@ class PatientMeta:
         All in mm
         """
         return {
-            'ImagePositionPatient': np.array([i*1000.0 for i in self.ImagePositionPatient]),
-            'PixelSpacing': np.array([i*1000.0 for i in self.PixelSpacing]),
+            'ImagePositionPatient': np.array([i*m_to_mm for i in self.ImagePositionPatient]),
+            'PixelSpacing': np.array([i*m_to_mm for i in self.PixelSpacing]),
             'ImageOrientationPatient': self.ImageOrientationPatient,
             'SliceVector': self.SliceVector,
-            'SliceThickness': self.SliceThickness*1000.0,
-            'SliceLocation0': self.SliceLocation0*1000.0,
-            'SpacingBetweenSlices': self.SpacingBetweenSlices*1000.0
+            'SliceThickness': self.SliceThickness*m_to_mm,
+            'SliceLocation0': self.SliceLocation0*m_to_mm,
+            'SpacingBetweenSlices': self.SpacingBetweenSlices*m_to_mm
         }   
 
     def imageToPatientCoordinates(self, imageCoords):
@@ -315,7 +319,11 @@ class PatientMeta:
 # EXPOSED METHODS
 # ===================================================================================================
 
-def arrToVTI(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Dataset] = None, TRUE_ORIENTATION: bool = False) -> Dict[float, vtk.vtkImageData]:
+def arrToVTI(arr: np.ndarray, 
+            patientMeta: PatientMeta, 
+            ds: Optional[dicom.Dataset] = None, 
+            TRUE_ORIENTATION: bool = False,
+            outputPath: Optional[str] = None) -> Dict[float, vtk.vtkImageData]:
     """Convert array (+meta) to VTI dict (keys=times, values=VTI volumes). 
 
     Args:
@@ -323,7 +331,8 @@ def arrToVTI(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Datas
         patientMeta (PatientMatrix): PatientMatrix object containing meta to be added as Field data
         ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
         TRUE_ORIENTATION (bool [False]) : Boolean to force accurate spatial location of image data.
-                                NOTE: this uses resampling from VTS data so output VTI will have different dimensions.  
+                                NOTE: this uses resampling from VTS data so output VTI will have different dimensions. 
+        outputPath (str [None]): Save as go, then rename at end - RAM friendly
     
     Returns:
         vtiDict
@@ -333,27 +342,27 @@ def arrToVTI(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Datas
     """
     dims = arr.shape
     vtkDict = {}
-    timesUsed = []
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]
-        ###
-        A3 = np.swapaxes(A3, 0, 1)
-        newImg = _arrToImagedata(A3, patientMeta)
-        if TRUE_ORIENTATION:
-            vts_data = _vti2vts(newImg, patientMeta)
-            newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
-            delAllCellArrays(newImg)
-            delArraysExcept(newImg, ['PixelData'])
-        if ds is not None:
-            addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
-                                                                "Time": patientMeta.Times[0]})
+        ###        
         try:
             thisTime = patientMeta.Times[k1]
         except KeyError:
             thisTime = k1
-        if thisTime in timesUsed:
-            thisTime = k1
-        timesUsed.append(thisTime)
+        if TRUE_ORIENTATION:
+            vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
+            newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
+            delAllCellArrays(newImg)
+            delArraysExcept(newImg, ['PixelData'])
+        else:
+            A3 = np.swapaxes(A3, 0, 1)
+            newImg = _arrToImagedata(A3, patientMeta)
+
+        if ds is not None:
+            addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
+                                                                "Time": thisTime})
+        if outputPath is not None:
+            newImg = fIO.writeVtkFile(newImg, os.path.join(outputPath, f"data_{k1:05d}.vti"))
         vtkDict[thisTime] = newImg
     return vtkDict
 
@@ -365,40 +374,46 @@ def _arrToImagedata(A3: np.ndarray, patientMeta: PatientMeta) -> vtk.vtkImageDat
     newImg.GetPointData().SetScalars(aArray)
     return newImg
 
-def _vti2vts(vti_image: vtk.vtkImageData, patientMeta: PatientMeta) -> vtk.vtkStructuredGrid:
-    vti_image.SetOrigin(0.0,0.0,0.0) # Origin should be in the patientMeta
-    return patientMeta.transformVTKData(vti_image)
-    
 def _buildVTIImage(patientMeta: PatientMeta=None) -> vtk.vtkImageData:
     if patientMeta is None:
         patientMeta = PatientMeta()
     vti_image = vtk.vtkImageData()
-    vti_image.SetSpacing(patientMeta.Spacing[0] ,patientMeta.Spacing[1] ,patientMeta.Spacing[2])
+    vti_image.SetSpacing(patientMeta.Spacing[0], patientMeta.Spacing[1], patientMeta.Spacing[2])
     vti_image.SetOrigin(patientMeta.Origin[0], patientMeta.Origin[1], patientMeta.Origin[2])
     vti_image.SetDimensions(patientMeta.Dimensions[1], patientMeta.Dimensions[0], patientMeta.Dimensions[2])
     return vti_image
 
-def arrToVTS(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Dataset] = None) -> Dict[float, vtk.vtkStructuredGrid]:
+
+def __arr3ToVTS(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Dataset] = None, thisTime: Optional[float]=0.0) -> vtk.vtkStructuredGrid:
+    # A3 = np.swapaxes(arr, 0, 1)
+    dummyPatientMeta = PatientMeta()
+    dummyPatientMeta.setMeta('Dimensions', arr.shape)
+    ii = _arrToImagedata(arr, patientMeta=dummyPatientMeta) # No info here, let the transform take care of it
+    vts_data = patientMeta.transformVTKData(ii)
+    if ds is not None:
+        addFieldDataFromDcmDataSet(vts_data, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
+                                                                "Time": thisTime})
+    return vts_data
+
+
+def arrToVTS(arr: np.ndarray, 
+            patientMeta: PatientMeta, 
+            ds: Optional[dicom.Dataset] = None, 
+            outputPath: Optional[str] = None) -> Dict[float, vtk.vtkStructuredGrid]:
     dims = arr.shape
     vtkDict = {}
-    timesUsed = []
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]
-        A3 = np.swapaxes(A3, 0, 1)
-        ii = _arrToImagedata(A3, patientMeta)
-        vts_data = _vti2vts(ii, patientMeta)
-        if ds is not None:
-            addFieldDataFromDcmDataSet(vts_data, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
-                                                                "Time": patientMeta.Times[0]})
         try:
             thisTime = patientMeta.Times[k1]
         except KeyError:
             thisTime = k1
-        if thisTime in timesUsed:
-            thisTime = k1
-        timesUsed.append(thisTime)
+        vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime)
+        if outputPath is not None:
+            vts_data = fIO.writeVtkFile(vts_data, os.path.join(outputPath, f"data_{k1:05d}.vts"))
         vtkDict[thisTime] = vts_data
     return vtkDict
+
 
 def writeArrToVTI(arr: np.ndarray, patientMeta: PatientMeta, filePrefix: str, outputPath: str, ds: Optional[dicom.Dataset] = None, TRUE_ORIENTATION: bool = False) -> str:
     """Will write a VTI file(s) from arr (if np.ndim(arr)=4 write vti files + pvd file)
@@ -523,7 +538,7 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
     return seg_dataset
 
 
-def getDcmSeg_meta(dcmseg):
+def getDcmSeg_meta_depreciated(dcmseg):
     sliceThick = dcmseg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].SliceThickness
     pixSpace = dcmseg.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].PixelSpacing
     ffgs = dcmseg.PerFrameFunctionalGroupsSequence
@@ -543,7 +558,7 @@ def getDcmSeg_meta(dcmseg):
             }
 
 
-def dicom_seg_to_vtk(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
+def dicom_seg_to_vtk_depreciated(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
     ds = dicom.dcmread(dicom_seg_path)
     patMeta = PatientMeta()
     patMeta.initFromDicomSeg(ds)
