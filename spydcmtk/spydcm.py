@@ -17,6 +17,67 @@ import spydcmtk.dcmTK as dcmTK
 from spydcmtk.spydcm_config import SpydcmTK_config
 
 
+class INTERACTIVE():
+    def __init__(self, study, outputPath) -> None:
+        self.study = study
+        self.outputPath = outputPath
+        #
+        self.options = {
+            '1': ("Data summary", self.dataSummary),
+            '2': ("Build VTS", self.buildVTS),
+            '3': ("Build FDQ", self.buildFDQ),
+            'q': ("Quit", self.quit)
+        }
+
+    def displayMenu(self):
+        print("\nSelect an option:")
+        for key, (description, _) in self.options.items():
+            print(f"{key}: {description}")
+
+    def getUserInput(self, question="your choice"):
+        return input(f"Enter {question}: ")
+
+    def run(self):
+        while True:
+            self.displayMenu()
+            choice = self.getUserInput()
+            if choice in self.options:
+                self.options[choice][1]()  # Execute the corresponding function
+            else:
+                print("Invalid option. Please try again.")
+
+    def dataSummary(self):
+        print(self.study.getStudySummary())
+
+    def buildVTS(self):
+        self.dataSummary()
+        seNum = self.getUserInput("series number")
+        try: 
+            seNum = int(seNum)
+            dcmSeries = self.study.getSeriesByID(seNum)
+            outputFilename = self.getUserInput("file name (vts)")
+            outputpath = os.path.join(self.outputPath, outputFilename)
+            dcmSeries.writeToVTS(outputpath)
+        except ValueError:
+            print("Invalid option. Please try again")
+
+    def buildFDQ(self):
+        self.dataSummary()
+        seNum_ = self.getUserInput("series numbers for FDQ")
+        try: 
+            seNum_4 = seNum_.strip().split(' ')
+            seNum_4 = [int(i) for i in seNum_4]
+            outputFilename = self.getUserInput("file name (pvd)")
+            outputpath = os.path.join(self.outputPath, outputFilename)
+            self.study.writeFDQ(seNum_4, outputpath)
+        except ValueError:
+            print("Invalid option. Please try again")
+
+
+    def quit(self):
+        print("Exiting the menu.")
+        exit()  
+
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
     """ Write a directory of dicom files to a Nifti (*.nii.gz) file. 
@@ -339,7 +400,8 @@ def checkArgs(args):
                 args.inspectFull, 
                 args.inspectQuick,
                 args.outputFolder is not None,
-                args.vti]
+                args.vti,
+                args.INTERACTIVE]
     return any(allActionArgs)
 
 ##  ========= RUN ACTIONS =========
@@ -367,11 +429,12 @@ def runActions(args, ap):
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
         try:
-            onlyOverview = args.inspect or args.inspectFull
+            onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
+            oneFilePerDir = args.inspectQuick or args.INTERACTIVE
             if not args.QUIET:
                 print(f"READING...")
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, 
-                                                                     ONE_FILE_PER_DIR=args.inspectQuick,
+                                                                     ONE_FILE_PER_DIR=oneFilePerDir,
                                                                      HIDE_PROGRESSBAR=args.QUIET, 
                                                                      FORCE_READ=args.FORCE, 
                                                                      OVERVIEW=onlyOverview) 
@@ -386,6 +449,11 @@ def runActions(args, ap):
                 print(iStudy.getTopDir())
                 print(iStudy.getStudySummary(args.inspectFull))
                 print('\n')
+        elif args.INTERACTIVE:
+            # TODO - check if multiple studies
+            INTER = INTERACTIVE(ListDicomStudies[0], outputPath=args.outputFolder)
+            INTER.run()
+
         else:
             if args.outputFolder is None:
                 print(f'WARNING: outputFolder not given - setting to inputFolder')
@@ -463,6 +531,8 @@ def main():
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
     #
+    ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode', action='store_true')
+    #
     ap.add_argument('-config', dest='configFile', help='Path to configuration file to use.', type=str, default=None)
     # -- program behaviour guidence -- #
     ap.add_argument('-SAFE', dest='SAFE', help='Safe naming - uses UIDs for naming to avoid potential conflicts.\n\t'+\
@@ -498,6 +568,8 @@ def main():
         sys.exit(1)
 
     ## -------------
+    if arguments.outputFolder is not None:
+        arguments.outputFolder = os.path.abspath(arguments.outputFolder)
 
     runActions(arguments, ap)
 

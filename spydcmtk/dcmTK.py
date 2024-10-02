@@ -189,10 +189,22 @@ class DicomSeries(list):
             dOut[ds.InstanceNumber] = dd
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
 
+    def _isSeriesFullyLoaded(self):
+        return len(self) == dcmTools.countFilesInDir(self.getRootDir())
+
+    def _loadToMemory(self):
+        if not self._isSeriesFullyLoaded():
+            rootDir = self.getRootDir()
+            self.clear()
+            self.extend([dicom.dcmread(os.path.join(rootDir, i), force=self.FORCE_READ) for i in tqdm(os.listdir(rootDir), disable=self.HIDE_PROGRESSBAR)])
+
     def getSeriesOverview(self, tagList=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
-        vals.append(len(self))
+        if len(self) == 1: # ONLY READ ONE FILE PER DIR
+            vals.append(dcmTools.countFilesInDir(self.getRootDir()))
+        else:
+            vals.append(len(self))
         return names, vals
 
     def getSeriesTimeAsDatetime(self):
@@ -738,6 +750,37 @@ class DicomStudy(list):
             raise ValueError('Missing some volumes')
         return DicomSeries(sorted_ds_list)
 
+    def writeFDQ(self, seriesNumber_list, outputFileName, VERBOSE=True):
+        """
+        Writes a 4D-flow output as VTS format.
+
+        Args:
+            seriesNumber_list (list): A list of series numbers identifying mag and 3 phase series. Mag, X, Y, Z phases
+            outputFileName (str): The name of the pvd file to write to.
+
+        Returns:
+            str: the pvd file written
+        """
+        rootDir, fName = os.path.split(outputFileName)
+        intermediate_pvds = {}
+        if VERBOSE: print("Writing out internediate series:")
+        for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"]):
+            if VERBOSE: print(f"    {label}")
+            dcmSeries = self.getSeriesBySeriesNumber(iSeriesNum)
+            dcmSeries._loadToMemory()
+            iOut = dcmSeries.writeToVTS(os.path.join(rootDir, f"{label}.pvd"))
+            intermediate_pvds[label] = iOut
+        if VERBOSE: print(f"Combining to final 4D-flow PVD")
+        fOut = dcmVTKTK._mergePhaseSeries(intermediate_pvds["MAG"], 
+                                            [intermediate_pvds["PX"],
+                                            intermediate_pvds["PY"],
+                                            intermediate_pvds["PZ"]], 
+                                            outputFileName, 
+                                            DEL_ORIGINAL=True)
+        if VERBOSE: print(f"Written {fOut}")
+        return fOut 
+
+
     def getStudySummaryDict(self, FORCE_STRING_KEYS=False):
         pt,pv = self.getPatientOverview()
         studySummaryDict = dict(zip(pt, pv))
@@ -764,9 +807,15 @@ class DicomStudy(list):
                 seriesStr = sorted(seriesStr, key=lambda i:int(i.split(',')[0]))
             except ValueError:
                 pass # Try to sort, but if fail (due to return not int somehow, then no sort)
-            return 'SUBJECT:%s\nSTUDY:%s\n    %s\n    %s\nTotal: %d images'%(patStr, studyStr, seriesHeader,'\n    '.join(seriesStr), self.getNumberOfDicoms())
+            seriesStr_ = '\n\n'+seriesHeader+'\n    '+'\n    '.join(seriesStr)
+            strOut = f"SUBJECT: {patStr}"
+            strOut += f"\nSTUDY: {studyStr}"
+            strOut += seriesStr_
+            return strOut
         else:
-            return 'SUBJECT:%s\nSTUDY:%s'%(patStr, studyStr)
+            strOut = f"SUBJECT: {patStr}"
+            strOut += f"\nSTUDY: {studyStr}"
+            return strOut
 
     def getTagValuesList(self, tagList, RETURN_STR):
         output = []
