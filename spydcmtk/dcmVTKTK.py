@@ -32,6 +32,8 @@ from vtk.util import numpy_support # type: ignore
 
 import spydcmtk.dcmTools as dcmTools
 from ngawari import fIO
+from ngawari import ftk
+from ngawari import vtkfilters
 
 
 mm_to_m = 0.001
@@ -480,6 +482,32 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     delArraysExcept(combinedImage, [arrayName])
     return combinedImage
 
+
+def _mergePhaseSeries(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
+    rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
+    magFiles = fIO.readPVDFileName(magPVD)
+    phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
+    times = sorted(magFiles.keys())
+    outputFilesDict = {}
+    phase_factors = [1, 1, -1] # This is GE: TODO generalise for SIEMENS / PHILLIPS
+    for k1, iTime in enumerate(times):
+        iVTS = fIO.readVTKFile(magFiles[iTime])
+        thisVelArray = []
+        for k2, iPhase in enumerate(phaseFiles_dicts): 
+            thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
+            thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
+            aName = vtkfilters.getScalarsArrayName(thisPhase)
+            thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2])
+        thisVelArray_ = np.array(thisVelArray).T
+        vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
+        fOutTemp = fIO.writeVtkFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
+        outputFilesDict[iTime] = fOutTemp
+    pvdFileOut = fIO.writeVtkPvdDict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True) # FIXME rename
+    if DEL_ORIGINAL:
+        fIO.deleteFilesByPVD(magPVD)
+        for iPhaseFile in phasePVD_list:
+            fIO.deleteFilesByPVD(iPhaseFile)
+    return pvdFileOut
 
 # =========================================================================
 # =========================================================================
