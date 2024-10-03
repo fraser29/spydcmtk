@@ -107,7 +107,7 @@ def anonymiseInPlace(dicomDirectory, anonName=None):
             return # Nothing to anonymise... 
         anonName = ""
     #
-    tmpDir = dicomDirectory+".WORKING"
+    tmpDir = dicomDirectory+".TEMP.WORKING"
     os.rename(dicomDirectory, tmpDir)
     dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName)
     shutil.rmtree(tmpDir)

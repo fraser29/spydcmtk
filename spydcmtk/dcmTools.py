@@ -343,8 +343,11 @@ def getSaveFileNameFor_ds_UID(ds, outputRootDir):
     destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, __getDSSaveFileName(ds, SAFE_NAMING=True))
     return destFile
 
-def getSaveFileNameFor_ds(ds, outputRootDir):
-    destFile = os.path.join(outputRootDir, getPatientDirName(ds), getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
+def getSaveFileNameFor_ds(ds, outputRootDir, ANON=False):
+    if ANON:
+        destFile = os.path.join(outputRootDir, getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
+    else:
+        destFile = os.path.join(outputRootDir, getPatientDirName(ds), getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
     return destFile
 
 def getPatientDirName(ds):
@@ -397,6 +400,11 @@ def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, W
 
 def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None):
     nFiles = countFilesInDir(inputDir)
+    outputDirTEMP = outputDir+".WORKING"
+    try:
+        os.rename(outputDir, outputDirTEMP)
+    except FileNotFoundError:
+        pass # OK - will make directory and rename at end
     for thisFile in tqdm(walkdir(inputDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
             continue
@@ -405,15 +413,16 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
         try:
             dataset = dicom.dcmread(thisFile, force=FORCE_READ, stop_before_pixels=False)
             if SAFE_NAMING: 
-                fOut = getSaveFileNameFor_ds_UID(dataset, outputDir)
+                fOut = getSaveFileNameFor_ds_UID(dataset, outputDirTEMP)
             else:
-                fOut = getSaveFileNameFor_ds(dataset, outputDir)
+                fOut = getSaveFileNameFor_ds(dataset, outputDirTEMP, ANON=anonName is not None)
             os.makedirs(os.path.split(fOut)[0], exist_ok=True)
             if anonName is not None:
                 dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonName, remove_private_tags=False)
             dataset.save_as(fOut, write_like_original=False)
         except dicom.filereader.InvalidDicomError:
             continue
+    os.rename(outputDirTEMP, outputDir)
 
 def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
     dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
