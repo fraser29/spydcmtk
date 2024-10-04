@@ -193,12 +193,8 @@ class PatientMeta:
         dx,dy,dz = vtiObj.GetSpacing()
         oo = vtiObj.GetOrigin()
         # 1st option from meta, then field data then default
-        iop = getFieldData(vtiObj, 
-                            'ImageOrientationPatient', 
-                            default=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
-        sliceVec = getFieldData(vtiObj, 
-                                'SliceVector', 
-                                default=[0.0, 0.0, 1.0])
+        iop = vtkfilters.getFieldData(vtiObj, 'ImageOrientationPatient', ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
+        sliceVec = vtkfilters.getFieldData(vtiObj, 'SliceVector', ifNotFound=[0.0,0.0,1.0])
         self._meta = {'PixelSpacing': [dy*scaleFactor, dx*scaleFactor],
                             'ImagePositionPatient': [i*scaleFactor for i in oo],
                             'ImageOrientationPatient': iop,
@@ -277,8 +273,12 @@ class PatientMeta:
         }   
 
     def imageToPatientCoordinates(self, imageCoords):
-        homogeneous_coords = np.hstack((imageCoords, np.ones((imageCoords.shape[0], 1))))
-        return (self._matrix @ homogeneous_coords.T).T[:, :3]
+        if imageCoords.ndim == 1:
+            homogeneous_coords = np.hstack((imageCoords, np.ones((1,))))
+            return (self._matrix @ homogeneous_coords.T).T[:3]
+        else:
+            homogeneous_coords = np.hstack((imageCoords, np.ones((imageCoords.shape[0], 1))))
+            return (self._matrix @ homogeneous_coords.T).T[:, :3]
 
     def patientToImageCoordinates(self, patientCoords):
         homogeneous_coords = np.hstack((patientCoords, np.ones((patientCoords.shape[0], 1))))
@@ -354,8 +354,8 @@ def arrToVTI(arr: np.ndarray,
         if TRUE_ORIENTATION:
             vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
             newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
-            delAllCellArrays(newImg)
-            delArraysExcept(newImg, ['PixelData'])
+            vtkfilters.delArraysExcept(newImg, [], pointData=False)
+            vtkfilters.delArraysExcept(newImg, ['PixelData'])
         else:
             A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
@@ -364,7 +364,7 @@ def arrToVTI(arr: np.ndarray,
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
                                                                 "Time": thisTime})
         if outputPath is not None:
-            newImg = fIO.writeVtkFile(newImg, os.path.join(outputPath, f"data_{k1:05d}.vti"))
+            newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{k1:05d}.vti"))
         vtkDict[thisTime] = newImg
     return vtkDict
 
@@ -412,7 +412,7 @@ def arrToVTS(arr: np.ndarray,
             thisTime = k1
         vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime)
         if outputPath is not None:
-            vts_data = fIO.writeVtkFile(vts_data, os.path.join(outputPath, f"data_{k1:05d}.vts"))
+            vts_data = fIO.writeVTKFile(vts_data, os.path.join(outputPath, f"data_{k1:05d}.vts"))
         vtkDict[thisTime] = vts_data
     return vtkDict
 
@@ -436,10 +436,10 @@ def writeArrToVTI(arr: np.ndarray, patientMeta: PatientMeta, filePrefix: str, ou
 def writeVTIDict(vtiDict: Dict[float, vtk.vtkImageData], outputPath: str, filePrefix: str) -> str:
     times = sorted(vtiDict.keys())
     if len(times) > 1:
-        return writeVtkPvdDict(vtiDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
+        return fIO.writeVTK_PVD_Dict(vtiDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
-        return writeVTI(vtiDict[times[0]], fOut)
+        return fIO.writeVTKFile(vtiDict[times[0]], fOut)
 
 def scaleVTI(vti_data: vtk.vtkImageData, factor: float) -> None:
     vti_data.SetOrigin([i*factor for i in vti_data.GetOrigin()])
@@ -467,7 +467,7 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     append_filter = vtk.vtkImageAppend()
     append_filter.SetAppendAxis(2)  # Combine images along the Z axis
     for file_name in imageFileNames:
-        thisImage = readVTKFile(file_name)
+        thisImage = fIO.readVTKFile(file_name)
         append_filter.AddInputData(thisImage)
     append_filter.Update()
     combinedImage = append_filter.GetOutput()
@@ -475,15 +475,16 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
         patientMeta = PatientMeta()
     combinedImage.SetOrigin(patientMeta.Origin)
     combinedImage.SetSpacing(patientMeta.Spacing)
-    a = getScalarsAsNumpy(combinedImage)
+    a = vtkfilters.getScalarsAsNumpy(combinedImage)
     if CONVERT_TO_GREYSCALE:
         a = np.mean(a, 1)
-    addArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True)
-    delArraysExcept(combinedImage, [arrayName])
+    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True)
+    vtkfilters.delArraysExcept(combinedImage, [arrayName])
     return combinedImage
 
 
-def _mergePhaseSeries(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
+    # TODO Generalise for 2DPC also
     rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
     magFiles = fIO.readPVDFileName(magPVD)
     phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
@@ -500,9 +501,9 @@ def _mergePhaseSeries(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
             thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2])
         thisVelArray_ = np.array(thisVelArray).T
         vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
-        fOutTemp = fIO.writeVtkFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
+        fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
         outputFilesDict[iTime] = fOutTemp
-    pvdFileOut = fIO.writeVtkPvdDict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True) # FIXME rename
+    pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True) # FIXME rename
     if DEL_ORIGINAL:
         fIO.deleteFilesByPVD(magPVD)
         for iPhaseFile in phasePVD_list:
@@ -586,23 +587,23 @@ def getDcmSeg_meta_depreciated(dcmseg):
             }
 
 
-def dicom_seg_to_vtk_depreciated(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
-    ds = dicom.dcmread(dicom_seg_path)
-    patMeta = PatientMeta()
-    patMeta.initFromDicomSeg(ds)
-    seg_data = ds.pixel_array
-    seg_data = np.transpose(seg_data, axes=[2,1,0])
-    image_data = vtk.vtkImageData()
-    image_data.SetOrigin(patMeta.Origin)
-    image_data.SetDimensions(patMeta.Dimensions)
-    image_data.SetSpacing(patMeta.Spacing)
-    vtk_array = numpy_support.numpy_to_vtk(num_array=seg_data.flatten('F'), deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
-    image_data.GetPointData().SetScalars(vtk_array)
-    if TRUE_ORIENTATION:
-        writeVTS(_vti2vts(image_data, patMeta), vtk_output_path)
-    else:
-        writeVTI(image_data, vtk_output_path)
-    return vtk_output_path
+# def dicom_seg_to_vtk_depreciated(dicom_seg_path, vtk_output_path, TRUE_ORIENTATION=False):
+#     ds = dicom.dcmread(dicom_seg_path)
+#     patMeta = PatientMeta()
+#     patMeta.initFromDicomSeg(ds)
+#     seg_data = ds.pixel_array
+#     seg_data = np.transpose(seg_data, axes=[2,1,0])
+#     image_data = vtk.vtkImageData()
+#     image_data.SetOrigin(patMeta.Origin)
+#     image_data.SetDimensions(patMeta.Dimensions)
+#     image_data.SetSpacing(patMeta.Spacing)
+#     vtk_array = numpy_support.numpy_to_vtk(num_array=seg_data.flatten('F'), deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
+#     image_data.GetPointData().SetScalars(vtk_array)
+#     if TRUE_ORIENTATION:
+#         fIO.writeVTS(_vti2vts(image_data, patMeta), vtk_output_path)
+#     else:
+#         fIO.writeVTI(image_data, vtk_output_path)
+#     return vtk_output_path
 
 
 class NoVtkError(Exception):
@@ -619,287 +620,6 @@ class NoVtkError(Exception):
 
 
 
-
-# ===================================================================================================
-## TO REMOVE TO NGAWARI
-# ===================================================================================================
-def __writerWrite(writer, data, fileName: str) -> str:
-    writer.SetFileName(fileName)
-    writer.SetInputData(data)
-    writer.Write()
-    return fileName
-
-
-def writeNII(data: vtk.vtkImageData, fileName: str) -> str:
-    writer = vtk.vtkNIFTIImageWriter()
-    return __writerWrite(writer, data, fileName)
-
-
-def writeMHA(data: vtk.vtkImageData, fileName: str) -> str:
-    writer = vtk.vtkMetaImageWriter()
-    return __writerWrite(writer, data, fileName)
-
-
-def writeVTS(data: vtk.vtkStructuredGrid, fileName: str) -> str:
-    writer = vtk.vtkXMLStructuredGridWriter()
-    return __writerWrite(writer, data, fileName)
-
-
-def writeVTI(data: vtk.vtkImageData, fileName: str) -> str:
-    writer = vtk.vtkXMLImageDataWriter()
-    writer.SetDataModeToBinary()
-    return __writerWrite(writer, data, fileName)
-
-
-def nii2vti(fullFileName: str) -> vtk.vtkImageData:
-    reader = vtk.vtkNIFTIImageReader()
-    reader.SetFileName(fullFileName)
-    reader.Update()
-    data = reader.GetOutput()
-    ## TRANSFORM
-    qFormMatrix = reader.GetQFormMatrix()
-    trans = vtk.vtkTransform()
-    trans.SetMatrix(qFormMatrix)
-    transFilter = vtk.vtkTransformFilter()
-    transFilter.SetTransform(trans)
-    transFilter.SetInputData(data)
-    transFilter.Update()
-    dataT = transFilter.GetOutput()
-    ## RESAMPLE BACK TO VTI
-    rif = vtk.vtkResampleToImage()
-    rif.SetInputDataObject(dataT)
-    d1,d2,d3 = dataT.GetDimensions()
-    rif.SetSamplingDimensions(d1,d2,d3)
-    rif.Update()
-    data = rif.GetOutput()
-    ## WRITE
-    dd, ff = os.path.split(fullFileName)
-    ff, _ = os.path.splitext(ff)
-    fOut = os.path.join(dd, ff+'.vti')
-    writeVTI(data, fOut)
-    return fOut
-
-def writeVtkFile(data: vtk.vtkImageData, fileName: str) -> str:
-    if fileName.endswith('.vti'):
-        return writeVTI(data, fileName)
-    elif fileName.endswith('.vts'):
-        return writeVTS(data, fileName)
-    elif fileName.endswith('.mha'):
-        return writeMHA(data, fileName)
-    
-def readVTKFile(fileName: str) -> vtk.vtkImageData:
-    # --- CHECK EXTENSION - READ FILE ---
-    if not os.path.isfile(fileName):
-        raise IOError('## ERROR: %s file not found'%(fileName))
-    if fileName.endswith('vtp'):
-        reader = vtk.vtkXMLPolyDataReader()
-    elif fileName.endswith('vts'):
-        reader = vtk.vtkXMLStructuredGridReader()
-    elif fileName.endswith('vtu'):
-        reader = vtk.vtkXMLUnstructuredGridReader()
-    elif fileName.endswith('stl'):
-        reader = vtk.vtkSTLReader()
-        reader.ScalarTagsOn()
-    elif fileName.endswith('nii'):
-        reader = vtk.vtkNIFTIImageReader()
-    elif fileName.endswith('vti'):
-        reader = vtk.vtkXMLImageDataReader()
-    elif fileName.endswith('vtk'):
-        reader = vtk.vtkPolyDataReader()
-    elif fileName.endswith('vtm'):
-        reader = vtk.vtkXMLMultiBlockDataReader()
-    elif fileName.endswith('nrrd'):
-        reader = vtk.vtkNrrdReader()
-    elif fileName.endswith('mha') | fileName.endswith('mhd'):
-        reader = vtk.vtkMetaImageReader()
-    elif fileName.endswith('png'):
-        reader = vtk.vtkPNGReader()
-    elif fileName.endswith('jpg'):
-        reader = vtk.vtkJPEGReader()
-    elif fileName.endswith('pvd'):
-        raise IOError(' PVD - should use readPVD()')
-    else:
-        raise IOError(fileName + ' not correct extension')
-    reader.SetFileName(fileName)
-    reader.Update()
-    return reader.GetOutput()
-
-# =========================================================================
-##          PVD Stuff
-# =========================================================================
-def checkIfExtnPresent(fileName: str, extn: str) -> str:
-    if (extn[0] == '.'):
-        extn = extn[1:]
-    le = len(extn)
-    if (fileName[-le:] != extn):
-        fileName = fileName + '.' + extn
-    return fileName
-
-def _writePVD(rootDirectory: str, filePrefix: str, outputSummary: Dict[int, Dict[str, Any]]) -> str:
-    """
-    :param rootDirectory:
-    :param filePrefix:
-    :param outputSummary: dict of dicts : { timeID : {TrueTime : float, FileName : str}
-    :return: full file name
-    """
-    fileOut = os.path.join(rootDirectory, filePrefix + '.pvd')
-    with open(fileOut, 'w') as f:
-        f.write('<?xml version="1.0"?>\n')
-        f.write('<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">\n')
-        f.write('<Collection>\n')
-        for timeId in sorted(outputSummary.keys()):
-            sTrueTime = outputSummary[timeId]['TrueTime']
-            tFileName = str(outputSummary[timeId]['FileName'])
-            f.write('<DataSet timestep="%7.5f" file="%s"/>\n' % (sTrueTime, tFileName))
-        f.write('</Collection>\n')
-        f.write('</VTKFile>')
-    return fileOut
-
-
-def _makePvdOutputDict(vtkDict: Dict[int, vtk.vtkImageData], filePrefix: str, fileExtn: str, subDir: str = '') -> Dict[int, Dict[str, Any]]:
-    outputSummary = {}
-    myKeys = vtkDict.keys()
-    myKeys = sorted(myKeys)
-    for timeId in range(len(myKeys)):
-        fileName = __buildFileName(filePrefix, timeId, fileExtn)
-        trueTime = myKeys[timeId]
-        outputMeta = {'FileName': os.path.join(subDir, fileName), 'TimeID': timeId, 'TrueTime': trueTime}
-        outputSummary[timeId] = outputMeta
-    return outputSummary
-
-def __writePvdData(vtkDict: Dict[int, vtk.vtkImageData], rootDir: str, filePrefix: str, fileExtn: str, subDir: str = '') -> None:
-    myKeys = vtkDict.keys()
-    myKeys = sorted(myKeys)
-    for timeId in range(len(myKeys)):
-        fileName = __buildFileName(filePrefix, timeId, fileExtn)
-        fileOut = os.path.join(rootDir, subDir, fileName)
-        if type(vtkDict[myKeys[timeId]]) == str:
-            os.rename(vtkDict[myKeys[timeId]], fileOut)
-        else:
-            writeVtkFile(vtkDict[myKeys[timeId]], fileOut)
-
-def writeVtkPvdDict(vtkDict: Dict[int, vtk.vtkImageData], rootDir: str, filePrefix: str, fileExtn: str, BUILD_SUBDIR: bool = True) -> str:
-    """
-    Write dict of time:vtkObj to pvd file
-        If dict is time:fileName then will copy files
-    :param vtkDict: python dict - time:vtkObj
-    :param rootDir: directory
-    :param filePrefix: make filePrefix.pvd
-    :param fileExtn: file extension (e.g. vtp, vti, vts etc)
-    :param BUILD_SUBDIR: bool - to build subdir (filePrefix.pvd in root, then data in root/filePrefix/
-    :return: full file name
-    """
-    filePrefix = os.path.splitext(filePrefix)[0]
-    subDir = ''
-    fullPVD = os.path.join(rootDir, checkIfExtnPresent(filePrefix, 'pvd'))
-    if os.path.isfile(fullPVD) & (type(list(vtkDict.values())[0]) != str):
-        deleteFilesByPVD(fullPVD, QUIET=True)
-    if BUILD_SUBDIR:
-        subDir = filePrefix
-        if not os.path.isdir(os.path.join(rootDir, subDir)):
-            os.mkdir(os.path.join(rootDir, subDir))
-    outputSummary = _makePvdOutputDict(vtkDict, filePrefix, fileExtn, subDir)
-    __writePvdData(vtkDict, rootDir, filePrefix, fileExtn, subDir)
-    return _writePVD(rootDir, filePrefix, outputSummary)
-
-def deleteFilesByPVD(pvdFile: str, FILE_ONLY: bool = False, QUIET: bool = False) -> int:
-    """
-    Will Read pvdFile - delete all files from hard drive that pvd refs
-        Then delete pvdFile
-    :param pvdFile:
-    :param FILE_ONLY:
-    :param QUIET:
-    :return:
-    """
-    if FILE_ONLY:
-        try:
-            os.remove(pvdFile)
-        except (IOError, OSError):
-            print('    warning - file not found %s' % (pvdFile))
-            return 1
-        return 0
-    try:
-        pvdDict = readPVDFileName(pvdFile)
-        for iKey in pvdDict.keys():
-            os.remove(pvdDict[iKey])
-            try:
-                os.remove(pvdDict[iKey])
-            except OSError:
-                pass  # ignore this as may be shared by and deleted by another pvd
-        os.remove(pvdFile)
-    except (IOError, OSError):
-        if (not QUIET)&("pvd" not in pvdFile):
-            print('    warning - file not found %s' % (pvdFile))
-    try:
-        head, _ = os.path.splitext(pvdFile)
-        os.rmdir(head)
-    except (IOError, OSError):
-        if not QUIET:
-            print('    warning - dir not found %s' % (os.path.splitext(pvdFile)[0]))
-    return 0
-
-def __buildFileName(prefix: str, idNumber: int, extn: str) -> str:
-    ids = '%05d'%(idNumber)
-    if extn[0] != '.':
-        extn = '.' + extn
-    fileName = prefix + '_' + ids + extn
-    return fileName
-
-def readPVDFileName(fileIn: str, vtpTime: float = 0.0, timeIDs: List[int] = None, RETURN_OBJECTS_DICT: bool = False) -> Dict[float, str]:
-    """
-    Read PVD file, return dictionary of fullFileNames - keys = time
-    So DOES NOT read file
-    If not pvd - will return dict of {0.0 : fileName}
-    """
-    if timeIDs is None:
-        timeIDs = []
-    _, ext = os.path.splitext(fileIn)
-    if ext != '.pvd':
-        if RETURN_OBJECTS_DICT:
-            return {vtpTime: readVTKFile(fileIn)}
-        else:
-            return {vtpTime: fileIn}
-    #
-    vtkDict = pvdGetDict(fileIn, timeIDs)
-    if RETURN_OBJECTS_DICT:
-        kk = vtkDict.keys()
-        return dict(zip(kk, [readVTKFile(vtkDict[i]) for i in kk]))
-    else:
-        return vtkDict
-
-def readPVD(fileIn: str, timeIDs: List[int] = None) -> Dict[float, str]:
-    if timeIDs is None:
-        timeIDs = []
-    return readPVDFileName(fileIn, timeIDs=timeIDs, RETURN_OBJECTS_DICT=True)
-
-def pvdGetDict(pvd: str, timeIDs: List[int] = None) -> Dict[float, str]:
-    if timeIDs is None:
-        timeIDs = []
-    if type(pvd) == str:
-        root = ET.parse(pvd).getroot()
-    elif type(pvd) == dict:
-        return pvd
-    else:
-        root = pvd
-    nTSteps = len(root[0])
-    if len(timeIDs) == 0:
-        timeIDs = range(nTSteps)
-    else:
-        for k1 in range(len(timeIDs)):
-            if timeIDs[k1] < 0:
-                timeIDs[k1] = nTSteps + timeIDs[k1]
-    pvdTimesFilesDict = {}
-    rootDir = os.path.dirname(pvd)
-    for k in range(nTSteps):
-        if k not in timeIDs:
-            continue
-        a = root[0][k].attrib
-        fullVtkFileName = os.path.join(rootDir, a['file'])
-        pvdTimesFilesDict[float(a['timestep'])] = fullVtkFileName
-    return pvdTimesFilesDict
-
-
-
 # =========================================================================
 # =========================================================================
 ## HELPFUL FILTERS
@@ -910,38 +630,6 @@ def vtkfilterFlipImageData(vtiObj, axis):
     flipper.SetInputData(vtiObj)
     flipper.Update()
     return flipper.GetOutput()
-
-
-def getScalarsAsNumpy(data):
-    aS = data.GetPointData().GetScalars()
-    aName = aS.GetName()
-    return getArrayAsNumpy(data, aName)
-
-
-def getArrayAsNumpy(data, arrayName):
-    return numpy_support.vtk_to_numpy(data.GetPointData().GetArray(arrayName)).copy()
-
-
-def addArrayFromNumpy(data, npArray, arrayName, SET_SCALAR=False):
-    aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
-    aArray.SetName(arrayName)
-    if SET_SCALAR:
-        data.GetPointData().SetScalars(aArray)
-    else:
-        data.GetPointData().AddArray(aArray)
-
-
-def addFieldData(vtkObj, fieldVal, fieldName):
-    tagArray = numpy_support.numpy_to_vtk(np.array([float(fieldVal)]))
-    tagArray.SetName(fieldName)
-    vtkObj.GetFieldData().AddArray(tagArray)
-
-
-def getFieldData(vtkObj, fieldName, default=None):
-    try:
-        return numpy_support.vtk_to_numpy(vtkObj.GetFieldData().GetArray(fieldName)).copy()
-    except AttributeError:
-        return default
 
 
 def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
@@ -970,20 +658,3 @@ def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
         tagArray = numpy_support.numpy_to_vtk(np.array(val))
         tagArray.SetName(iTag)
         vtkObj.GetFieldData().AddArray(tagArray)
-
-
-def delArray(data, arrayName):
-    data.GetPointData().RemoveArray(arrayName)
-
-
-def delArraysExcept(data, arrayNamesToKeep_list):
-    aList = [data.GetPointData().GetArrayName(i) for i in range(data.GetPointData().GetNumberOfArrays())]
-    for ia in aList:
-        if ia not in arrayNamesToKeep_list:
-            data.GetPointData().RemoveArray(ia)
-    return data
-
-
-def delAllCellArrays(data):
-    for i in range(data.GetCellData().GetNumberOfArrays()):
-        data.GetCellData().RemoveArray(data.GetCellData().GetArrayName(i))

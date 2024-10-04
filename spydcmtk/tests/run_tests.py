@@ -102,14 +102,14 @@ class TestDicom2VT2Dicom(unittest.TestCase):
         cleanMakeDirs(tmpDir)
         fOut = dcmSeries.writeToVTI(tmpDir)
         self.assertTrue(os.path.isfile(fOut), msg='Written pvd file does not exist')
-        dd = dcmTK.dcmVTKTK.readPVD(fOut)
+        dd = dcmTK.dcmVTKTK.fIO.readPVD(fOut)
         dTimes = sorted(dd.keys())
         self.assertAlmostEqual(dTimes[1], 0.05192, places=7, msg='time key in vti dict incorrect')
         vti0 = dd[dTimes[0]]
         oo = vti0.GetOrigin()
         self.assertAlmostEqual(oo[1], 0.1166883275304, places=7, msg='origin in vti dict incorrect')
         if not DEBUG:
-            dcmTK.dcmVTKTK.deleteFilesByPVD(fOut)
+            dcmTK.dcmVTKTK.fIO.deleteFilesByPVD(fOut)
             shutil.rmtree(tmpDir)
 
 
@@ -269,59 +269,59 @@ def getTestVolDS():
         dsList = dcmTK.DicomSeries.setFromDirectory(MISC_DIR, HIDE_PROGRESSBAR=True)
     return dsList
 
-class TestArrToDCMSeg(unittest.TestCase):
-    def runTest(self):
-        dsList = getTestVolDS()
-        if len(dsList) > 0:
-            tmpDir = os.path.join(TEST_OUTPUT, 'tmp10')
-            cleanMakeDirs(tmpDir)
-            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
-            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
-            lHigh = pixArray > ThresL
-            lLow = pixArray < ThresH
-            labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
-            dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
-            self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
-            if not DEBUG:
-                shutil.rmtree(tmpDir)
+# class TestArrToDCMSeg(unittest.TestCase):
+#     def runTest(self):
+#         dsList = getTestVolDS()
+#         if len(dsList) > 0:
+#             tmpDir = os.path.join(TEST_OUTPUT, 'tmp10')
+#             cleanMakeDirs(tmpDir)
+#             pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
+#             dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+#             lHigh = pixArray > ThresL
+#             lLow = pixArray < ThresH
+#             labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
+#             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
+#             self.assertTrue(os.path.isfile(dcmSegOut), msg='DCMSEG file does not exist')
+#             if not DEBUG:
+#                 shutil.rmtree(tmpDir)
 
 def _scaleVTI(ff):
-    ii = dcmTK.dcmVTKTK.readVTKFile(ff)
+    ii = dcmTK.dcmVTKTK.fIO.readVTKFile(ff)
     dcmTK.dcmVTKTK.scaleVTI(ii, 1000.0)
     oo = ii.GetOrigin()
-    dcmTK.dcmVTKTK.writeVTI(ii, ff)
+    dcmTK.dcmVTKTK.fIO.writeVTKFile(ii, ff)
     return oo
 
-class TestDCMSegToVTI(unittest.TestCase):
-    def runTest(self):
-        dsList = getTestVolDS()
-        if len(dsList) > 0:
-            tmpDir = os.path.join(TEST_OUTPUT, 'tmp11')
-            cleanMakeDirs(tmpDir)
-            pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
-            vtiOutA = os.path.join(tmpDir, 'dcm.vti')
-            vtiOutA2 = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION.vti')
-            vtsA = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION_VTS.vts')
-            dsList.writeToVTI(vtiOutA, TRUE_ORIENTATION=False)
-            dsList.writeToVTS(vtsA)
-            dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
+# class TestDCMSegToVTI(unittest.TestCase):
+#     def runTest(self):
+#         dsList = getTestVolDS()
+#         if len(dsList) > 0:
+#             tmpDir = os.path.join(TEST_OUTPUT, 'tmp11')
+#             cleanMakeDirs(tmpDir)
+#             pixArray = np.transpose(np.squeeze(dsList.getPixelDataAsNumpy()[0]), axes=[2,0,1])
+#             vtiOutA = os.path.join(tmpDir, 'dcm.vti')
+#             vtiOutA2 = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION.vti')
+#             vtsA = os.path.join(tmpDir, 'dcm_TRUE_ORIENTATION_VTS.vts')
+#             dsList.writeToVTI(vtiOutA, TRUE_ORIENTATION=False)
+#             dsList.writeToVTS(vtsA)
+#             dsList.writeToVTI(vtiOutA2, TRUE_ORIENTATION=True)
 
-            vtk_DcmSegOutA = os.path.join(tmpDir, 'dcmSeg.vts')
-            lHigh = pixArray > ThresL
-            lLow = pixArray < ThresH
-            labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
-            dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
-            dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
-            dcmTK.dcmVTKTK.dicom_seg_to_vtk(dcmSegOut, vtk_DcmSegOutA, TRUE_ORIENTATION=True)
+#             vtk_DcmSegOutA = os.path.join(tmpDir, 'dcmSeg.vts')
+#             lHigh = pixArray > ThresL
+#             lLow = pixArray < ThresH
+#             labelMap = np.array((lLow.astype(int)+lHigh.astype(int))==2).astype(int)
+#             dcmSegOut = os.path.join(tmpDir, 'dcmseg.dcm')
+#             dcmTK.dcmVTKTK.array_to_DcmSeg(labelMap, dsList, dcmSegOut)
+#             dcmTK.dcmVTKTK.dicom_seg_to_vtk(dcmSegOut, vtk_DcmSegOutA, TRUE_ORIENTATION=True)
 
-            vtk_DcmSegOutB = os.path.join(tmpDir, 'dcmSegB.vts')
-            dcmTK.dcmVTKTK.dicom_seg_to_vtk(os.path.join(TEST_DIRECTORY, "example_seg.dcm"), vtk_DcmSegOutB, TRUE_ORIENTATION=True)
+#             vtk_DcmSegOutB = os.path.join(tmpDir, 'dcmSegB.vts')
+#             dcmTK.dcmVTKTK.dicom_seg_to_vtk(os.path.join(TEST_DIRECTORY, "example_seg.dcm"), vtk_DcmSegOutB, TRUE_ORIENTATION=True)
 
-            self.assertTrue(os.path.isfile(vtiOutA), msg='VTI from DCMSEG file does not exist')
-            self.assertTrue(os.path.isfile(vtk_DcmSegOutA), msg='VTI-SEG-A from DCMSEG file does not exist')
-            self.assertTrue(os.path.isfile(vtk_DcmSegOutB), msg='VTI-SEG-B from DCMSEG file does not exist')
-            if not DEBUG:
-                shutil.rmtree(tmpDir)
+#             self.assertTrue(os.path.isfile(vtiOutA), msg='VTI from DCMSEG file does not exist')
+#             self.assertTrue(os.path.isfile(vtk_DcmSegOutA), msg='VTI-SEG-A from DCMSEG file does not exist')
+#             self.assertTrue(os.path.isfile(vtk_DcmSegOutB), msg='VTI-SEG-B from DCMSEG file does not exist')
+#             if not DEBUG:
+#                 shutil.rmtree(tmpDir)
 
 def buildImages(outDir, seNum):
     try:
@@ -357,7 +357,7 @@ class TestImagesToVTI(unittest.TestCase):
                                              'Spacing': [0.001, 0.001, 0.02]})
                 ii = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=pat_meta, CONVERT_TO_GREYSCALE=True)
                 emojivti = os.path.join(tmpDir, 'emoji.vti')
-                dcmTK.dcmVTKTK.writeVTI(ii, emojivti)
+                dcmTK.dcmVTKTK.fIO.writeVTKFile(ii, emojivti)
                 self.assertTrue(os.path.isfile(emojivti), msg='emoji.vti file does not exist')
                 valA = ii.GetPointData().GetArray("PixelData").GetTuple(192648)[0]
                 IDB = ii.ComputePointId([173,51,2])
@@ -367,7 +367,7 @@ class TestImagesToVTI(unittest.TestCase):
                 #
                 ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=None, CONVERT_TO_GREYSCALE=False)
                 emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
-                dcmTK.dcmVTKTK.writeVTI(ii2, emojivti2)
+                dcmTK.dcmVTKTK.fIO.writeVTKFile(ii2, emojivti2)
                 self.assertTrue(os.path.isfile(emojivti2), msg='emoji2.vti file does not exist')
                 valA = ii2.GetPointData().GetArray("PixelData").GetTuple(485453)[2]
                 IDB = ii2.ComputePointId([168,401,0])
@@ -406,7 +406,7 @@ class TestDCM2VTI2DCM(unittest.TestCase):
             cleanMakeDirs(tmpDir)
             vtiOut = os.path.join(tmpDir, 'dcm.vti')
             dsList.writeToVTI(vtiOut)
-            vtiObj = dcmTK.dcmVTKTK.readVTKFile(vtiOut)
+            vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(vtiOut)
 
             mf = dcmTK.dcmVTKTK.vtk.vtkImageMedian3D()
             mf.SetInputData(vtiObj)

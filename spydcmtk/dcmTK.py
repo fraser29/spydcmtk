@@ -413,7 +413,7 @@ class DicomSeries(list):
         else:
             fileName = self._generateFileName(outputNamingTags, '')
         vtsDict = self.buildVTSDict(outputPath)
-        return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
+        return dcmVTKTK.writeVTK_PVD_Dict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self, outputPath=None):
         A, patientMeta = self.getPixelDataAsNumpy()
@@ -771,7 +771,7 @@ class DicomStudy(list):
             iOut = dcmSeries.writeToVTS(os.path.join(rootDir, f"{label}.pvd"))
             intermediate_pvds[label] = iOut
         if VERBOSE: print(f"Combining to final 4D-flow PVD")
-        fOut = dcmVTKTK._mergePhaseSeries(intermediate_pvds["MAG"], 
+        fOut = dcmVTKTK.mergePhaseSeries4D(intermediate_pvds["MAG"], 
                                             [intermediate_pvds["PX"],
                                             intermediate_pvds["PY"],
                                             intermediate_pvds["PZ"]], 
@@ -1123,9 +1123,9 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     else:
         vti = vtiFile
     if arrayName is None:
-        A = dcmVTKTK.getScalarsAsNumpy(vti)
+        A = dcmVTKTK.vtkfilters.getScalarsAsNumpy(vti)
     else:
-        A = dcmVTKTK.getArrayAsNumpy(vti, arrayName)
+        A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
