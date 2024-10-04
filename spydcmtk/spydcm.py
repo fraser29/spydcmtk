@@ -317,7 +317,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
     for iPath in listOfFilePaths:
         if os.path.isfile(iPath):
             if iPath.endswith('nii') or iPath.endswith('nii.gz') :
-                iPath = dcmTK.dcmVTKTK.nii2vti(iPath)
+                iPath = dcmTK.dcmVTKTK.fIO.readNifti(iPath)
                 CLEAN_UP_LIST.append(iPath)
             FILE_TO_VTK_LIST.append(iPath)
         else:
@@ -325,7 +325,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
                 dcmToVTKPath = directoryToVTI(iPath, outputDir, TRUE_ORIENTATION=False)
                 for ifile in dcmToVTKPath:
                     if ifile.endswith('.pvd'):
-                        FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.readPVDFileName(ifile).values())
+                        FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.fIO.readPVDFileName(ifile).values())
                     else:
                         FILE_TO_VTK_LIST.append(ifile)
                 CLEAN_UP_LIST += dcmToVTKPath
@@ -350,7 +350,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
             print('Cleaning up:', str(CLEAN_UP_LIST))
         for ifile in CLEAN_UP_LIST:
             if iFile.endswith('.pvd'):
-                dcmTK.dcmVTKTK.deleteFilesByPVD(iFile)
+                dcmTK.dcmVTKTK.fIO.deleteFilesByPVD(iFile)
             else:
                 os.unlink(ifile)
 

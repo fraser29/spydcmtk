@@ -407,12 +407,8 @@ class TestDCM2VTI2DCM(unittest.TestCase):
             vtiOut = os.path.join(tmpDir, 'dcm.vti')
             dsList.writeToVTI(vtiOut)
             vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(vtiOut)
-
-            mf = dcmTK.dcmVTKTK.vtk.vtkImageMedian3D()
-            mf.SetInputData(vtiObj)
-            mf.SetKernelSize(15,15,15)
-            mf.Update()
-            dcmTK.writeVTIToDicoms(mf.GetOutput(), dsList[0], tmpDir)
+            vtiObj_m = dcmTK.dcmVTKTK.vtkfilters.filterVtiMedian(vtiObj, filterKernalSize=15)
+            dcmTK.writeVTIToDicoms(vtiObj, dsList[0], tmpDir)
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 

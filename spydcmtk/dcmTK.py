@@ -413,7 +413,7 @@ class DicomSeries(list):
         else:
             fileName = self._generateFileName(outputNamingTags, '')
         vtsDict = self.buildVTSDict(outputPath)
-        return dcmVTKTK.writeVTK_PVD_Dict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
+        return dcmVTKTK.fIO.writeVTK_PVD_Dict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
     def buildVTSDict(self, outputPath=None):
         A, patientMeta = self.getPixelDataAsNumpy()
@@ -1119,7 +1119,7 @@ def studySummary(pathToDicoms):
 ## =====================================================================================================================
 def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
     if type(vtiFile) == str:
-        vti = dcmVTKTK.readVTKFile(vtiFile)
+        vti = dcmVTKTK.fIO.readVTKFile(vtiFile)
     else:
         vti = vtiFile
     if arrayName is None:
