@@ -193,8 +193,14 @@ class PatientMeta:
         dx,dy,dz = vtiObj.GetSpacing()
         oo = vtiObj.GetOrigin()
         # 1st option from meta, then field data then default
-        iop = vtkfilters.getFieldData(vtiObj, 'ImageOrientationPatient', ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
-        sliceVec = vtkfilters.getFieldData(vtiObj, 'SliceVector', ifNotFound=[0.0,0.0,1.0])
+        try:
+            iop = vtkfilters.getFieldData(vtiObj, 'ImageOrientationPatient')
+        except AttributeError:
+            iop = [1.0,0.0,0.0,0.0,1.0,0.0]
+        try:
+            sliceVec = vtkfilters.getFieldData(vtiObj, 'SliceVector')
+        except AttributeError:
+            sliceVec = [0.0,0.0,1.0]
         self._meta = {'PixelSpacing': [dy*scaleFactor, dx*scaleFactor],
                             'ImagePositionPatient': [i*scaleFactor for i in oo],
                             'ImageOrientationPatient': iop,
