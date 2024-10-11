@@ -467,6 +467,9 @@ class DicomSeries(list):
         self.sortBySlice_InstanceNumber()
         N = self.getNumberOfTimeSteps()
         A = np.zeros((I, J, K, N))
+        if (K*N) != len(self):
+            print(f"DEBUG: Getting numpy array shape: [{I}, {J}, {K}, {N}] (K*N={K*N} == {len(self)})")
+            raise FileNotFoundError(f"Missing some DICOM files.")
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
@@ -727,28 +730,34 @@ class DicomStudy(list):
             if iSeries.getTag('SeriesInstanceUID') == UID:
                 return iSeries
 
+
     def getSeriesByTag(self, tag, value, convertToType=None):
         for iSeries in self:
             if iSeries.getTag(tag, convertToType=convertToType) == value:
                 return iSeries
 
+
     def mergeSeriesVolumesWithTime(self):
-        triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(len(self))])
-        sorted_ds_list = [None for _ in range(self.getNumberOfDicoms())]
-        c0 = 0
-        for i in range(len(self)):
+        nTimes = len(self)
+        triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(nTimes)])
+        nPerTime = len(self.getSeriesByTag('TriggerTime', triggerTimes[0], convertToType=float))
+        sorted_ds_list = [None for _ in range(nTimes*nPerTime)]
+        print(f"Merging series: n times: {nTimes}, N per time: {nPerTime}")
+        for i in range(nTimes):
             iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
             iSeries.sortByInstanceNumber()
-            c1 = 0
-            for iDS in iSeries:
-                thisID = int(iDS['InstanceNumber'].value) + c1*(len(triggerTimes)-1) + c0 -1 # change to 0 index
-                iDS.InstanceNumber = thisID
+            for k1, iDS in enumerate(iSeries):
+                if nPerTime > 1:
+                    # thisID = int(iDS['InstanceNumber'].value) + c1*(len(triggerTimes)-1) + c0 -1 # change to 0 index
+                    thisID = i + (nTimes * k1)
+                else:
+                    thisID = i
+                iDS.InstanceNumber = thisID + 1 # 1 index
                 sorted_ds_list[thisID] = iDS
-                c1 += 1
-            c0 += 1
         if sorted_ds_list.count(None) != 0:
             raise ValueError('Missing some volumes')
         return DicomSeries(sorted_ds_list)
+
 
     def writeFDQ(self, seriesNumber_list, outputFileName, VERBOSE=True):
         """
