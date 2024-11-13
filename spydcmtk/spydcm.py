@@ -26,6 +26,7 @@ class INTERACTIVE():
             '1': ("Data summary", self.dataSummary),
             '2': ("Build VTS", self.buildVTS),
             '3': ("Build FDQ", self.buildFDQ),
+            '4': ("Build overview image", self.buildOverviewImage),
             'q': ("Quit", self.quit)
         }
 
@@ -73,6 +74,15 @@ class INTERACTIVE():
         except ValueError:
             print("Invalid option. Please try again")
 
+    def buildOverviewImage(self):
+        self.dataSummary()
+        seNum = self.getUserInput("series number")
+        outputFilename = self.getUserInput("file name (png) - leave blank to show")
+        if outputFilename == '':
+            outputpath = None
+        else:
+            outputpath = os.path.join(self.outputPath, outputFilename)
+        self.study.getSeriesByID(seNum).buildOverviewImage(outputpath)
 
     def quit(self):
         print("Exiting the menu.")
@@ -440,6 +450,16 @@ def runActions(args, ap):
                                                                      OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
+
+            if args.filter is not None:
+                if len(ListDicomStudies) > 1:
+                    ListDicomStudies = ListDicomStudies.filterByTag(args.filter[0], args.filter[1])
+                else:
+                    newListOfDicomStudies = []
+                    for iStudy in ListDicomStudies: 
+                        newListOfDicomStudies.append(iStudy.filterByTag(args.filter[0], args.filter[1]))
+                    ListDicomStudies = dcmTK.ListOfDicomStudies(newListOfDicomStudies)
+
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
@@ -509,6 +529,8 @@ def main():
         help='anonymous ID [optional - only used if anonName is given, default=""]', type=str, default='')
     ap.add_argument('-RemovePrivateTags', dest='REMOVE_PRIVATE_TAGS',
         help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
+    ap.add_argument('-filter', dest='filter',
+        help='Will filter dicoms based on tag name and value. Tag name and value required. If input is multiple studies then act on each.', nargs=2, default=None)
     ap.add_argument('-inspect', dest='inspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-inspectFull', dest='inspectFull',

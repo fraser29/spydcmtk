@@ -11,7 +11,7 @@ from tqdm import tqdm
 import json
 import numpy as np
 import shutil
-
+import matplotlib.pyplot as plt
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
@@ -121,6 +121,12 @@ class DicomSeries(list):
 
     def getRootDir(self):
         return os.path.split(self[0].filename)[0]
+
+    def filterByTag(self, tagName, tagValue):
+        return DicomSeries([i for i in self if i.getTag(tagName) == tagValue], 
+                           OVERVIEW=self.OVERVIEW, 
+                           HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR, 
+                           FORCE_READ=self.FORCE_READ)
 
     def getDicomFullFileName(self, dsID=0):
         return self[dsID].filename
@@ -616,6 +622,34 @@ class DicomSeries(list):
                 suffix += '_'+iVal
         return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
+
+    def buildOverviewImage(self, outputFileName=None):
+        A = self.getPixelDataAsNumpy()[0]
+        i,j,k,n = A.shape
+        if k > 1:
+            iSlice = k//2
+            Image_list = [A[:,:,iSlice,0], np.rot90(A[i//2,:,:,0],3), np.rot90(A[:,j//2,:,0],3)]
+        else:
+            Image_list = [A[:,:,0,0]]
+        fig, axs = plt.subplots(1, len(Image_list))
+        if len(Image_list) == 1:
+            axs = [axs]  # Convert single Axes to list for consistent indexing
+        for i, iA in enumerate(Image_list):
+            axs[i].imshow(iA, cmap='gray')
+            axs[i].axis('off')
+        fig.tight_layout()
+        if outputFileName is not None:
+            plt.savefig(outputFileName)
+            plt.close()
+            return outputFileName
+        else:
+            plt.show()
+        
+
+
+# ================================================================================================================
+# DicomStudy
+# ================================================================================================================
 class DicomStudy(list):
     """
     Extends list of DicomSeries objects (creating list of list of pydicom.dataset)
@@ -661,6 +695,11 @@ class DicomStudy(list):
             studyUID = str(generate_uid())
         for i in self:
             i.resetUIDs(studyUID)
+
+    def filterByTag(self, tagName, tagValue):
+        return DicomStudy([i for i in self if i.getTag(tagName) == tagValue], 
+                           OVERVIEW=self.OVERVIEW, 
+                           HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
 
     def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
         for i in self:
@@ -826,7 +865,7 @@ class DicomStudy(list):
             strOut += f"\nSTUDY: {studyStr}"
             return strOut
 
-    def getTagValuesList(self, tagList, RETURN_STR):
+    def getTagValuesList(self, tagList, RETURN_STR=False):
         output = []
         for i in self:
             output += i.getTagValuesList(tagList, False)
@@ -953,6 +992,11 @@ class ListOfDicomStudies(list):
 
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
+
+    def filterByTag(self, tagName, tagValue):
+        return ListOfDicomStudies([i for i in self if i.getTag(tagName) == tagValue], 
+                                  OVERVIEW=self.OVERVIEW, 
+                                  HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
 
     def writeToOrganisedFileStructure(self, outputRootDir):
         outDirs = []

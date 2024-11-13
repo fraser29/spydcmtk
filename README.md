@@ -12,6 +12,7 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 Current is VERSION 1.1.9 Release. 
 
+- 1.2.1: Add filter by tag name and value. Add build image overview option. 
 - 1.2.0: Improved stability of VTK conversion. Bug fixes. Add basic interactive functionality. Add functionality to construct 4D-flow datasets. Add reliance on external library ngawari for basic IO operations, format conversion and vtk filter actions. 
 - 1.1.9: Permit user naming of series directory when writing at series level. Assistance for modifying tag values. 
 - 1.1.8: Added improved functionality for dicom to: VTK image data; and VTK structured grid data conversion
