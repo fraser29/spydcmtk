@@ -232,7 +232,7 @@ class DicomSeries(list):
     def yieldDataset(self):
         for ds in self:
             if self.OVERVIEW:
-                yield  dicom.read_file(ds.filename, stop_before_pixels=False, force=True)
+                yield  dicom.dcmread(ds.filename, stop_before_pixels=False, force=True)
             else:
                 yield ds
 
@@ -875,7 +875,10 @@ class DicomStudy(list):
 
     def writeToOrganisedFileStructure(self, patientOutputDir, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
-        studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
+        try:
+            studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
+        except IndexError: # Study is empty
+            return None
         studyOutputDirTemp = studyOutputDir+".WORKING"
         if os.path.isdir(studyOutputDir):
             os.rename(studyOutputDir, studyOutputDirTemp)
@@ -887,6 +890,8 @@ class DicomStudy(list):
 
     def writeToZipArchive(self, patientOutputDir, CLEAN_UP=True):
         studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir)
+        if studyOutputDir is None:
+            return
         r, f = os.path.split(studyOutputDir)
         shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
         fileOut = studyOutputDir+'.zip'
@@ -1194,7 +1199,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     if dcmTemplate_or_ds is None:
         dsRAW = dcmTools.buildFakeDS()
     elif type(dcmTemplate_or_ds) == str:
-        dsRAW = dicom.read_file(dcmTemplate_or_ds)
+        dsRAW = dicom.dcmread(dcmTemplate_or_ds)
     else:
         dsRAW = dcmTemplate_or_ds
     nRow, nCol, nSlice = pixelArray.shape

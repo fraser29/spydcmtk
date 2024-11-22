@@ -159,7 +159,7 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
         for iFile in files:
             thisFile = os.path.join(root, iFile)
             try:
-                dicom.read_file(thisFile, stop_before_pixels=True, defer_size=16, force=FORCE_READ) # will error if not dicom
+                dicom.dcmread(thisFile, stop_before_pixels=True, defer_size=16, force=FORCE_READ) # will error if not dicom
                 if not QUIET:
                     print('OK: %s'%(thisFile))
                 fullDirsWithDicoms.append(root)
@@ -200,7 +200,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
                 continue
             thisFile = os.path.join(root, iFile)
             try:
-                dataset = dicom.read_file(thisFile, stop_before_pixels=True)
+                dataset = dicom.dcmread(thisFile, stop_before_pixels=True)
                 if MatchingTag_dict is not None:
                     tf = []
                     for iKey in MatchingTag_dict.keys():

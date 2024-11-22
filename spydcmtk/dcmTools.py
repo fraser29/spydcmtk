@@ -254,7 +254,7 @@ def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                 continue
             thisFile=tar.extractfile(member)
             try:
-                dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)#, specific_tags=['StudyInstanceUID','SeriesInstanceUID'])
+                dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
                 if matchingTagValuePair is not None:
                     if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
                         continue
@@ -284,7 +284,7 @@ def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
         for file in zf.namelist():
             with zf.open(file) as thisFile:
                 try:
-                    dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
+                    dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
                     if matchingTagValuePair is not None:
                         if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
                             continue
