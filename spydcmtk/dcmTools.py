@@ -390,12 +390,12 @@ def getDicomFileIdentifierStr(ds):
             f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.InstanceNumber].value}'
     return cleanString(strOut)
 
-def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, WRITE_LIKE_ORIG=True, SAFE_NAMING=False, REMOVE_PRIVATE_TAGS=False):
+def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, SAFE_NAMING=False, REMOVE_PRIVATE_TAGS=False):
     destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
     os.makedirs(outputRootDir, exist_ok=True)
     if anonName is not None:
         ds = anonymiseDicomDS(ds, UIDupdateDict=UIDupdateDict, anonName=anonName, anonID=anonID, remove_private_tags=REMOVE_PRIVATE_TAGS)
-    ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
+    ds.save_as(destFile, enforce_file_format=True)
     return destFile
 
 def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None):
@@ -419,7 +419,7 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
             os.makedirs(os.path.split(fOut)[0], exist_ok=True)
             if anonName is not None:
                 dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonName, remove_private_tags=False)
-            dataset.save_as(fOut, write_like_original=False)
+            dataset.save_as(fOut, enforce_file_format=True)
         except dicom.filereader.InvalidDicomError:
             continue
     os.rename(outputDirTEMP, outputDir)
@@ -532,6 +532,5 @@ def buildFakeDS():
     ##
     ds.add_new([0x0010,0x0010], 'PN', "TEST^DATA")
     ds.add_new([0x0010,0x0020], 'LO', '12345')
-    ds.fix_meta_info()
     return ds
 

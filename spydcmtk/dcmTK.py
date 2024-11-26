@@ -332,7 +332,6 @@ class DicomSeries(list):
         if SAFE_NAMING_CHECK:
             self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
-        LIKE_ORIG = True
         if seriesOutDirName is None:
             seriesOutDirName = self.getSeriesOutDirName()
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
@@ -351,9 +350,7 @@ class DicomSeries(list):
                     continue
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
-                LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, WRITE_LIKE_ORIG=LIKE_ORIG, 
-                                            SAFE_NAMING=self.SAFE_NAME_MODE)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, SAFE_NAMING=self.SAFE_NAME_MODE)
         # ON COMPLETION RENAME OUTPUTDIR
         os.rename(seriesOutputDirTemp, seriesOutputDir)
         return seriesOutputDir
