@@ -222,7 +222,7 @@ class DicomSeries(list):
             return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S")
 
     def getImagePositionPatient_np(self, dsID):
-        ipp = self.getTag('ImagePositionPatient', dsID=dsID)
+        ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=[0.0,0.0,0.0])
         return np.array(ipp)
 
     def getImageOrientationPatient_np(self, dsID=0):
@@ -441,9 +441,12 @@ class DicomSeries(list):
 
     def getSliceNormalVector(self):
         self.sortBySlice_InstanceNumber()
-        sliceVec = self.getImagePositionPatient_np(-1) - self.getImagePositionPatient_np(0)
+        try:
+            sliceVec = self.getImagePositionPatient_np(-1) - self.getImagePositionPatient_np(0)
+        except:
+            sliceVec = [0.0,0.0,0.0] # If no slice locations then assume no normal vector (one image)
         if np.linalg.norm(sliceVec) < 1e-9:
-            iop = self.getTag('ImageOrientationPatient')
+            iop = self.getTag('ImageOrientationPatient', ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
             sliceVec = np.cross(iop[:3], iop[3:6])
         else:
             sliceVec = sliceVec / np.linalg.norm(sliceVec)
@@ -620,7 +623,7 @@ class DicomSeries(list):
         return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
 
-    def buildOverviewImage(self, outputFileName=None):
+    def buildOverviewImage(self, outputFileName=None, RETURN_FIG=False):
         A = self.getPixelDataAsNumpy()[0]
         i,j,k,n = A.shape
         if k > 1:
@@ -635,6 +638,8 @@ class DicomSeries(list):
             axs[i].imshow(iA, cmap='gray')
             axs[i].axis('off')
         fig.tight_layout()
+        if RETURN_FIG:
+            return fig
         if outputFileName is not None:
             plt.savefig(outputFileName)
             plt.close()
