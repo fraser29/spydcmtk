@@ -78,7 +78,7 @@ For information on files found and variables used run:
 ## Documentation
 
 Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
-For detailed documentation please see [spydcmtk-documnetation](https://fraser29.github.io/spydcmtk/)
+For detailed documentation please see [spydcmtk-documentation](https://fraser29.github.io/spydcmtk/)
 
 ## Works in progress
 
