@@ -452,7 +452,7 @@ class DicomSeries(list):
             sliceVec = sliceVec / np.linalg.norm(sliceVec)
         return sliceVec
 
-    def doesSliceLocationsMatchingIOPNormal(self):
+    def doesSliceLocationNorm_Match_IOPNormal(self):
         iop = self.getTag('ImageOrientationPatient')
         iopN = np.cross(iop[:3], iop[3:6])
         sliceLocN = self.getSliceNormalVector()
