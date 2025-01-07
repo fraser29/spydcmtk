@@ -7,7 +7,6 @@ import os
 import datetime
 import json
 import glob
-import datetime
 import numpy as np
 import tarfile
 import shutil
@@ -33,6 +32,7 @@ class DicomTags(object):
     SliceThickness = 0x0018, 0x0050
     RepetitionTime = 0x0018, 0x0080
     EchoTime = 0x0018, 0x0081
+    InversionTime = 0x0018, 0x0082
     NumberOfAverages = 0x0018, 0x0083
     MagneticFieldStrength = 0x0018, 0x0087
     SpacingBetweenSlices = 0x0018, 0x0088
@@ -45,6 +45,7 @@ class DicomTags(object):
     AcquisitionMatrix = 0x0018, 0x1310
     FlipAngle = 0x0018, 0x1314
     PatientPosition = 0x0018, 0x5100
+    PatientOrientation = 0x0020, 0x0020
     ImagePositionPatient = 0x0020, 0x0032
     ImageOrientationPatient = 0x0020, 0x0037
     StudyInstanceUID = 0x0020, 0x000d
@@ -180,6 +181,9 @@ def instanceNumberSortKey(val):
         return 99e99
 
 def sliceLoc_InstanceNumberSortKey(val):
+    """
+    Sort by slice location 1st (group all slices together), then instance number
+    """
     try:
         return (float(__getTags(val, ['SliceLocation'])['SliceLocation']), float(__getTags(val, ['InstanceNumber'])['InstanceNumber']))
     except (ValueError, IOError, AttributeError):
@@ -253,7 +257,7 @@ def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                 continue
             thisFile=tar.extractfile(member)
             try:
-                dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)#, specific_tags=['StudyInstanceUID','SeriesInstanceUID'])
+                dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
                 if matchingTagValuePair is not None:
                     if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
                         continue
@@ -283,7 +287,7 @@ def getDicomDictFromZip(zipFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
         for file in zf.namelist():
             with zf.open(file) as thisFile:
                 try:
-                    dataset = dicom.read_file(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
+                    dataset = dicom.dcmread(thisFile, stop_before_pixels=OVERVIEW_ONLY, force=FORCE_READ)
                     if matchingTagValuePair is not None:
                         if dataset.get(matchingTagValuePair[0], 'NIL') != matchingTagValuePair[1]:
                             continue
@@ -342,8 +346,11 @@ def getSaveFileNameFor_ds_UID(ds, outputRootDir):
     destFile = os.path.join(outputRootDir, ds.PatientID, ds.StudyInstanceUID, ds.SeriesInstanceUID, __getDSSaveFileName(ds, SAFE_NAMING=True))
     return destFile
 
-def getSaveFileNameFor_ds(ds, outputRootDir):
-    destFile = os.path.join(outputRootDir, getPatientDirName(ds), getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
+def getSaveFileNameFor_ds(ds, outputRootDir, ANON=False):
+    if ANON:
+        destFile = os.path.join(outputRootDir, getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
+    else:
+        destFile = os.path.join(outputRootDir, getPatientDirName(ds), getStudyDirName(ds), getSeriesDirName(ds), __getDSSaveFileName(ds, SAFE_NAMING=False))
     return destFile
 
 def getPatientDirName(ds):
@@ -386,16 +393,21 @@ def getDicomFileIdentifierStr(ds):
             f'{ds[DicomTags.StudyDate].value}_{ds[DicomTags.SeriesNumber].value}_{ds[DicomTags.InstanceNumber].value}'
     return cleanString(strOut)
 
-def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, WRITE_LIKE_ORIG=True, SAFE_NAMING=False, REMOVE_PRIVATE_TAGS=False):
+def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, SAFE_NAMING=False, REMOVE_PRIVATE_TAGS=False):
     destFile = os.path.join(outputRootDir, __getDSSaveFileName(ds, SAFE_NAMING))
     os.makedirs(outputRootDir, exist_ok=True)
     if anonName is not None:
         ds = anonymiseDicomDS(ds, UIDupdateDict=UIDupdateDict, anonName=anonName, anonID=anonID, remove_private_tags=REMOVE_PRIVATE_TAGS)
-    ds.save_as(destFile, write_like_original=WRITE_LIKE_ORIG)
+    ds.save_as(destFile, enforce_file_format=True)
     return destFile
 
-def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None):
+def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None, anonID=""):
     nFiles = countFilesInDir(inputDir)
+    outputDirTEMP = outputDir+".WORKING"
+    try:
+        os.rename(outputDir, outputDirTEMP)
+    except FileNotFoundError:
+        pass # OK - will make directory and rename at end
     for thisFile in tqdm(walkdir(inputDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
             continue
@@ -404,19 +416,18 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
         try:
             dataset = dicom.dcmread(thisFile, force=FORCE_READ, stop_before_pixels=False)
             if SAFE_NAMING: 
-                fOut = getSaveFileNameFor_ds_UID(dataset, outputDir)
+                fOut = getSaveFileNameFor_ds_UID(dataset, outputDirTEMP)
             else:
-                fOut = getSaveFileNameFor_ds(dataset, outputDir)
+                fOut = getSaveFileNameFor_ds(dataset, outputDirTEMP, ANON=anonName is not None)
             os.makedirs(os.path.split(fOut)[0], exist_ok=True)
             if anonName is not None:
-                dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonName, remove_private_tags=False)
-            dataset.save_as(fOut, write_like_original=False)
+                dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonID, remove_private_tags=False)
+            dataset.save_as(fOut, enforce_file_format=True)
         except dicom.filereader.InvalidDicomError:
             continue
+    os.rename(outputDirTEMP, outputDir)
 
 def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
-    # Reading specific tags is actually slower. 
-    # dataset = dicom.dcmread(thisFile, specific_tags=['StudyInstanceUID','SeriesInstanceUID'], stop_before_pixels=OVERVIEW, force=FORCE_READ)
     dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
     studyUID = str(dataset.StudyInstanceUID)
     seriesUID = str(dataset.SeriesInstanceUID)
@@ -426,11 +437,28 @@ def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
         dsDict[studyUID][seriesUID] = []
     dsDict[studyUID][seriesUID].append(dataset)
 
-def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, DEBUG=False):
+def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
+    """Find all dicoms under "rootDir" and organise based upon UIDs
+
+    Args:
+        rootDir (str): Directory path under which to search
+        HIDE_PROGRESSBAR (bool, optional): To hide tqdm progress bar. Defaults to False.
+        FORCE_READ (bool, optional): Will tell pydicom to force read files that do not conform to dicom standard. Defaults to False.
+        ONE_FILE_PER_DIR (bool, optional): For a fast summary, will read only first file found per subdirectory (if one knows that dicoms are already organised in such a format). Defaults to False.
+        OVERVIEW (bool, optional): Will not read pixel data. Defaults to False.
+        extn_filter (str, optional): For faster reading of large multi data directory trees pass an extension to filter upon (e.g. dcm) then will only read files ending in this extension. Defaults to None.
+        DEBUG (bool, optional): Set true for debugging actions. Defaults to False.
+
+    Returns:
+        dict: A larger dictionary structure of {studyUID: {seriesUID: [list of pydicom datasets]}}
+    """
     dsDict = {}
     successReadDirs = set()
     nFiles = countFilesInDir(rootDir)
     for thisFile in tqdm(walkdir(rootDir), total=nFiles, leave=True, disable=HIDE_PROGRESSBAR):
+        if extn_filter is not None:
+            if not thisFile.endswith(extn_filter):
+                continue
         if 'dicomdir' in os.path.split(thisFile)[1].lower():
             continue
         if thisFile.endswith('json'):
@@ -453,7 +481,22 @@ def organiseDicomHeirachyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fals
             continue
     return dsDict
 
-def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
+def writeDirectoryToNII(dcmDir, outputPath, fileName):
+    """Write directory of dicom files to nifti file.
+        Requires dcm2nii which must be in path or provided via config. 
+        Also writes json sidecar. s
+
+    Args:
+        dcmDir (str): Directory under which to find DICOMS
+        outputPath (str): Directory where to save output
+        fileName (str): Filename for output
+
+    Raises:
+        OSError: If dcm2nii path is not found
+
+    Returns:
+        str: full filename of new nifti file
+    """
     if not os.path.isfile(SpydcmTK_config.dcm2nii_path):
         res = shutil.which(SpydcmTK_config.dcm2nii_path) # Maybe command name and in path
         if res is None:
@@ -462,16 +505,15 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=False):
     print(f'RUNNING: {dcm2niiCmd}')
     os.system(dcm2niiCmd)
     extn = '.nii.gz' if '-z y' in SpydcmTK_config.dcm2nii_options else '.nii'
-    if FORCE_FILENAME or (len(SpydcmTK_config.dcm2nii_options) == 0):
-        list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
-        latest_file = max(list_of_files, key=os.path.getctime)
-        newFileName = os.path.join(outputPath, fileName)
-        os.rename(latest_file, newFileName)
-        print(f"Renamed {latest_file} --> as {newFileName}")
-        latest_json = latest_file.replace(extn, '.json')
-        if os.path.isfile(latest_json):
-            os.rename(latest_json, newFileName.replace(extn, '.json'))
-        return newFileName
+    list_of_files = glob.glob(os.path.join(outputPath, f'*{extn}')) 
+    latest_file = max(list_of_files, key=os.path.getctime)
+    newFileName = os.path.join(outputPath, fileName)
+    os.rename(latest_file, newFileName)
+    print(f"Renamed {latest_file} --> as {newFileName}")
+    latest_json = latest_file.replace(extn, '.json')
+    if os.path.isfile(latest_json):
+        os.rename(latest_json, newFileName.replace(extn, '.json'))
+    return newFileName
 
 def buildFakeDS():
     meta = dicom.dataset.FileMetaDataset()
@@ -493,6 +535,5 @@ def buildFakeDS():
     ##
     ds.add_new([0x0010,0x0010], 'PN', "TEST^DATA")
     ds.add_new([0x0010,0x0020], 'LO', '12345')
-    ds.fix_meta_info()
     return ds
 

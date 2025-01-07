@@ -17,6 +17,77 @@ import spydcmtk.dcmTK as dcmTK
 from spydcmtk.spydcm_config import SpydcmTK_config
 
 
+class INTERACTIVE():
+    def __init__(self, study, outputPath) -> None:
+        self.study = study
+        self.outputPath = outputPath
+        #
+        self.options = {
+            '1': ("Data summary", self.dataSummary),
+            '2': ("Build VTS", self.buildVTS),
+            '3': ("Build FDQ", self.buildFDQ),
+            '4': ("Build overview image", self.buildOverviewImage),
+            'q': ("Quit", self.quit)
+        }
+
+    def displayMenu(self):
+        print("\nSelect an option:")
+        for key, (description, _) in self.options.items():
+            print(f"{key}: {description}")
+
+    def getUserInput(self, question="your choice"):
+        return input(f"Enter {question}: ")
+
+    def run(self):
+        while True:
+            self.displayMenu()
+            choice = self.getUserInput()
+            if choice in self.options:
+                self.options[choice][1]()  # Execute the corresponding function
+            else:
+                print("Invalid option. Please try again.")
+
+    def dataSummary(self):
+        print(self.study.getStudySummary())
+
+    def buildVTS(self):
+        self.dataSummary()
+        seNum = self.getUserInput("series number")
+        try: 
+            seNum = int(seNum)
+            dcmSeries = self.study.getSeriesByID(seNum)
+            outputFilename = self.getUserInput("file name (vts)")
+            outputpath = os.path.join(self.outputPath, outputFilename)
+            dcmSeries.writeToVTS(outputpath)
+        except ValueError:
+            print("Invalid option. Please try again")
+
+    def buildFDQ(self):
+        self.dataSummary()
+        seNum_ = self.getUserInput("series numbers for FDQ")
+        try: 
+            seNum_4 = seNum_.strip().split(' ')
+            seNum_4 = [int(i) for i in seNum_4]
+            outputFilename = self.getUserInput("file name (pvd)")
+            outputpath = os.path.join(self.outputPath, outputFilename)
+            self.study.writeFDQ(seNum_4, outputpath)
+        except ValueError:
+            print("Invalid option. Please try again")
+
+    def buildOverviewImage(self):
+        self.dataSummary()
+        seNum = self.getUserInput("series number")
+        outputFilename = self.getUserInput("file name (png) - leave blank to show")
+        if outputFilename == '':
+            outputpath = None
+        else:
+            outputpath = os.path.join(self.outputPath, outputFilename)
+        self.study.getSeriesByID(seNum).buildOverviewImage(outputpath)
+
+    def quit(self):
+        print("Exiting the menu.")
+        exit()  
+
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
     """ Write a directory of dicom files to a Nifti (*.nii.gz) file. 
@@ -27,7 +98,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
         outputPath (str): Path to output directory where to save nifti
         fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)
     """
-    return dcmTools.writeDirectoryToNII(dcmDir, outputPath, fileName, FORCE_FILENAME=True)
+    return dcmTools.writeDirectoryToNII(dcmDir, outputPath, fileName)
 
 
 def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, seriesDescriptionIdentifier=None, ONE_FILE_PER_DIR=True):
@@ -88,7 +159,7 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
         for iFile in files:
             thisFile = os.path.join(root, iFile)
             try:
-                dicom.read_file(thisFile, stop_before_pixels=True, defer_size=16, force=FORCE_READ) # will error if not dicom
+                dicom.dcmread(thisFile, stop_before_pixels=True, defer_size=16, force=FORCE_READ) # will error if not dicom
                 if not QUIET:
                     print('OK: %s'%(thisFile))
                 fullDirsWithDicoms.append(root)
@@ -100,16 +171,16 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
     return fullDirsWithDicoms
 
 
-def anonymiseInPlace(dicomDirectory, anonName=None):
+def anonymiseInPlace(dicomDirectory, anonName=None, anonID="", QUIET=False):
     if anonName is None:
         ds = returnFirstDicomFound(dicomDirectory)
         if ds is None:
             return # Nothing to anonymise... 
-        anonName = ds.get("StudyInstanceUID", "ANON")
+        anonName = ""
     #
-    tmpDir = dicomDirectory+".WORKING"
+    tmpDir = dicomDirectory+".TEMP.WORKING"
     os.rename(dicomDirectory, tmpDir)
-    dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName)
+    dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName, anonID=anonID, HIDE_PROGRESSBAR=QUIET)
     shutil.rmtree(tmpDir)
 
 
@@ -129,7 +200,7 @@ def returnFirstDicomFound(rootDir, FILE_NAME_ONLY=False, MatchingTag_dict=None):
                 continue
             thisFile = os.path.join(root, iFile)
             try:
-                dataset = dicom.read_file(thisFile, stop_before_pixels=True)
+                dataset = dicom.dcmread(thisFile, stop_before_pixels=True)
                 if MatchingTag_dict is not None:
                     tf = []
                     for iKey in MatchingTag_dict.keys():
@@ -156,7 +227,7 @@ def getTag(pathToDicoms, tagName):
 
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
-                   QUITE=True, FORCE=False, INCLUDE_MATRIX=True):
+                   QUITE=True, FORCE=False, TRUE_ORIENTATION=False):
     """Convert directory of dicoms to VTI files (one vti per series)
         Naming built from dicom tags: 
 
@@ -172,7 +243,7 @@ def directoryToVTI(dcmDirectory, outputFolder,
         list: List of output file names written
     """
     ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(dcmDirectory, HIDE_PROGRESSBAR=QUITE, FORCE_READ=FORCE, OVERVIEW=False) 
-    return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+    return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
 
 
 def directoryToVTS(dcmDirectory, outputFolder,
@@ -196,15 +267,15 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, INCLUDE_MATRIX=True, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, TRUE_ORIENTATION=False, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
             if VTS:
-                print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
-                # fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
+                # print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
+                fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             else:
-                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, INCLUDE_MATRIX=INCLUDE_MATRIX)
+                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
             outputFiles.append(fOut)
             if not QUIET:
                 print(f'Written {fOut}')
@@ -256,15 +327,15 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
     for iPath in listOfFilePaths:
         if os.path.isfile(iPath):
             if iPath.endswith('nii') or iPath.endswith('nii.gz') :
-                iPath = dcmTK.dcmVTKTK.nii2vti(iPath)
+                iPath = dcmTK.dcmVTKTK.fIO.readNifti(iPath)
                 CLEAN_UP_LIST.append(iPath)
             FILE_TO_VTK_LIST.append(iPath)
         else:
             if os.path.isdir(iPath): # If path to dicoms
-                dcmToVTKPath = directoryToVTI(iPath, outputDir, INCLUDE_MATRIX=False)
+                dcmToVTKPath = directoryToVTI(iPath, outputDir, TRUE_ORIENTATION=False)
                 for ifile in dcmToVTKPath:
                     if ifile.endswith('.pvd'):
-                        FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.readPVDFileName(ifile).values())
+                        FILE_TO_VTK_LIST += list(dcmTK.dcmVTKTK.fIO.readPVDFileName(ifile).values())
                     else:
                         FILE_TO_VTK_LIST.append(ifile)
                 CLEAN_UP_LIST += dcmToVTKPath
@@ -289,7 +360,7 @@ def convertInputsToHTML(listOfFilePaths, outputFile=None, glanceHtml=None, QUIET
             print('Cleaning up:', str(CLEAN_UP_LIST))
         for ifile in CLEAN_UP_LIST:
             if iFile.endswith('.pvd'):
-                dcmTK.dcmVTKTK.deleteFilesByPVD(iFile)
+                dcmTK.dcmVTKTK.fIO.deleteFilesByPVD(iFile)
             else:
                 os.unlink(ifile)
 
@@ -339,7 +410,8 @@ def checkArgs(args):
                 args.inspectFull, 
                 args.inspectQuick,
                 args.outputFolder is not None,
-                args.vti]
+                args.vti,
+                args.INTERACTIVE]
     return any(allActionArgs)
 
 ##  ========= RUN ACTIONS =========
@@ -367,16 +439,27 @@ def runActions(args, ap):
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
         try:
-            onlyOverview = args.inspect or args.inspectFull
+            onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
+            oneFilePerDir = args.inspectQuick or args.INTERACTIVE
             if not args.QUIET:
                 print(f"READING...")
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, 
-                                                                     ONE_FILE_PER_DIR=args.inspectQuick,
+                                                                     ONE_FILE_PER_DIR=oneFilePerDir,
                                                                      HIDE_PROGRESSBAR=args.QUIET, 
                                                                      FORCE_READ=args.FORCE, 
                                                                      OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
+
+            if args.filter is not None:
+                if len(ListDicomStudies) > 1:
+                    ListDicomStudies = ListDicomStudies.filterByTag(args.filter[0], args.filter[1])
+                else:
+                    newListOfDicomStudies = []
+                    for iStudy in ListDicomStudies: 
+                        newListOfDicomStudies.append(iStudy.filterByTag(args.filter[0], args.filter[1]))
+                    ListDicomStudies = dcmTK.ListOfDicomStudies(newListOfDicomStudies)
+
         except IOError as e:
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
@@ -386,6 +469,11 @@ def runActions(args, ap):
                 print(iStudy.getTopDir())
                 print(iStudy.getStudySummary(args.inspectFull))
                 print('\n')
+        elif args.INTERACTIVE:
+            # TODO - check if multiple studies
+            INTER = INTERACTIVE(ListDicomStudies[0], outputPath=args.outputFolder)
+            INTER.run()
+
         else:
             if args.outputFolder is None:
                 print(f'WARNING: outputFolder not given - setting to inputFolder')
@@ -397,7 +485,9 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, INCLUDE_MATRIX=(not args.NO_MATRIX))
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, TRUE_ORIENTATION=args.TRUE_VTI_ORIENTATION)
+            elif args.vts:
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, VTS=True)
             elif args.html:
                 for iDS in ListDicomStudies:
                     for iSeries in iDS:
@@ -405,12 +495,16 @@ def runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.outputFolder is not None:
+                if args.anonName is not None:
+                    if not args.QUIET:
+                        print(f"ANONYMISING...")
+                    ListDicomStudies.anonymise(anonName=args.anonName, 
+                                               anonPatientID=args.anonID, 
+                                               removePrivateTags=args.REMOVE_PRIVATE_TAGS)
+                    ListDicomStudies.resetUIDs()
                 if not args.QUIET:
                     print(f"WRITTING...")
-                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder, 
-                                                                            anonName=args.anonName, 
-                                                                            anonID=args.anonID,
-                                                                            REMOVE_PRIVATE_TAGS=args.REMOVE_PRIVATE_TAGS)
+                outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder)
                 allDirsPresent = all([os.path.isdir(i) for i in outDirList])
                 res = 0 if allDirsPresent else 1
                 ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
@@ -435,6 +529,8 @@ def main():
         help='anonymous ID [optional - only used if anonName is given, default=""]', type=str, default='')
     ap.add_argument('-RemovePrivateTags', dest='REMOVE_PRIVATE_TAGS',
         help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
+    ap.add_argument('-filter', dest='filter',
+        help='Will filter dicoms based on tag name and value. Tag name and value required. If input is multiple studies then act on each.', nargs=2, default=None)
     ap.add_argument('-inspect', dest='inspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-inspectFull', dest='inspectFull',
@@ -451,9 +547,13 @@ def main():
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
-    ap.add_argument('-NO_MATRIX', dest='NO_MATRIX', help='No matrix added to vti files', action='store_true')
+    ap.add_argument('-TRUE_VTI_ORIENTATION', dest='TRUE_VTI_ORIENTATION', help='Will resample vti data at true location (output different dimensiuons)', action='store_true')
+    ap.add_argument('-vts', dest='vts',
+        help='Will convert each series to vts. Naming: {PName}_{SE#}_{SEDesc}.vts', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
+    #
+    ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode', action='store_true')
     #
     ap.add_argument('-config', dest='configFile', help='Path to configuration file to use.', type=str, default=None)
     # -- program behaviour guidence -- #
@@ -490,6 +590,8 @@ def main():
         sys.exit(1)
 
     ## -------------
+    if arguments.outputFolder is not None:
+        arguments.outputFolder = os.path.abspath(arguments.outputFolder)
 
     runActions(arguments, ap)
 

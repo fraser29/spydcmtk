@@ -11,7 +11,7 @@ from tqdm import tqdm
 import json
 import numpy as np
 import shutil
-
+import matplotlib.pyplot as plt
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmVTKTK as dcmVTKTK
@@ -54,12 +54,23 @@ class DicomSeries(list):
         """
         return ' '.join([str(i) for i in self.getSeriesOverview()[1]])
 
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            result = super().__getitem__(item)
+            return DicomSeries(result)
+        else:
+            return super().__getitem__(item)
+
     @classmethod
     def _setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
-        dStudy = dStudyList[0]
+        try:
+            dStudy = dStudyList[0]
+        except IndexError:
+            raise ValueError('No DICOMS found - please check your inputs')
         if len(dStudy) > 1:
             raise ValueError('More than one series found - use DicomStudy class')
         return cls(dStudy[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
@@ -83,7 +94,7 @@ class DicomSeries(list):
         Returns:
             DicomSeries: An instance of DicomSeries class.
         """
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
@@ -111,6 +122,15 @@ class DicomSeries(list):
     def getRootDir(self):
         return os.path.split(self[0].filename)[0]
 
+    def filterByTag(self, tagName, tagValue):
+        return DicomSeries([i for i in self if i.getTag(tagName) == tagValue], 
+                           OVERVIEW=self.OVERVIEW, 
+                           HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR, 
+                           FORCE_READ=self.FORCE_READ)
+
+    def getDicomFullFileName(self, dsID=0):
+        return self[dsID].filename
+
     def sortByInstanceNumber(self):
         self.sort(key=dcmTools.instanceNumberSortKey)
 
@@ -126,9 +146,9 @@ class DicomSeries(list):
         except KeyError:
             return ifNotFound
 
-    def setTag(self, tag, value):
+    def setTags_all(self, tag, value):
         for ds in self:
-            ds.data_element(tag).value = value
+            ds[tag].value = value
 
     def getTagObj(self, tag, dsID=0):
         try:
@@ -175,10 +195,22 @@ class DicomSeries(list):
             dOut[ds.InstanceNumber] = dd
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
 
+    def _isSeriesFullyLoaded(self):
+        return len(self) == dcmTools.countFilesInDir(self.getRootDir())
+
+    def _loadToMemory(self):
+        if not self._isSeriesFullyLoaded():
+            rootDir = self.getRootDir()
+            self.clear()
+            self.extend([dicom.dcmread(os.path.join(rootDir, i), force=self.FORCE_READ) for i in tqdm(os.listdir(rootDir), disable=self.HIDE_PROGRESSBAR)])
+
     def getSeriesOverview(self, tagList=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
-        vals.append(len(self))
+        if len(self) == 1: # ONLY READ ONE FILE PER DIR
+            vals.append(dcmTools.countFilesInDir(self.getRootDir()))
+        else:
+            vals.append(len(self))
         return names, vals
 
     def getSeriesTimeAsDatetime(self):
@@ -190,7 +222,7 @@ class DicomSeries(list):
             return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S")
 
     def getImagePositionPatient_np(self, dsID):
-        ipp = self.getTag('ImagePositionPatient', dsID=dsID)
+        ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=[0.0,0.0,0.0])
         return np.array(ipp)
 
     def getImageOrientationPatient_np(self, dsID=0):
@@ -200,7 +232,7 @@ class DicomSeries(list):
     def yieldDataset(self):
         for ds in self:
             if self.OVERVIEW:
-                yield  dicom.read_file(ds.filename, stop_before_pixels=False, force=True)
+                yield  dicom.dcmread(ds.filename, stop_before_pixels=False, force=True)
             else:
                 yield ds
 
@@ -223,42 +255,92 @@ class DicomSeries(list):
             return SE_RENAME[thisSeNum]
         return dcmTools.cleanString(f"SE{thisSeNum}{suffix}")
 
-    def resetUIDs(self, studyUID=None):
+    # ----------------------------------------------------------------------------------------------------
+    def removeTimes(self, timesIDs_ToRemove):
+        K = int(self.getNumberOfSlicesPerVolume())
+        self.sortBySlice_InstanceNumber()
+        N = self.getNumberOfTimeSteps()
+        c0 = 0
+        dsToRm = []
+        for k1 in range(K):
+            for k2 in range(N):
+                if k2 in timesIDs_ToRemove:
+                    dsToRm.append(self[c0])
+                c0 += 1
+        for iDS in dsToRm:
+            self.remove(iDS)
+
+    # ----------------------------------------------------------------------------------------------------
+    def resetUIDs(self, studyUID):
+        """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass last)
+
+        Args:
+            studyUID (str): UID - can use str(generate_uid())
         """
-            Reset UIDs - helpful for case of anon for analysis - but going back into PACS 
-        """
-        if studyUID is None:
-            studyUID = str(generate_uid())
         seriesUID = str(generate_uid())
         for k1 in range(len(self)):
             self[k1].SOPInstanceUID = str(generate_uid())
             self[k1].SeriesInstanceUID = seriesUID
             self[k1].StudyInstanceUID = studyUID
 
+    def anonymise(self, anonName, anonPatientID, anon_birthdate=True, remove_private_tags=True):
+        """Anonymise series inplace
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, anonName=None, anonID='', UIDupdateDict={}, SE_RENAME={}, 
-                                      LIKE_ORIG=True, SAFE_NAMING_CHECK=True, REMOVE_PRIVATE_TAGS=False):
+        Args:
+            anonName (str): New anonymise name (can be empty str)
+            anonPatientID (str): New anon patient ID, if None then no action taken.
+            anon_birthdate (bool, optional): To remove birthdate from tags. Defaults to True.
+            remove_private_tags (bool, optional): To remove private tags from dataset. Defaults to True. 
+                In some cases this will need to be set False to keep tags necessary for post processing (e.g. some DTI tags). 
+                It is up to the user to confirm complete anonymisation in these cases. 
+        """
+        def PN_callback(ds, data_element):
+            """Called from the dataset "walk" recursive function for all data elements."""
+            if data_element.VR == "PN":
+                data_element.value = 'anonymous'
+            if "Institution" in data_element.name:
+                data_element.value = 'anonymous'
+            if data_element.name == "Patient's Name":
+                data_element.value = anonName
+            if (data_element.name == "Patient ID") and (anonPatientID is not None):
+                data_element.value = anonPatientID
+
+        # Remove patient name and any other person names using a callback to walk over data elements for each ds
+        for dataset in self:
+            try:
+                dataset.walk(PN_callback)
+            except TypeError: 
+                pass
+            # Other Tags
+            for name in ['OtherPatientIDs', 'OtherPatientIDsSequence', 'PatientAddress']:
+                if name in dataset:
+                    delattr(dataset, name)
+            if anon_birthdate:
+                for name in ['PatientBirthDate']:
+                    if name in dataset:
+                        dataset.data_element(name).value = ''
+            if remove_private_tags:
+                try:
+                    dataset.remove_private_tags()
+                except TypeError:
+                    pass
+
+    def writeToOrganisedFileStructure(self, studyOutputDir, SAFE_NAMING_CHECK=True, seriesOutDirName=None):
         """ Recurse down directory tree - grab dicoms and move to new
-            hierarchical folder structure
-            SE_RENAME = dict of SE# and Name to rename the SE folder    
-            LIKE_ORIG - set to False if updated some tags
-            REMOVE_PRIVATE_TAGS - remove private tags on anonymisation - default False
+            hierarchical folder structure rooted at 'studyOutputDir'
         """
         if SAFE_NAMING_CHECK:
             self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
-        LIKE_ORIG = True
-        destFile = None
-        seriesOutDirName = self.getSeriesOutDirName(SE_RENAME)
-        print('SERIES OUT: ', seriesOutDirName)
+        if seriesOutDirName is None:
+            seriesOutDirName = self.getSeriesOutDirName()
         seriesOutputDir = os.path.join(studyOutputDir, seriesOutDirName)
         seriesOutputDirTemp = seriesOutputDir+".WORKING"
         if os.path.isdir(seriesOutputDir):
             os.rename(seriesOutputDir, seriesOutputDirTemp)
         if self.FORCE_READ:
-            ADD_TRANSFERSYNTAX = True ## THIS IS A BESPOKE CHANGE
+            ADD_TRANSFERSYNTAX = True # need to add if required force read. 
         TO_DECOMPRESS = self.isCompressed()
-        UIDupdateDict['SeriesInstanceUID'] = dicom.uid.generate_uid()
         for ds in tqdm(self.yieldDataset(), total=len(self), disable=self.HIDE_PROGRESSBAR):
             if TO_DECOMPRESS:
                 try:
@@ -268,9 +350,7 @@ class DicomSeries(list):
                     continue
             if ADD_TRANSFERSYNTAX:
                 ds.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
-                LIKE_ORIG=False
-            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, anonName, anonID, UIDupdateDict, 
-                                            WRITE_LIKE_ORIG=LIKE_ORIG, SAFE_NAMING=self.SAFE_NAME_MODE, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            destFile = dcmTools.writeOut_ds(ds, seriesOutputDirTemp, SAFE_NAMING=self.SAFE_NAME_MODE)
         # ON COMPLETION RENAME OUTPUTDIR
         os.rename(seriesOutputDirTemp, seriesOutputDir)
         return seriesOutputDir
@@ -286,29 +366,65 @@ class DicomSeries(list):
         return fileName+extn
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        fileName = self._generateFileName(outputNamingTags, '.nii.gz')
+        """Will write DicomSeries as nii.gz file (uses dcm2niix found on local system)
+
+        Args:
+            outputPath (str): Directory where to save output (if full pathname, with extn, is given then this is used)
+            outputNamingTags (tuple, optional): Tags to use to name output. If outputPath contains extension then not used. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
+
+        Returns:
+            str: Name of files saved
+        """
+        if outputPath.endswith('nii.gz'):
+            outputPath, fileName = os.path.split(outputPath)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
-    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), INCLUDE_MATRIX=True):
-        fileName = self._generateFileName(outputNamingTags, '')
-        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=INCLUDE_MATRIX)
+    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False):
+        """Write DicomSeries as VTK ImageData (*.vti)
+
+        Args:
+            outputPath (str): Directory to save in or full filename to save
+            outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
+            TRUE_ORIENTATION (bool, optional): To apply matrix to VTI data. Defaults to False.
+
+        Returns:
+            str: Name of file saved
+        """
+        if outputPath.endswith('vti') or outputPath.endswith('pvd'):
+            outputPath, fileName = os.path.split(outputPath)
+            fileName, _ = os.path.splitext(fileName)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '')
+        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        vtsDict = self.buildVTSDict()
-        fileName = self._generateFileName(outputNamingTags, '')
-        return dcmVTKTK.writeVtkPvdDict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
+        """Write DicomSeries as VTK StructuredImageData (*.vts)
 
-    def buildVTSDict(self):
-        vtiDict = self.buildVTIDict(INCLUDE_MATRIX=False)
-        vtsDict = {}
-        for ikey in vtiDict.keys():
-            vtsDict[ikey] = dcmVTKTK.vtiToVts_viaTransform(vtiDict[ikey])
-        return vtsDict
+        Args:
+            outputPath (str): Directory to save in or full filename to save.
+            outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
 
-    def buildVTIDict(self, INCLUDE_MATRIX=True):
-        A, meta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, meta, self[0], INCLUDE_MATRIX=INCLUDE_MATRIX)
+        Returns:
+            str: Name of file saved
+        """
+        if outputPath.endswith('vts') or outputPath.endswith('pvd'):
+            outputPath, fileName = os.path.split(outputPath)
+            fileName, _ = os.path.splitext(fileName)
+        else:
+            fileName = self._generateFileName(outputNamingTags, '')
+        vtsDict = self.buildVTSDict(outputPath)
+        return dcmVTKTK.fIO.writeVTK_PVD_Dict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
+
+    def buildVTSDict(self, outputPath=None):
+        A, patientMeta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTS(A, patientMeta, self[0], outputPath)
+
+    def buildVTIDict(self, TRUE_ORIENTATION=False):
+        A, patientMeta = self.getPixelDataAsNumpy()
+        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION)
 
     @property
     def sliceLocations(self):
@@ -323,37 +439,58 @@ class DicomSeries(list):
         sliceLocS = set(sliceLoc)
         return sliceLoc.count(sliceLocS.pop())
 
-    def getMatrix(self):
+    def getSliceNormalVector(self):
         self.sortBySlice_InstanceNumber()
-        ipp = self.getImagePositionPatient_np(0)
-        iop = self.getImageOrientationPatient_np()
-        vecC = np.cross(iop[3:6], iop[:3])
-        dx, dy, dz = self.getDeltaCol(), self.getDeltaRow(), self.getDeltaSlice()
-        return np.array([[iop[3]*dx, iop[0]*dy, vecC[0]*dz, iop[0]],
-                         [iop[4]*dx, iop[1]*dy, vecC[1]*dz, iop[1]],
-                         [iop[5]*dx, iop[2]*dy, vecC[2]*dz, iop[2]],
-                         [0,0,0,1]])
+        try:
+            sliceVec = self.getImagePositionPatient_np(-1) - self.getImagePositionPatient_np(0)
+        except:
+            sliceVec = [0.0,0.0,0.0] # If no slice locations then assume no normal vector (one image)
+        if np.linalg.norm(sliceVec) < 1e-9:
+            iop = self.getTag('ImageOrientationPatient', ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
+            sliceVec = np.cross(iop[:3], iop[3:6])
+        else:
+            sliceVec = sliceVec / np.linalg.norm(sliceVec)
+        return sliceVec
+
+    def doesSliceLocationsMatchingIOPNormal(self):
+        iop = self.getTag('ImageOrientationPatient')
+        iopN = np.cross(iop[:3], iop[3:6])
+        sliceLocN = self.getSliceNormalVector()
+        tf = [i*j>=0.0 for i,j in zip(iopN, sliceLocN)]
+        return all(tf)
+
+    def is3D(self):
+        return self.getNumberOfSlicesPerVolume() > 1
+
+    def is4D(self):
+        return self.getNumberOfTimeSteps() > 1
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
-            Also return dictionary of meta ('Spacing', 'Origin', 'ImageOrientationPatient', 'Times')
+            Also return a PatientMatrix object containing meta
+            NOTE: Some data is repeated to serve VTK and DICOM conventions
+
+        Returns:
+            tuple: 
+                numpy array - shape [nRow, nCol, nSlice, nTime], 
+                dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
-        I,J,K = int(self.getTag('Columns')), int(self.getTag('Rows')), int(self.getNumberOfSlicesPerVolume())
-        self.sortBySlice_InstanceNumber()
+        I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
+        self.sortBySlice_InstanceNumber() # This takes care of order - slices grouped, then time for each slice 
         N = self.getNumberOfTimeSteps()
         A = np.zeros((I, J, K, N))
+        if (K*N) != len(self):
+            print(f"DEBUG: Getting numpy array shape: [{I}, {J}, {K}, {N}] (K*N={K*N} == {len(self)})")
+            raise FileNotFoundError(f"Missing some DICOM files.")
         c0 = 0
         for k1 in range(K):
             for k2 in range(N):
-                iA = self[c0].pixel_array.T
+                iA = self[c0].pixel_array
                 A[:, :, k1, k2] = iA
                 c0 += 1
-        dt = self.getTemporalResolution()
-        meta = {'Spacing':[self.getDeltaCol()*0.001, self.getDeltaRow()*0.001, self.getDeltaSlice()*0.001], 
-                'Origin': [i*0.001 for i in self.getImagePositionPatient_np(0)], 
-                'ImageOrientationPatient': self.getTag('ImageOrientationPatient'), 
-                'Times': [dt*n*0.001 for n in range(N)]}
-        return A, meta
+        patientMeta = dcmVTKTK.PatientMeta()
+        patientMeta.initFromDicomSeries(self)
+        return A, patientMeta
 
     def getScanDuration_secs(self):
         try:
@@ -393,16 +530,35 @@ class DicomSeries(list):
 
     def getManufacturer(self):
         return self.getTag(0x00080070, ifNotFound='Unknown')
+
     def IS_GE(self):
         return self.getManufacturer().lower().startswith('ge')
+
     def IS_SIEMENS(self):
         return self.getManufacturer().lower().startswith('siemens')
+
+    def IS_PHILIPS(self):
+        return self.getManufacturer().lower().startswith('philips')
+
+    def IS_BRUKER(self):
+        return self.getManufacturer().lower().startswith('bruker')
 
     def getPulseSequenceName(self):
         if self.IS_GE():
             return self.getTag(0x0019109c)
         else:
             return self.getTag(0x00180024)
+
+    def getVENC(self):
+        """Get VENC value in mm/s
+        """
+        if self.IS_GE():
+            return float(self.getTag(0x001910cc))
+        elif self.IS_SIEMENS():
+            vencStr = self.getTag(0x00511014)
+            return float(vencStr.split("_")[0].replace("v", "")) * 10.0
+        else: # TODO - add other vendors
+            return None
 
     def getInternalPulseSequenceName(self):
         return self.getTag(0x0019109e)
@@ -453,6 +609,14 @@ class DicomSeries(list):
         return outDict
 
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
+        """Checks is should name dicoms based on UIDs or if a SE-number, Instace-number naming convention is possible.
+        Basically checks if there would be any overlaps. 
+
+        Args:
+            se_instance_set (set, optional): A set of instance file names (without extension). Defaults to None.
+        """
+        if self.SAFE_NAME_MODE:
+            return
         if se_instance_set is None:
             se_instance_set = set()
         for k1 in range(len(self)):
@@ -464,21 +628,55 @@ class DicomSeries(list):
                 break
             se_instance_set.add(se_instance_str)
 
-    def getStudyOutputDir(self, rootDir='', anonName=None, studyPrefix=''):
-        # 'AccessionNumber' 'StudyID'
+    def getStudyOutputDir(self, rootDir='', studyPrefix=''):
+        """Generate a study output directory name based on config setting STUDY_NAMINF_TAG_LIST
+
+        Args:
+            rootDir (str, optional): The root directory to build study directory in. Defaults to ''.
+            studyPrefix (str, optional): Optional prefix to add to naming. Defaults to ''.
+
+        Returns:
+            str: Path to directory at Study level where dicoms will be written
+        """
         suffix = ''
         if self.SAFE_NAME_MODE:
             suffix += f"{self.getTag('StudyInstanceUID')}"
         for iTag in SpydcmTK_config.STUDY_NAMING_TAG_LIST:
-            if (anonName is not None) and ('name' in iTag.lower()):
-                continue
             iVal = self.getTag(iTag, ifNotFound='', convertToType=str)
             if len(iVal) > 0:
                 suffix += '_'+iVal
-        if anonName is not None:
-            suffix = f'{anonName}_{suffix}'
         return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
+
+    def buildOverviewImage(self, outputFileName=None, RETURN_FIG=False):
+        A = self.getPixelDataAsNumpy()[0]
+        i,j,k,n = A.shape
+        if k > 1:
+            iSlice = k//2
+            Image_list = [A[:,:,iSlice,0], np.rot90(A[i//2,:,:,0],3), np.rot90(A[:,j//2,:,0],3)]
+        else:
+            Image_list = [A[:,:,0,0]]
+        fig, axs = plt.subplots(1, len(Image_list))
+        if len(Image_list) == 1:
+            axs = [axs]  # Convert single Axes to list for consistent indexing
+        for i, iA in enumerate(Image_list):
+            axs[i].imshow(iA, cmap='gray')
+            axs[i].axis('off')
+        fig.tight_layout()
+        if RETURN_FIG:
+            return fig
+        if outputFileName is not None:
+            plt.savefig(outputFileName)
+            plt.close()
+            return outputFileName
+        else:
+            plt.show()
+        
+
+
+# ================================================================================================================
+# DicomStudy
+# ================================================================================================================
 class DicomStudy(list):
     """
     Extends list of DicomSeries objects (creating list of list of pydicom.dataset)
@@ -504,7 +702,7 @@ class DicomStudy(list):
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
         return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
@@ -519,11 +717,30 @@ class DicomStudy(list):
         for iSeries in self:
             iSeries.SAFE_NAME_MODE = True
 
+    def resetUIDs(self, studyUID=None):
+        if studyUID is None:
+            studyUID = str(generate_uid())
+        for i in self:
+            i.resetUIDs(studyUID)
+
+    def filterByTag(self, tagName, tagValue):
+        return DicomStudy([i for i in self if i.getTag(tagName) == tagValue], 
+                           OVERVIEW=self.OVERVIEW, 
+                           HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
+
+    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
+        for i in self:
+            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
+
     def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
         return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
 
     def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
         return self[seriesID].getTagListAndNames(tagList, dsID=instanceID)
+
+    def setTags_all(self, tag, value):
+        for i in self:
+            i.setTags_all(tag, value)
 
     def isCompressed(self):
         return self[0].isCompressed()
@@ -563,6 +780,7 @@ class DicomStudy(list):
         return self.getTagListAndNames(tagList)
 
     def getSeriesByID(self, ID):
+        ID = int(ID)
         for iSeries in self:
             try:
                 if int(iSeries.getTag('SeriesNumber')) == ID:
@@ -577,6 +795,67 @@ class DicomStudy(list):
         for iSeries in self:
             if iSeries.getTag('SeriesInstanceUID') == UID:
                 return iSeries
+
+
+    def getSeriesByTag(self, tag, value, convertToType=None):
+        for iSeries in self:
+            if iSeries.getTag(tag, convertToType=convertToType) == value:
+                return iSeries
+
+
+    def mergeSeriesVolumesWithTime(self):
+        nTimes = len(self)
+        triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(nTimes)])
+        nPerTime = len(self.getSeriesByTag('TriggerTime', triggerTimes[0], convertToType=float))
+        sorted_ds_list = [None for _ in range(nTimes*nPerTime)]
+        print(f"Merging series: n times: {nTimes}, N per time: {nPerTime}")
+        for i in range(nTimes):
+            iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
+            iSeries.sortByInstanceNumber()
+            for k1, iDS in enumerate(iSeries):
+                if nPerTime > 1:
+                    # thisID = int(iDS['InstanceNumber'].value) + c1*(len(triggerTimes)-1) + c0 -1 # change to 0 index
+                    thisID = i + (nTimes * k1)
+                else:
+                    thisID = i
+                iDS.InstanceNumber = thisID + 1 # 1 index
+                sorted_ds_list[thisID] = iDS
+        if sorted_ds_list.count(None) != 0:
+            raise ValueError('Missing some volumes')
+        return DicomSeries(sorted_ds_list)
+
+
+    def writeFDQ(self, seriesNumber_list, outputFileName, phase_factors=[1,1,1], VERBOSE=True):
+        """
+        Writes a 4D-flow output as VTS format.
+
+        Args:
+            seriesNumber_list (list): A list of series numbers identifying mag and 3 phase series. Mag, X, Y, Z phases
+            outputFileName (str): The name of the pvd file to write to.
+
+        Returns:
+            str: the pvd file written
+        """
+        rootDir, fName = os.path.split(outputFileName)
+        intermediate_pvds = {}
+        if VERBOSE: print("Writing out internediate series:")
+        for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"]):
+            if VERBOSE: print(f"    {label}")
+            dcmSeries = self.getSeriesBySeriesNumber(iSeriesNum)
+            dcmSeries._loadToMemory()
+            iOut = dcmSeries.writeToVTS(os.path.join(rootDir, f"{label}.pvd"))
+            intermediate_pvds[label] = iOut
+        if VERBOSE: print(f"Combining to final 4D-flow PVD")
+        fOut = dcmVTKTK.mergePhaseSeries4D(intermediate_pvds["MAG"], 
+                                            [intermediate_pvds["PX"],
+                                            intermediate_pvds["PY"],
+                                            intermediate_pvds["PZ"]], 
+                                            outputFileName, 
+                                            phase_factors=phase_factors,
+                                            DEL_ORIGINAL=True)
+        if VERBOSE: print(f"Written {fOut}")
+        return fOut 
+
 
     def getStudySummaryDict(self, FORCE_STRING_KEYS=False):
         pt,pv = self.getPatientOverview()
@@ -604,11 +883,17 @@ class DicomStudy(list):
                 seriesStr = sorted(seriesStr, key=lambda i:int(i.split(',')[0]))
             except ValueError:
                 pass # Try to sort, but if fail (due to return not int somehow, then no sort)
-            return 'SUBJECT:%s\nSTUDY:%s\n    %s\n    %s\nTotal: %d images'%(patStr, studyStr, seriesHeader,'\n    '.join(seriesStr), self.getNumberOfDicoms())
+            seriesStr_ = '\n\n'+seriesHeader+'\n    '+'\n    '.join(seriesStr)
+            strOut = f"SUBJECT: {patStr}"
+            strOut += f"\nSTUDY: {studyStr}"
+            strOut += seriesStr_
+            return strOut
         else:
-            return 'SUBJECT:%s\nSTUDY:%s'%(patStr, studyStr)
+            strOut = f"SUBJECT: {patStr}"
+            strOut += f"\nSTUDY: {studyStr}"
+            return strOut
 
-    def getTagValuesList(self, tagList, RETURN_STR):
+    def getTagValuesList(self, tagList, RETURN_STR=False):
         output = []
         for i in self:
             output += i.getTagValuesList(tagList, False)
@@ -616,23 +901,25 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
-    def writeToOrganisedFileStructure(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', REMOVE_PRIVATE_TAGS=False):
+    def writeToOrganisedFileStructure(self, patientOutputDir, studyPrefix=''):
         self.checkIfShouldUse_SAFE_NAMING()
-        studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, anonName, studyPrefix)
+        try:
+            studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
+        except IndexError: # Study is empty
+            return None
         studyOutputDirTemp = studyOutputDir+".WORKING"
         if os.path.isdir(studyOutputDir):
             os.rename(studyOutputDir, studyOutputDirTemp)
-        UIDupdateDict = {'StudyInstanceUID': dicom.uid.generate_uid()}
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, anonName=anonName, anonID=anonID, 
-                                                  UIDupdateDict=UIDupdateDict, SE_RENAME=SE_RENAME, 
-                                                  SAFE_NAMING_CHECK=False, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, 
+                                                  SAFE_NAMING_CHECK=False)
         os.rename(studyOutputDirTemp, studyOutputDir)
         return studyOutputDir
 
-    def writeToZipArchive(self, patientOutputDir, anonName=None, anonID='', SE_RENAME={}, studyPrefix='', CLEAN_UP=True, REMOVE_PRIVATE_TAGS=False):
-        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir, anonName, anonID, SE_RENAME, studyPrefix, 
-                                                            REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+    def writeToZipArchive(self, patientOutputDir, CLEAN_UP=True):
+        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir)
+        if studyOutputDir is None:
+            return
         r, f = os.path.split(studyOutputDir)
         shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
         fileOut = studyOutputDir+'.zip'
@@ -684,8 +971,13 @@ class ListOfDicomStudies(list):
                     raise IOError("ERROR READING DICOMS: SPDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
 
     @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirachyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
+    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, extn_filter=None):
+        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, 
+                                                         HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
+                                                         FORCE_READ=FORCE_READ, 
+                                                         ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, 
+                                                         OVERVIEW=OVERVIEW,
+                                                         extn_filter=extn_filter)
         return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
     @classmethod
@@ -720,19 +1012,30 @@ class ListOfDicomStudies(list):
             for iSeries in iStudy:
                 iSeries.SAFE_NAME_MODE = True
 
+    def resetUIDs(self):
+        for i in self:
+            i.resetUIDs()
+
+    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
+        for i in self:
+            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
+
     def isCompressed(self):
         return self[0].isCompressed()
 
     def getNumberOfDicoms(self):
         return sum([i.getNumberOfDicoms() for i in self])
 
-    def writeToOrganisedFileStructure(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, REMOVE_PRIVATE_TAGS=False):
+    def filterByTag(self, tagName, tagValue):
+        return ListOfDicomStudies([i for i in self if i.getTag(tagName) == tagValue], 
+                                  OVERVIEW=self.OVERVIEW, 
+                                  HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
+
+    def writeToOrganisedFileStructure(self, outputRootDir):
         outDirs = []
         for iStudy in self:
             suffix = ''
             for iTag in SpydcmTK_config.SUBJECT_NAMING_TAG_LIST:
-                if (anonName is not None) and ('name' in iTag.lower()):
-                    continue
                 iVal = iStudy.getTag(iTag, ifNotFound='', convertToType=str)
                 if len(iVal) > 0:
                     suffix += '_'+iVal
@@ -741,15 +1044,14 @@ class ListOfDicomStudies(list):
             else:
                 ioutputRootDir = outputRootDir
 
-            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir, anonName=anonName, anonID=anonID, 
-                                                       SE_RENAME=SE_RENAME, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
+            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir)
             outDirs.append(ooD)
         return outDirs
 
-    def writeToZipArchive(self, outputRootDir, anonName=None, anonID='', SE_RENAME={}, CLEAN_UP=True):
+    def writeToZipArchive(self, outputRootDir, CLEAN_UP=True):
         outDirs = []
         for iStudy in self:
-            ooD = iStudy.writeToZipArchive(outputRootDir, anonName=anonName, anonID=anonID, SE_RENAME=SE_RENAME, CLEAN_UP=CLEAN_UP)
+            ooD = iStudy.writeToZipArchive(outputRootDir, CLEAN_UP=CLEAN_UP)
             outDirs.append(ooD)
         return outDirs
 
@@ -771,10 +1073,15 @@ class ListOfDicomStudies(list):
         for i in overviewList:
             print(','.join(i))
 
-
     def getStudyByDate(self, date_str):
+        return self.getStudyByTag('StudyDate', date_str)
+
+    def getStudyByPID(self, PID):
+        return self.getStudyByTag('PatientID', PID)
+
+    def getStudyByTag(self, tagName, tagValue):
         for i in self:
-            if i.getTag('StudyDate') == date_str:
+            if i.getTag(tagName) == tagValue:
                 return i
 
     def buildMSTable(self, DICOM_TAGS=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
@@ -867,12 +1174,6 @@ class BIDS_Directory(object):
         subjIDs = [i for i in os.listdir(self.rootDir) if i.startswith('sub-')]
         return sorted([BIDS_Subject(i, self) for i in subjIDs])
 
-def walkdir(folder):
-    """Walk through each files in a directory"""
-    for dirpath, _, files in os.walk(folder):
-        for filename in files:
-            yield os.path.abspath(os.path.join(dirpath, filename))
-
 
 def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, 
                    HIDE_PROGRESSBAR=False, REMOVE_PRIVATE_TAGS=False):
@@ -902,32 +1203,31 @@ def studySummary(pathToDicoms):
 ## =====================================================================================================================
 ##   WRITE DICOMS
 ## =====================================================================================================================
-def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMatrixDict={}):
+def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
     if type(vtiFile) == str:
-        vti = dcmVTKTK.readVTKFile(vtiFile)
-    if arrayName is None:
-        A = dcmVTKTK.getScalarsAsNumpy(vti)
+        vti = dcmVTKTK.fIO.readVTKFile(vtiFile)
     else:
-        A = dcmVTKTK.getArrayAsNumpy(vti, arrayName)
+        vti = vtiFile
+    if arrayName is None:
+        A = dcmVTKTK.vtkfilters.getScalarsAsNumpy(vti)
+    else:
+        A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
     A = np.reshape(A, vti.GetDimensions(), 'F')
     A = np.rot90(A)
     A = np.flipud(A)
-    print(A.shape, type(A), A.dtype)
-    patientMatrixDict = dcmVTKTK.getPatientMatrixDict(vti, patientMatrixDict)
-    return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMatrixDict, outputDir, tagUpdateDict=tagUpdateDict)
+    if patientMeta is None:
+        patientMeta = dcmVTKTK.PatientMeta()
+    patientMeta.initFromVTI(vti)
+    return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMeta, outputDir, tagUpdateDict=tagUpdateDict)
 
 
-def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, outputDir, tagUpdateDict=None):
-    """
-    patientMatrixDict = {PixelSpacing: [1,2], ImagePositionPatient: [1,3], ImageOrientationPatient: [1,6], SliceThickness: 1}
-    Note - use "SliceThickness" in patientMatrixDict - with assumption that SliceThickness==SpacingBetweenSlices (explicitely built this way - ndArray can not have otherwise)
-    """
+def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir, tagUpdateDict=None):
     if tagUpdateDict is None:
         tagUpdateDict = {}
     if dcmTemplate_or_ds is None:
         dsRAW = dcmTools.buildFakeDS()
     elif type(dcmTemplate_or_ds) == str:
-        dsRAW = dicom.read_file(dcmTemplate_or_ds)
+        dsRAW = dicom.dcmread(dcmTemplate_or_ds)
     else:
         dsRAW = dcmTemplate_or_ds
     nRow, nCol, nSlice = pixelArray.shape
@@ -938,7 +1238,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
-        slice0 = 0.0
+        slice0 = patientMeta.SliceLocation0*dcmVTKTK.m_to_mm
+    
+    sliceThick = patientMeta.SliceThickness*dcmVTKTK.m_to_mm
+    ipp = [i*dcmVTKTK.m_to_mm for i in patientMeta.ImagePositionPatient]
 
     SeriesUID = dicom.uid.generate_uid()
     try:
@@ -966,35 +1269,42 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMatrixDict, out
         ds.BitsAllocated = 16
         ds.BitsStored = 16
         ds.HighBit = 15
-        ds.SliceThickness = patientMatrixDict['SpacingBetweenSlices'] # Can no longer claim overlapping slices if have modified
-        ds.SpacingBetweenSlices = patientMatrixDict['SpacingBetweenSlices']
+        ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
+        ds.SpacingBetweenSlices = sliceThick
         ds.SmallestImagePixelValue = int(mn)
         ds.LargestImagePixelValue = int(mx)
         ds.WindowCenter = int(mx / 2)
         ds.WindowWidth = int(mx / 2)
-        ds.PixelSpacing = list(patientMatrixDict['PixelSpacing'])
-        kVec = np.cross(patientMatrixDict['ImageOrientationPatient'][:3],
-                        patientMatrixDict['ImageOrientationPatient'][3:])
-        ImagePositionPatient = np.array(patientMatrixDict['ImagePositionPatient']) + k*kVec*ds.SpacingBetweenSlices
+        ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
+
+        sliceVec = np.array(patientMeta.SliceVector)
+        ImagePositionPatient = ipp + k*sliceVec*sliceThick
         ds.ImagePositionPatient = list(ImagePositionPatient)
-        # try:
-        sliceLoc = slice0 + k*ds.SpacingBetweenSlices
-        # except KeyError:
-        #     sliceLoc = dcmTools.distPts(ImagePositionPatient, np.array(patientMatrixDict['ImagePositionPatient']))
+        sliceLoc = slice0 + k*sliceThick
         ds.SliceLocation = sliceLoc
-        ds.ImageOrientationPatient = list(patientMatrixDict['ImageOrientationPatient'])
+        ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
         for iKey in tagUpdateDict.keys():
-            try:
-                ds[iKey] = tagUpdateDict[iKey]
-            except (ValueError, TypeError):
+            if len(tagUpdateDict[iKey]) == 3:
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
-        # ds.PixelData = pixelArray[:,:,k].tostring()
+            else:
+                ds[iKey] = tagUpdateDict[iKey]
         ds.PixelData = pixelArray[:,:,k].tobytes()
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
-    dcmSeries.writeToOrganisedFileStructure(outputDir)
+    return dcmSeries.writeToOrganisedFileStructure(outputDir)
 
+def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds, 
+                            outputDir, tagUpdateDict=None):
+
+    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=True)
+    combinedImage = dcmVTKTK.vtkfilterFlipImageData(combinedImage, 1)
+    writeVTIToDicoms(combinedImage, 
+                        dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
+                        outputDir=outputDir,
+                        arrayName='PixelData',
+                        tagUpdateDict=tagUpdateDict,
+                        patientMeta=patientMeta)
 
 
 def getResolution(dataVts):
@@ -1013,9 +1323,3 @@ def getResolution(dataVts):
 def distBetweenTwoPts(a, b):
     return np.sqrt(np.sum((np.asarray(a) - np.asarray(b)) ** 2))
 
-def printPoints(vtsD):
-    dd = vtsD.GetDimensions()
-    ijks = [[0,0,0],[0,0,1],[0,0,2],[0,0,3],[0,0,4]]
-    for ii in ijks:
-        ID = np.ravel_multi_index(ii, dd, order='F')
-        print(ii, ID, vtsD.GetPoint(ID))
