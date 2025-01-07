@@ -199,8 +199,8 @@ def __getTags(dataset, tagsList):
 def getRootDirWithSEdirs(startDir):
     """
     Search from startDir until find rootDir with format of subdirs:
-        SE123_
-        ... etc
+        `SE123_` etc
+
     param1: start directory of search
     return: rootdirectory with subfolders of SE{int}_ format (startDir if not found)
     """
