@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="../../">
 <head>
@@ -5,18 +7,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>spydcmtk.dcmTools &mdash; spydcmtk 1.1.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  <!--[if lt IE 9]>
-    <script src="../../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="../../_static/jquery.js?v=5d32c60e"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=a48ae3df"></script>
-        <script src="../../_static/doctools.js?v=888ff710"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=a48ae3df"></script>
+      <script src="../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
@@ -84,7 +82,6 @@
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">glob</span>
-<span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">tarfile</span>
 <span class="kn">import</span> <span class="nn">shutil</span>
@@ -112,6 +109,7 @@
     <span class="n">SliceThickness</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0050</span>
     <span class="n">RepetitionTime</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0080</span>
     <span class="n">EchoTime</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0081</span>
+    <span class="n">InversionTime</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0082</span>
     <span class="n">NumberOfAverages</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0083</span>
     <span class="n">MagneticFieldStrength</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0087</span>
     <span class="n">SpacingBetweenSlices</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x0088</span>
@@ -124,6 +122,7 @@
     <span class="n">AcquisitionMatrix</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x1310</span>
     <span class="n">FlipAngle</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x1314</span>
     <span class="n">PatientPosition</span> <span class="o">=</span> <span class="mh">0x0018</span><span class="p">,</span> <span class="mh">0x5100</span>
+    <span class="n">PatientOrientation</span> <span class="o">=</span> <span class="mh">0x0020</span><span class="p">,</span> <span class="mh">0x0020</span>
     <span class="n">ImagePositionPatient</span> <span class="o">=</span> <span class="mh">0x0020</span><span class="p">,</span> <span class="mh">0x0032</span>
     <span class="n">ImageOrientationPatient</span> <span class="o">=</span> <span class="mh">0x0020</span><span class="p">,</span> <span class="mh">0x0037</span>
     <span class="n">StudyInstanceUID</span> <span class="o">=</span> <span class="mh">0x0020</span><span class="p">,</span> <span class="mh">0x000d</span>
@@ -301,6 +300,9 @@
 <div class="viewcode-block" id="sliceLoc_InstanceNumberSortKey">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.sliceLoc_InstanceNumberSortKey">[docs]</a>
 <span class="k">def</span> <span class="nf">sliceLoc_InstanceNumberSortKey</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Sort by slice location 1st (group all slices together), then instance number</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">__getTags</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;SliceLocation&#39;</span><span class="p">])[</span><span class="s1">&#39;SliceLocation&#39;</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">__getTags</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;InstanceNumber&#39;</span><span class="p">])[</span><span class="s1">&#39;InstanceNumber&#39;</span><span class="p">]))</span>
     <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IOError</span><span class="p">,</span> <span class="ne">AttributeError</span><span class="p">):</span>
@@ -386,7 +388,7 @@
                 <span class="k">continue</span>
             <span class="n">thisFile</span><span class="o">=</span><span class="n">tar</span><span class="o">.</span><span class="n">extractfile</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="n">OVERVIEW_ONLY</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span><span class="c1">#, specific_tags=[&#39;StudyInstanceUID&#39;,&#39;SeriesInstanceUID&#39;])</span>
+                <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="n">OVERVIEW_ONLY</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">matchingTagValuePair</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">matchingTagValuePair</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;NIL&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">matchingTagValuePair</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
                         <span class="k">continue</span>
@@ -419,7 +421,7 @@
         <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">():</span>
             <span class="k">with</span> <span class="n">zf</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">file</span><span class="p">)</span> <span class="k">as</span> <span class="n">thisFile</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="n">OVERVIEW_ONLY</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span>
+                    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="n">OVERVIEW_ONLY</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">matchingTagValuePair</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                         <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">matchingTagValuePair</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;NIL&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">matchingTagValuePair</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
                             <span class="k">continue</span>
@@ -487,8 +489,11 @@
 
 <div class="viewcode-block" id="getSaveFileNameFor_ds">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.getSaveFileNameFor_ds">[docs]</a>
-<span class="k">def</span> <span class="nf">getSaveFileNameFor_ds</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">outputRootDir</span><span class="p">):</span>
-    <span class="n">destFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputRootDir</span><span class="p">,</span> <span class="n">getPatientDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">getStudyDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">getSeriesDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">__getDSSaveFileName</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+<span class="k">def</span> <span class="nf">getSaveFileNameFor_ds</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">outputRootDir</span><span class="p">,</span> <span class="n">ANON</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">ANON</span><span class="p">:</span>
+        <span class="n">destFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputRootDir</span><span class="p">,</span> <span class="n">getStudyDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">getSeriesDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">__getDSSaveFileName</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">destFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputRootDir</span><span class="p">,</span> <span class="n">getPatientDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">getStudyDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">getSeriesDirName</span><span class="p">(</span><span class="n">ds</span><span class="p">),</span> <span class="n">__getDSSaveFileName</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">destFile</span></div>
 
 
@@ -546,19 +551,24 @@
 
 <div class="viewcode-block" id="writeOut_ds">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.writeOut_ds">[docs]</a>
-<span class="k">def</span> <span class="nf">writeOut_ds</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">outputRootDir</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">UIDupdateDict</span><span class="o">=</span><span class="p">{},</span> <span class="n">WRITE_LIKE_ORIG</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">REMOVE_PRIVATE_TAGS</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">writeOut_ds</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">outputRootDir</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">UIDupdateDict</span><span class="o">=</span><span class="p">{},</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">REMOVE_PRIVATE_TAGS</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="n">destFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputRootDir</span><span class="p">,</span> <span class="n">__getDSSaveFileName</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="p">))</span>
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">outputRootDir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">anonName</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">anonymiseDicomDS</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">UIDupdateDict</span><span class="o">=</span><span class="n">UIDupdateDict</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="n">anonName</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="n">anonID</span><span class="p">,</span> <span class="n">remove_private_tags</span><span class="o">=</span><span class="n">REMOVE_PRIVATE_TAGS</span><span class="p">)</span>
-    <span class="n">ds</span><span class="o">.</span><span class="n">save_as</span><span class="p">(</span><span class="n">destFile</span><span class="p">,</span> <span class="n">write_like_original</span><span class="o">=</span><span class="n">WRITE_LIKE_ORIG</span><span class="p">)</span>
+    <span class="n">ds</span><span class="o">.</span><span class="n">save_as</span><span class="p">(</span><span class="n">destFile</span><span class="p">,</span> <span class="n">enforce_file_format</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">destFile</span></div>
 
 
 <div class="viewcode-block" id="streamDicoms">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.streamDicoms">[docs]</a>
-<span class="k">def</span> <span class="nf">streamDicoms</span><span class="p">(</span><span class="n">inputDir</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">streamDicoms</span><span class="p">(</span><span class="n">inputDir</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
     <span class="n">nFiles</span> <span class="o">=</span> <span class="n">countFilesInDir</span><span class="p">(</span><span class="n">inputDir</span><span class="p">)</span>
+    <span class="n">outputDirTEMP</span> <span class="o">=</span> <span class="n">outputDir</span><span class="o">+</span><span class="s2">&quot;.WORKING&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">outputDir</span><span class="p">,</span> <span class="n">outputDirTEMP</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+        <span class="k">pass</span> <span class="c1"># OK - will make directory and rename at end</span>
     <span class="k">for</span> <span class="n">thisFile</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">walkdir</span><span class="p">(</span><span class="n">inputDir</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="n">nFiles</span><span class="p">,</span> <span class="n">leave</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">disable</span><span class="o">=</span><span class="n">HIDE_PROGRESSBAR</span><span class="p">):</span>
         <span class="k">if</span> <span class="s1">&#39;dicomdir&#39;</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">thisFile</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
             <span class="k">continue</span>
@@ -567,22 +577,21 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">SAFE_NAMING</span><span class="p">:</span> 
-                <span class="n">fOut</span> <span class="o">=</span> <span class="n">getSaveFileNameFor_ds_UID</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">)</span>
+                <span class="n">fOut</span> <span class="o">=</span> <span class="n">getSaveFileNameFor_ds_UID</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">outputDirTEMP</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">fOut</span> <span class="o">=</span> <span class="n">getSaveFileNameFor_ds</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">)</span>
+                <span class="n">fOut</span> <span class="o">=</span> <span class="n">getSaveFileNameFor_ds</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">outputDirTEMP</span><span class="p">,</span> <span class="n">ANON</span><span class="o">=</span><span class="n">anonName</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
             <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fOut</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">anonName</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">dataset</span> <span class="o">=</span> <span class="n">anonymiseDicomDS</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="n">anonName</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="n">anonName</span><span class="p">,</span> <span class="n">remove_private_tags</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-            <span class="n">dataset</span><span class="o">.</span><span class="n">save_as</span><span class="p">(</span><span class="n">fOut</span><span class="p">,</span> <span class="n">write_like_original</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">dataset</span> <span class="o">=</span> <span class="n">anonymiseDicomDS</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="n">anonName</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="n">anonID</span><span class="p">,</span> <span class="n">remove_private_tags</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">dataset</span><span class="o">.</span><span class="n">save_as</span><span class="p">(</span><span class="n">fOut</span><span class="p">,</span> <span class="n">enforce_file_format</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">dicom</span><span class="o">.</span><span class="n">filereader</span><span class="o">.</span><span class="n">InvalidDicomError</span><span class="p">:</span>
-            <span class="k">continue</span></div>
+            <span class="k">continue</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">outputDirTEMP</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="readDicomFile_intoDict">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.readDicomFile_intoDict">[docs]</a>
 <span class="k">def</span> <span class="nf">readDicomFile_intoDict</span><span class="p">(</span><span class="n">dcmFile</span><span class="p">,</span> <span class="n">dsDict</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">OVERVIEW</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-    <span class="c1"># Reading specific tags is actually slower. </span>
-    <span class="c1"># dataset = dicom.dcmread(thisFile, specific_tags=[&#39;StudyInstanceUID&#39;,&#39;SeriesInstanceUID&#39;], stop_before_pixels=OVERVIEW, force=FORCE_READ)</span>
     <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">dcmFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="n">OVERVIEW</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span>
     <span class="n">studyUID</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">StudyInstanceUID</span><span class="p">)</span>
     <span class="n">seriesUID</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">SeriesInstanceUID</span><span class="p">)</span>
@@ -593,13 +602,30 @@
     <span class="n">dsDict</span><span class="p">[</span><span class="n">studyUID</span><span class="p">][</span><span class="n">seriesUID</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="organiseDicomHeirachyByUIDs">
-<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.organiseDicomHeirachyByUIDs">[docs]</a>
-<span class="k">def</span> <span class="nf">organiseDicomHeirachyByUIDs</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ONE_FILE_PER_DIR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">OVERVIEW</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">DEBUG</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="organiseDicomHeirarchyByUIDs">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.organiseDicomHeirarchyByUIDs">[docs]</a>
+<span class="k">def</span> <span class="nf">organiseDicomHeirarchyByUIDs</span><span class="p">(</span><span class="n">rootDir</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ONE_FILE_PER_DIR</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">OVERVIEW</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">extn_filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">DEBUG</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find all dicoms under &quot;rootDir&quot; and organise based upon UIDs</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        rootDir (str): Directory path under which to search</span>
+<span class="sd">        HIDE_PROGRESSBAR (bool, optional): To hide tqdm progress bar. Defaults to False.</span>
+<span class="sd">        FORCE_READ (bool, optional): Will tell pydicom to force read files that do not conform to dicom standard. Defaults to False.</span>
+<span class="sd">        ONE_FILE_PER_DIR (bool, optional): For a fast summary, will read only first file found per subdirectory (if one knows that dicoms are already organised in such a format). Defaults to False.</span>
+<span class="sd">        OVERVIEW (bool, optional): Will not read pixel data. Defaults to False.</span>
+<span class="sd">        extn_filter (str, optional): For faster reading of large multi data directory trees pass an extension to filter upon (e.g. dcm) then will only read files ending in this extension. Defaults to None.</span>
+<span class="sd">        DEBUG (bool, optional): Set true for debugging actions. Defaults to False.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: A larger dictionary structure of {studyUID: {seriesUID: [list of pydicom datasets]}}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">dsDict</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="n">successReadDirs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="n">nFiles</span> <span class="o">=</span> <span class="n">countFilesInDir</span><span class="p">(</span><span class="n">rootDir</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">thisFile</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">walkdir</span><span class="p">(</span><span class="n">rootDir</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="n">nFiles</span><span class="p">,</span> <span class="n">leave</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">disable</span><span class="o">=</span><span class="n">HIDE_PROGRESSBAR</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">extn_filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">thisFile</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">extn_filter</span><span class="p">):</span>
+                <span class="k">continue</span>
         <span class="k">if</span> <span class="s1">&#39;dicomdir&#39;</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">thisFile</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
             <span class="k">continue</span>
         <span class="k">if</span> <span class="n">thisFile</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;json&#39;</span><span class="p">):</span>
@@ -625,7 +651,22 @@
 
 <div class="viewcode-block" id="writeDirectoryToNII">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTools.writeDirectoryToNII">[docs]</a>
-<span class="k">def</span> <span class="nf">writeDirectoryToNII</span><span class="p">(</span><span class="n">dcmDir</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="n">FORCE_FILENAME</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">writeDirectoryToNII</span><span class="p">(</span><span class="n">dcmDir</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write directory of dicom files to nifti file.</span>
+<span class="sd">        Requires dcm2nii which must be in path or provided via config. </span>
+<span class="sd">        Also writes json sidecar. s</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        dcmDir (str): Directory under which to find DICOMS</span>
+<span class="sd">        outputPath (str): Directory where to save output</span>
+<span class="sd">        fileName (str): Filename for output</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        OSError: If dcm2nii path is not found</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        str: full filename of new nifti file</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">dcm2nii_path</span><span class="p">):</span>
         <span class="n">res</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">dcm2nii_path</span><span class="p">)</span> <span class="c1"># Maybe command name and in path</span>
         <span class="k">if</span> <span class="n">res</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -634,16 +675,15 @@
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;RUNNING: </span><span class="si">{</span><span class="n">dcm2niiCmd</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="n">dcm2niiCmd</span><span class="p">)</span>
     <span class="n">extn</span> <span class="o">=</span> <span class="s1">&#39;.nii.gz&#39;</span> <span class="k">if</span> <span class="s1">&#39;-z y&#39;</span> <span class="ow">in</span> <span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">dcm2nii_options</span> <span class="k">else</span> <span class="s1">&#39;.nii&#39;</span>
-    <span class="k">if</span> <span class="n">FORCE_FILENAME</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">dcm2nii_options</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
-        <span class="n">list_of_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputPath</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;*</span><span class="si">{</span><span class="n">extn</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">))</span> 
-        <span class="n">latest_file</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">list_of_files</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getctime</span><span class="p">)</span>
-        <span class="n">newFileName</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">latest_file</span><span class="p">,</span> <span class="n">newFileName</span><span class="p">)</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Renamed </span><span class="si">{</span><span class="n">latest_file</span><span class="si">}</span><span class="s2"> --&gt; as </span><span class="si">{</span><span class="n">newFileName</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">latest_json</span> <span class="o">=</span> <span class="n">latest_file</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">extn</span><span class="p">,</span> <span class="s1">&#39;.json&#39;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">latest_json</span><span class="p">):</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">latest_json</span><span class="p">,</span> <span class="n">newFileName</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">extn</span><span class="p">,</span> <span class="s1">&#39;.json&#39;</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">newFileName</span></div>
+    <span class="n">list_of_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputPath</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;*</span><span class="si">{</span><span class="n">extn</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">))</span> 
+    <span class="n">latest_file</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">list_of_files</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getctime</span><span class="p">)</span>
+    <span class="n">newFileName</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">latest_file</span><span class="p">,</span> <span class="n">newFileName</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Renamed </span><span class="si">{</span><span class="n">latest_file</span><span class="si">}</span><span class="s2"> --&gt; as </span><span class="si">{</span><span class="n">newFileName</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">latest_json</span> <span class="o">=</span> <span class="n">latest_file</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">extn</span><span class="p">,</span> <span class="s1">&#39;.json&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">latest_json</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">latest_json</span><span class="p">,</span> <span class="n">newFileName</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">extn</span><span class="p">,</span> <span class="s1">&#39;.json&#39;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">newFileName</span></div>
 
 
 <div class="viewcode-block" id="buildFakeDS">
@@ -668,7 +708,6 @@
     <span class="c1">##</span>
     <span class="n">ds</span><span class="o">.</span><span class="n">add_new</span><span class="p">([</span><span class="mh">0x0010</span><span class="p">,</span><span class="mh">0x0010</span><span class="p">],</span> <span class="s1">&#39;PN&#39;</span><span class="p">,</span> <span class="s2">&quot;TEST^DATA&quot;</span><span class="p">)</span>
     <span class="n">ds</span><span class="o">.</span><span class="n">add_new</span><span class="p">([</span><span class="mh">0x0010</span><span class="p">,</span><span class="mh">0x0020</span><span class="p">],</span> <span class="s1">&#39;LO&#39;</span><span class="p">,</span> <span class="s1">&#39;12345&#39;</span><span class="p">)</span>
-    <span class="n">ds</span><span class="o">.</span><span class="n">fix_meta_info</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">ds</span></div>
 
 

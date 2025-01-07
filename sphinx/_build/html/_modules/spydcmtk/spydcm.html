@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="../../">
 <head>
@@ -5,18 +7,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>spydcmtk.spydcm &mdash; spydcmtk 1.1.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  <!--[if lt IE 9]>
-    <script src="../../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="../../_static/jquery.js?v=5d32c60e"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=a48ae3df"></script>
-        <script src="../../_static/doctools.js?v=888ff710"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=a48ae3df"></script>
+      <script src="../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
@@ -94,6 +92,104 @@
 <span class="kn">from</span> <span class="nn">spydcmtk.spydcm_config</span> <span class="kn">import</span> <span class="n">SpydcmTK_config</span>
 
 
+<div class="viewcode-block" id="INTERACTIVE">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE">[docs]</a>
+<span class="k">class</span> <span class="nc">INTERACTIVE</span><span class="p">():</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">study</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">study</span> <span class="o">=</span> <span class="n">study</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputPath</span> <span class="o">=</span> <span class="n">outputPath</span>
+        <span class="c1">#</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;1&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;Data summary&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataSummary</span><span class="p">),</span>
+            <span class="s1">&#39;2&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;Build VTS&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buildVTS</span><span class="p">),</span>
+            <span class="s1">&#39;3&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;Build FDQ&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buildFDQ</span><span class="p">),</span>
+            <span class="s1">&#39;4&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;Build overview image&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buildOverviewImage</span><span class="p">),</span>
+            <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;Quit&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">quit</span><span class="p">)</span>
+        <span class="p">}</span>
+
+<div class="viewcode-block" id="INTERACTIVE.displayMenu">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.displayMenu">[docs]</a>
+    <span class="k">def</span> <span class="nf">displayMenu</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Select an option:&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.getUserInput">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.getUserInput">[docs]</a>
+    <span class="k">def</span> <span class="nf">getUserInput</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">question</span><span class="o">=</span><span class="s2">&quot;your choice&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">input</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Enter </span><span class="si">{</span><span class="n">question</span><span class="si">}</span><span class="s2">: &quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.run">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">displayMenu</span><span class="p">()</span>
+            <span class="n">choice</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">choice</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">choice</span><span class="p">][</span><span class="mi">1</span><span class="p">]()</span>  <span class="c1"># Execute the corresponding function</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Invalid option. Please try again.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.dataSummary">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.dataSummary">[docs]</a>
+    <span class="k">def</span> <span class="nf">dataSummary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">study</span><span class="o">.</span><span class="n">getStudySummary</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.buildVTS">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.buildVTS">[docs]</a>
+    <span class="k">def</span> <span class="nf">buildVTS</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataSummary</span><span class="p">()</span>
+        <span class="n">seNum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;series number&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span> 
+            <span class="n">seNum</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">seNum</span><span class="p">)</span>
+            <span class="n">dcmSeries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">study</span><span class="o">.</span><span class="n">getSeriesByID</span><span class="p">(</span><span class="n">seNum</span><span class="p">)</span>
+            <span class="n">outputFilename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;file name (vts)&quot;</span><span class="p">)</span>
+            <span class="n">outputpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outputPath</span><span class="p">,</span> <span class="n">outputFilename</span><span class="p">)</span>
+            <span class="n">dcmSeries</span><span class="o">.</span><span class="n">writeToVTS</span><span class="p">(</span><span class="n">outputpath</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Invalid option. Please try again&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.buildFDQ">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.buildFDQ">[docs]</a>
+    <span class="k">def</span> <span class="nf">buildFDQ</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataSummary</span><span class="p">()</span>
+        <span class="n">seNum_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;series numbers for FDQ&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span> 
+            <span class="n">seNum_4</span> <span class="o">=</span> <span class="n">seNum_</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)</span>
+            <span class="n">seNum_4</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">seNum_4</span><span class="p">]</span>
+            <span class="n">outputFilename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;file name (pvd)&quot;</span><span class="p">)</span>
+            <span class="n">outputpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outputPath</span><span class="p">,</span> <span class="n">outputFilename</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">study</span><span class="o">.</span><span class="n">writeFDQ</span><span class="p">(</span><span class="n">seNum_4</span><span class="p">,</span> <span class="n">outputpath</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Invalid option. Please try again&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.buildOverviewImage">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.buildOverviewImage">[docs]</a>
+    <span class="k">def</span> <span class="nf">buildOverviewImage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataSummary</span><span class="p">()</span>
+        <span class="n">seNum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;series number&quot;</span><span class="p">)</span>
+        <span class="n">outputFilename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getUserInput</span><span class="p">(</span><span class="s2">&quot;file name (png) - leave blank to show&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">outputFilename</span> <span class="o">==</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+            <span class="n">outputpath</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">outputpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outputPath</span><span class="p">,</span> <span class="n">outputFilename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">study</span><span class="o">.</span><span class="n">getSeriesByID</span><span class="p">(</span><span class="n">seNum</span><span class="p">)</span><span class="o">.</span><span class="n">buildOverviewImage</span><span class="p">(</span><span class="n">outputpath</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="INTERACTIVE.quit">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.INTERACTIVE.quit">[docs]</a>
+    <span class="k">def</span> <span class="nf">quit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exiting the menu.&quot;</span><span class="p">)</span>
+        <span class="n">exit</span><span class="p">()</span>  </div>
+</div>
+
+
 
 <div class="viewcode-block" id="writeDirectoryToNII">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.writeDirectoryToNII">[docs]</a>
@@ -106,7 +202,7 @@
 <span class="sd">        outputPath (str): Path to output directory where to save nifti</span>
 <span class="sd">        fileName (str): Name of output nii.gz file (will rename nii.gz output from dcm2nii)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">dcmTools</span><span class="o">.</span><span class="n">writeDirectoryToNII</span><span class="p">(</span><span class="n">dcmDir</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="n">FORCE_FILENAME</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">dcmTools</span><span class="o">.</span><span class="n">writeDirectoryToNII</span><span class="p">(</span><span class="n">dcmDir</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">fileName</span><span class="p">)</span></div>
 
 
 
@@ -173,7 +269,7 @@
         <span class="k">for</span> <span class="n">iFile</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
             <span class="n">thisFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">iFile</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">dicom</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">defer_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span> <span class="c1"># will error if not dicom</span>
+                <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">defer_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="n">FORCE_READ</span><span class="p">)</span> <span class="c1"># will error if not dicom</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">QUIET</span><span class="p">:</span>
                     <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;OK: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">thisFile</span><span class="p">))</span>
                 <span class="n">fullDirsWithDicoms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
@@ -188,16 +284,16 @@
 
 <div class="viewcode-block" id="anonymiseInPlace">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.anonymiseInPlace">[docs]</a>
-<span class="k">def</span> <span class="nf">anonymiseInPlace</span><span class="p">(</span><span class="n">dicomDirectory</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">anonymiseInPlace</span><span class="p">(</span><span class="n">dicomDirectory</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">anonName</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">returnFirstDicomFound</span><span class="p">(</span><span class="n">dicomDirectory</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="c1"># Nothing to anonymise... </span>
-        <span class="n">anonName</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;StudyInstanceUID&quot;</span><span class="p">,</span> <span class="s2">&quot;ANON&quot;</span><span class="p">)</span>
+        <span class="n">anonName</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="c1">#</span>
-    <span class="n">tmpDir</span> <span class="o">=</span> <span class="n">dicomDirectory</span><span class="o">+</span><span class="s2">&quot;.WORKING&quot;</span>
+    <span class="n">tmpDir</span> <span class="o">=</span> <span class="n">dicomDirectory</span><span class="o">+</span><span class="s2">&quot;.TEMP.WORKING&quot;</span>
     <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">dicomDirectory</span><span class="p">,</span> <span class="n">tmpDir</span><span class="p">)</span>
-    <span class="n">dcmTools</span><span class="o">.</span><span class="n">streamDicoms</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">,</span> <span class="n">dicomDirectory</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="n">anonName</span><span class="p">)</span>
+    <span class="n">dcmTools</span><span class="o">.</span><span class="n">streamDicoms</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">,</span> <span class="n">dicomDirectory</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="n">anonName</span><span class="p">,</span> <span class="n">anonID</span><span class="o">=</span><span class="n">anonID</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="n">QUIET</span><span class="p">)</span>
     <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">)</span></div>
 
 
@@ -220,7 +316,7 @@
                 <span class="k">continue</span>
             <span class="n">thisFile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">iFile</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">dataset</span> <span class="o">=</span> <span class="n">dicom</span><span class="o">.</span><span class="n">dcmread</span><span class="p">(</span><span class="n">thisFile</span><span class="p">,</span> <span class="n">stop_before_pixels</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">MatchingTag_dict</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">tf</span> <span class="o">=</span> <span class="p">[]</span>
                     <span class="k">for</span> <span class="n">iKey</span> <span class="ow">in</span> <span class="n">MatchingTag_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
@@ -253,7 +349,7 @@
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.spydcm.directoryToVTI">[docs]</a>
 <span class="k">def</span> <span class="nf">directoryToVTI</span><span class="p">(</span><span class="n">dcmDirectory</span><span class="p">,</span> <span class="n">outputFolder</span><span class="p">,</span> 
                    <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">VTI_NAMING_TAG_LIST</span><span class="p">,</span> 
-                   <span class="n">QUITE</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">FORCE</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                   <span class="n">QUITE</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">FORCE</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert directory of dicoms to VTI files (one vti per series)</span>
 <span class="sd">        Naming built from dicom tags: </span>
 
@@ -269,7 +365,7 @@
 <span class="sd">        list: List of output file names written</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ListDicomStudies</span> <span class="o">=</span> <span class="n">dcmTK</span><span class="o">.</span><span class="n">ListOfDicomStudies</span><span class="o">.</span><span class="n">setFromInput</span><span class="p">(</span><span class="n">dcmDirectory</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="n">QUITE</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="n">FORCE</span><span class="p">,</span> <span class="n">OVERVIEW</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> 
-    <span class="k">return</span> <span class="n">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="o">=</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">outputNamingTags</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="n">INCLUDE_MATRIX</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="o">=</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">outputNamingTags</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="n">TRUE_ORIENTATION</span><span class="p">)</span></div>
 
 
 
@@ -297,15 +393,15 @@
 
 
 
-<span class="k">def</span> <span class="nf">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">VTI_NAMING_TAG_LIST</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">VTS</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">SpydcmTK_config</span><span class="o">.</span><span class="n">VTI_NAMING_TAG_LIST</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">VTS</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="n">outputFiles</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">iDS</span> <span class="ow">in</span> <span class="n">ListDicomStudies</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">iSeries</span> <span class="ow">in</span> <span class="n">iDS</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">VTS</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DICOMS TO VTS IS NOT IMPLEMENTED YET&quot;</span><span class="p">)</span>
-                <span class="c1"># fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)</span>
+                <span class="c1"># print(f&quot;DICOMS TO VTS IS NOT IMPLEMENTED YET&quot;)</span>
+                <span class="n">fOut</span> <span class="o">=</span> <span class="n">iSeries</span><span class="o">.</span><span class="n">writeToVTS</span><span class="p">(</span><span class="n">outputPath</span><span class="o">=</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">outputNamingTags</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">fOut</span> <span class="o">=</span> <span class="n">iSeries</span><span class="o">.</span><span class="n">writeToVTI</span><span class="p">(</span><span class="n">outputPath</span><span class="o">=</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">outputNamingTags</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="n">INCLUDE_MATRIX</span><span class="p">)</span>
+                <span class="n">fOut</span> <span class="o">=</span> <span class="n">iSeries</span><span class="o">.</span><span class="n">writeToVTI</span><span class="p">(</span><span class="n">outputPath</span><span class="o">=</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="n">outputNamingTags</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="n">TRUE_ORIENTATION</span><span class="p">)</span>
             <span class="n">outputFiles</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fOut</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">QUIET</span><span class="p">:</span>
                 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Written </span><span class="si">{</span><span class="n">fOut</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
@@ -359,15 +455,15 @@
     <span class="k">for</span> <span class="n">iPath</span> <span class="ow">in</span> <span class="n">listOfFilePaths</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">iPath</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">iPath</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;nii&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">iPath</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;nii.gz&#39;</span><span class="p">)</span> <span class="p">:</span>
-                <span class="n">iPath</span> <span class="o">=</span> <span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">nii2vti</span><span class="p">(</span><span class="n">iPath</span><span class="p">)</span>
+                <span class="n">iPath</span> <span class="o">=</span> <span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">fIO</span><span class="o">.</span><span class="n">readNifti</span><span class="p">(</span><span class="n">iPath</span><span class="p">)</span>
                 <span class="n">CLEAN_UP_LIST</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iPath</span><span class="p">)</span>
             <span class="n">FILE_TO_VTK_LIST</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iPath</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">iPath</span><span class="p">):</span> <span class="c1"># If path to dicoms</span>
-                <span class="n">dcmToVTKPath</span> <span class="o">=</span> <span class="n">directoryToVTI</span><span class="p">(</span><span class="n">iPath</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">dcmToVTKPath</span> <span class="o">=</span> <span class="n">directoryToVTI</span><span class="p">(</span><span class="n">iPath</span><span class="p">,</span> <span class="n">outputDir</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">ifile</span> <span class="ow">in</span> <span class="n">dcmToVTKPath</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">ifile</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.pvd&#39;</span><span class="p">):</span>
-                        <span class="n">FILE_TO_VTK_LIST</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">readPVDFileName</span><span class="p">(</span><span class="n">ifile</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+                        <span class="n">FILE_TO_VTK_LIST</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">fIO</span><span class="o">.</span><span class="n">readPVDFileName</span><span class="p">(</span><span class="n">ifile</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">FILE_TO_VTK_LIST</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ifile</span><span class="p">)</span>
                 <span class="n">CLEAN_UP_LIST</span> <span class="o">+=</span> <span class="n">dcmToVTKPath</span>
@@ -392,7 +488,7 @@
             <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Cleaning up:&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">CLEAN_UP_LIST</span><span class="p">))</span>
         <span class="k">for</span> <span class="n">ifile</span> <span class="ow">in</span> <span class="n">CLEAN_UP_LIST</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">iFile</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.pvd&#39;</span><span class="p">):</span>
-                <span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">deleteFilesByPVD</span><span class="p">(</span><span class="n">iFile</span><span class="p">)</span>
+                <span class="n">dcmTK</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">fIO</span><span class="o">.</span><span class="n">deleteFilesByPVD</span><span class="p">(</span><span class="n">iFile</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">ifile</span><span class="p">)</span>
 
@@ -457,7 +553,8 @@
                 <span class="n">args</span><span class="o">.</span><span class="n">inspectFull</span><span class="p">,</span> 
                 <span class="n">args</span><span class="o">.</span><span class="n">inspectQuick</span><span class="p">,</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
-                <span class="n">args</span><span class="o">.</span><span class="n">vti</span><span class="p">]</span>
+                <span class="n">args</span><span class="o">.</span><span class="n">vti</span><span class="p">,</span>
+                <span class="n">args</span><span class="o">.</span><span class="n">INTERACTIVE</span><span class="p">]</span>
     <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">allActionArgs</span><span class="p">)</span></div>
 
 
@@ -488,16 +585,27 @@
             <span class="n">dcmTools</span><span class="o">.</span><span class="n">streamDicoms</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inputPath</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">FORCE_READ</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">FORCE</span><span class="p">,</span> <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">,</span> <span class="n">SAFE_NAMING</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">SAFE</span><span class="p">)</span>
             <span class="k">return</span> <span class="mi">0</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">onlyOverview</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">inspect</span> <span class="ow">or</span> <span class="n">args</span><span class="o">.</span><span class="n">inspectFull</span>
+            <span class="n">onlyOverview</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">inspect</span> <span class="ow">or</span> <span class="n">args</span><span class="o">.</span><span class="n">inspectFull</span> <span class="ow">or</span> <span class="n">args</span><span class="o">.</span><span class="n">INTERACTIVE</span>
+            <span class="n">oneFilePerDir</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">inspectQuick</span> <span class="ow">or</span> <span class="n">args</span><span class="o">.</span><span class="n">INTERACTIVE</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">:</span>
                 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;READING...&quot;</span><span class="p">)</span>
             <span class="n">ListDicomStudies</span> <span class="o">=</span> <span class="n">dcmTK</span><span class="o">.</span><span class="n">ListOfDicomStudies</span><span class="o">.</span><span class="n">setFromInput</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inputPath</span><span class="p">,</span> 
-                                                                     <span class="n">ONE_FILE_PER_DIR</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">inspectQuick</span><span class="p">,</span>
+                                                                     <span class="n">ONE_FILE_PER_DIR</span><span class="o">=</span><span class="n">oneFilePerDir</span><span class="p">,</span>
                                                                      <span class="n">HIDE_PROGRESSBAR</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">,</span> 
                                                                      <span class="n">FORCE_READ</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">FORCE</span><span class="p">,</span> 
                                                                      <span class="n">OVERVIEW</span><span class="o">=</span><span class="n">onlyOverview</span><span class="p">)</span> 
             <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">SAFE</span><span class="p">:</span>
                 <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">setSafeNameMode</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">ListDicomStudies</span> <span class="o">=</span> <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">filterByTag</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">filter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="o">.</span><span class="n">filter</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">newListOfDicomStudies</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">iStudy</span> <span class="ow">in</span> <span class="n">ListDicomStudies</span><span class="p">:</span> 
+                        <span class="n">newListOfDicomStudies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iStudy</span><span class="o">.</span><span class="n">filterByTag</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">filter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="o">.</span><span class="n">filter</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+                    <span class="n">ListDicomStudies</span> <span class="o">=</span> <span class="n">dcmTK</span><span class="o">.</span><span class="n">ListOfDicomStudies</span><span class="p">(</span><span class="n">newListOfDicomStudies</span><span class="p">)</span>
+
         <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">ap</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Error reading </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">inputPath</span><span class="si">}</span><span class="s1">.</span><span class="se">\n</span><span class="s1">    </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
             <span class="c1"># Let IOERROR play out here is not correct input</span>
@@ -507,6 +615,11 @@
                 <span class="nb">print</span><span class="p">(</span><span class="n">iStudy</span><span class="o">.</span><span class="n">getTopDir</span><span class="p">())</span>
                 <span class="nb">print</span><span class="p">(</span><span class="n">iStudy</span><span class="o">.</span><span class="n">getStudySummary</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inspectFull</span><span class="p">))</span>
                 <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">INTERACTIVE</span><span class="p">:</span>
+            <span class="c1"># TODO - check if multiple studies</span>
+            <span class="n">INTER</span> <span class="o">=</span> <span class="n">INTERACTIVE</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">outputPath</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">)</span>
+            <span class="n">INTER</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;WARNING: outputFolder not given - setting to inputFolder&#39;</span><span class="p">)</span>
@@ -518,7 +631,9 @@
                         <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">:</span>
                             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Written </span><span class="si">{</span><span class="n">fOut</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">vti</span><span class="p">:</span>
-                <span class="n">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="o">=</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">,</span> <span class="n">INCLUDE_MATRIX</span><span class="o">=</span><span class="p">(</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">NO_MATRIX</span><span class="p">))</span>
+                <span class="n">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="o">=</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">,</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">TRUE_VTI_ORIENTATION</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">vts</span><span class="p">:</span>
+                <span class="n">_listDicomStudiesToVTI</span><span class="p">(</span><span class="n">ListDicomStudies</span><span class="o">=</span><span class="n">ListDicomStudies</span><span class="p">,</span> <span class="n">outputFolder</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">,</span> <span class="n">QUIET</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">,</span> <span class="n">VTS</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">html</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">iDS</span> <span class="ow">in</span> <span class="n">ListDicomStudies</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">iSeries</span> <span class="ow">in</span> <span class="n">iDS</span><span class="p">:</span>
@@ -526,12 +641,16 @@
                         <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">:</span>
                             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Written </span><span class="si">{</span><span class="n">fOut</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">anonName</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ANONYMISING...&quot;</span><span class="p">)</span>
+                    <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">anonymise</span><span class="p">(</span><span class="n">anonName</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">anonName</span><span class="p">,</span> 
+                                               <span class="n">anonPatientID</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">anonID</span><span class="p">,</span> 
+                                               <span class="n">removePrivateTags</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">REMOVE_PRIVATE_TAGS</span><span class="p">)</span>
+                    <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">resetUIDs</span><span class="p">()</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">QUIET</span><span class="p">:</span>
                     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WRITTING...&quot;</span><span class="p">)</span>
-                <span class="n">outDirList</span> <span class="o">=</span> <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">,</span> 
-                                                                            <span class="n">anonName</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">anonName</span><span class="p">,</span> 
-                                                                            <span class="n">anonID</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">anonID</span><span class="p">,</span>
-                                                                            <span class="n">REMOVE_PRIVATE_TAGS</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">REMOVE_PRIVATE_TAGS</span><span class="p">)</span>
+                <span class="n">outDirList</span> <span class="o">=</span> <span class="n">ListDicomStudies</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">)</span>
                 <span class="n">allDirsPresent</span> <span class="o">=</span> <span class="nb">all</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">outDirList</span><span class="p">])</span>
                 <span class="n">res</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">allDirsPresent</span> <span class="k">else</span> <span class="mi">1</span>
                 <span class="n">ap</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Transfer and sort from </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">inputPath</span><span class="si">}</span><span class="s1"> to </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">outputFolder</span><span class="si">}</span><span class="s1"> COMPLETE</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span></div>
@@ -559,6 +678,8 @@
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;anonymous ID [optional - only used if anonName is given, default=&quot;&quot;]&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-RemovePrivateTags&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;REMOVE_PRIVATE_TAGS&#39;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;set to remove private tags during anonymisation [optional - only used if anonName is given, default=&quot;False&quot;]&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
+    <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-filter&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;filter&#39;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will filter dicoms based on tag name and value. Tag name and value required. If input is multiple studies then act on each.&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-inspect&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;inspect&#39;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will output a summary of dicoms to the terminal&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-inspectFull&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;inspectFull&#39;</span><span class="p">,</span>
@@ -575,9 +696,13 @@
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will convert each series to nii.gz. Naming: </span><span class="si">{PName}</span><span class="s1">_{SE#}_</span><span class="si">{SEDesc}</span><span class="s1">.nii.gz&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-vti&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;vti&#39;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will convert each series to vti. Naming: </span><span class="si">{PName}</span><span class="s1">_{SE#}_</span><span class="si">{SEDesc}</span><span class="s1">.vti&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
-    <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-NO_MATRIX&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;NO_MATRIX&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;No matrix added to vti files&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
+    <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-TRUE_VTI_ORIENTATION&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;TRUE_VTI_ORIENTATION&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will resample vti data at true location (output different dimensiuons)&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
+    <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-vts&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;vts&#39;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will convert each series to vts. Naming: </span><span class="si">{PName}</span><span class="s1">_{SE#}_</span><span class="si">{SEDesc}</span><span class="s1">.vts&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-html&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;html&#39;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will convert each series to html file for web viewing. Naming: outputfolder argument&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
+    <span class="c1">#</span>
+    <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-I&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;INTERACTIVE&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Will read input and launch interactive mode&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
     <span class="c1">#</span>
     <span class="n">ap</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-config&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;configFile&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to configuration file to use.&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
     <span class="c1"># -- program behaviour guidence -- #</span>
@@ -614,6 +739,8 @@
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="c1">## -------------</span>
+    <span class="k">if</span> <span class="n">arguments</span><span class="o">.</span><span class="n">outputFolder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">arguments</span><span class="o">.</span><span class="n">outputFolder</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">arguments</span><span class="o">.</span><span class="n">outputFolder</span><span class="p">)</span>
 
     <span class="n">runActions</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="n">ap</span><span class="p">)</span></div>
 
