@@ -336,8 +336,8 @@ Basically checks if there would be any overlaps.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="spydcmtk.dcmTK.DicomSeries.doesSliceLocationsMatchingIOPNormal">
-<span class="sig-name descname"><span class="pre">doesSliceLocationsMatchingIOPNormal</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/dcmTK.html#DicomSeries.doesSliceLocationsMatchingIOPNormal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.dcmTK.DicomSeries.doesSliceLocationsMatchingIOPNormal" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py" id="spydcmtk.dcmTK.DicomSeries.doesSliceLocationNorm_Match_IOPNormal">
+<span class="sig-name descname"><span class="pre">doesSliceLocationNorm_Match_IOPNormal</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/dcmTK.html#DicomSeries.doesSliceLocationNorm_Match_IOPNormal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.dcmTK.DicomSeries.doesSliceLocationNorm_Match_IOPNormal" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -666,7 +666,7 @@ hierarchical folder structure rooted at ‘studyOutputDir’</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="spydcmtk.dcmTK.DicomSeries.writeToVTI">
 <span class="sig-name descname"><span class="pre">writeToVTI</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outputPath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputNamingTags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">('PatientName',</span> <span class="pre">'SeriesNumber',</span> <span class="pre">'SeriesDescription')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">TRUE_ORIENTATION</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/dcmTK.html#DicomSeries.writeToVTI"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.dcmTK.DicomSeries.writeToVTI" title="Link to this definition"></a></dt>
-<dd><p>Write DicomSeries as VTK ImageData (<a href="#id1"><span class="problematic" id="id2">*</span></a>.vti)</p>
+<dd><p>Write DicomSeries as VTK ImageData (<cite>*.vti</cite>)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -687,7 +687,7 @@ hierarchical folder structure rooted at ‘studyOutputDir’</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="spydcmtk.dcmTK.DicomSeries.writeToVTS">
 <span class="sig-name descname"><span class="pre">writeToVTS</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outputPath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputNamingTags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">('PatientName',</span> <span class="pre">'SeriesNumber',</span> <span class="pre">'SeriesDescription')</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/dcmTK.html#DicomSeries.writeToVTS"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.dcmTK.DicomSeries.writeToVTS" title="Link to this definition"></a></dt>
-<dd><p>Write DicomSeries as VTK StructuredImageData (<a href="#id3"><span class="problematic" id="id4">*</span></a>.vts)</p>
+<dd><p>Write DicomSeries as VTK StructuredImageData (<cite>*.vts</cite>)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1323,8 +1323,7 @@ implement default like this:</p>
 <dt class="sig sig-object py" id="spydcmtk.dcmTools.getRootDirWithSEdirs">
 <span class="sig-prename descclassname"><span class="pre">spydcmtk.dcmTools.</span></span><span class="sig-name descname"><span class="pre">getRootDirWithSEdirs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">startDir</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/dcmTools.html#getRootDirWithSEdirs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.dcmTools.getRootDirWithSEdirs" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Search from startDir until find rootDir with format of subdirs:</dt><dd><p><a href="#id9"><span class="problematic" id="id10">SE123_</span></a>
-… etc</p>
+<dt>Search from startDir until find rootDir with format of subdirs:</dt><dd><p><cite>SE123_</cite> etc</p>
 </dd>
 </dl>
 <p>param1: start directory of search
@@ -1706,7 +1705,7 @@ NOTE: this uses resampling from VTS data so output VTI will have different dimen
 <li><p><strong>arr</strong> (<em>np.array</em>) – Array of pixel data, shape: nR,nC,nSlice,nTime</p></li>
 <li><p><strong>patientMeta</strong> (<em>PatientMatrix</em>) – PatientMatrix object containing meta to be added as Field data</p></li>
 <li><p><strong>filePrefix</strong> (<em>str</em>) – File name prefix (if nTime&gt;1 then named ‘{fileprefix}_{timeID:05d}.vti)</p></li>
-<li><p><strong>outputPath</strong> (<em>str</em>) – Output path (if nTime &gt; 1 then ‘{fileprefix}.pvd written to outputPath and sub-directory holds <a href="#id5"><span class="problematic" id="id6">*</span></a>.vti files)</p></li>
+<li><p><strong>outputPath</strong> (<em>str</em>) – Output path (if nTime &gt; 1 then ‘{fileprefix}.pvd written to outputPath and sub-directory holds <cite>*.vti</cite> files)</p></li>
 <li><p><strong>ds</strong> (<em>pydicom dataset</em><em> [</em><em>optional</em><em>]</em>) – pydicom dataset to use to add dicom tags as field data</p></li>
 </ul>
 </dd>
@@ -1944,7 +1943,7 @@ If have dicoms in nice folder structure then this can be a fast way to find, e.g
 <dt class="sig sig-object py" id="spydcmtk.spydcm.writeDirectoryToNII">
 <span class="sig-prename descclassname"><span class="pre">spydcmtk.spydcm.</span></span><span class="sig-name descname"><span class="pre">writeDirectoryToNII</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dcmDir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputPath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fileName</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/spydcmtk/spydcm.html#writeDirectoryToNII"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#spydcmtk.spydcm.writeDirectoryToNII" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Write a directory of dicom files to a Nifti (<a href="#id7"><span class="problematic" id="id8">*</span></a>.nii.gz) file.</dt><dd><p>Uses dcm2nii so MUST have dcm2nii installed and within path.</p>
+<dt>Write a directory of dicom files to a Nifti (<cite>*.nii.gz</cite>) file.</dt><dd><p>Uses dcm2nii so MUST have dcm2nii installed and within path.</p>
 </dd>
 </dl>
 <dl class="field-list simple">

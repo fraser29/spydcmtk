@@ -539,7 +539,7 @@
 <div class="viewcode-block" id="DicomSeries.writeToVTI">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTK.DicomSeries.writeToVTI">[docs]</a>
     <span class="k">def</span> <span class="nf">writeToVTI</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;PatientName&#39;</span><span class="p">,</span> <span class="s1">&#39;SeriesNumber&#39;</span><span class="p">,</span> <span class="s1">&#39;SeriesDescription&#39;</span><span class="p">),</span> <span class="n">TRUE_ORIENTATION</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write DicomSeries as VTK ImageData (*.vti)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write DicomSeries as VTK ImageData (`*.vti`)</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            outputPath (str): Directory to save in or full filename to save</span>
@@ -561,7 +561,7 @@
 <div class="viewcode-block" id="DicomSeries.writeToVTS">
 <a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTK.DicomSeries.writeToVTS">[docs]</a>
     <span class="k">def</span> <span class="nf">writeToVTS</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputPath</span><span class="p">,</span> <span class="n">outputNamingTags</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;PatientName&#39;</span><span class="p">,</span> <span class="s1">&#39;SeriesNumber&#39;</span><span class="p">,</span> <span class="s1">&#39;SeriesDescription&#39;</span><span class="p">)):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write DicomSeries as VTK StructuredImageData (*.vts)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write DicomSeries as VTK StructuredImageData (`*.vts`)</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            outputPath (str): Directory to save in or full filename to save.</span>
@@ -628,9 +628,9 @@
         <span class="k">return</span> <span class="n">sliceVec</span></div>
 
 
-<div class="viewcode-block" id="DicomSeries.doesSliceLocationsMatchingIOPNormal">
-<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTK.DicomSeries.doesSliceLocationsMatchingIOPNormal">[docs]</a>
-    <span class="k">def</span> <span class="nf">doesSliceLocationsMatchingIOPNormal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="DicomSeries.doesSliceLocationNorm_Match_IOPNormal">
+<a class="viewcode-back" href="../../spydcmtk.html#spydcmtk.dcmTK.DicomSeries.doesSliceLocationNorm_Match_IOPNormal">[docs]</a>
+    <span class="k">def</span> <span class="nf">doesSliceLocationNorm_Match_IOPNormal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">iop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTag</span><span class="p">(</span><span class="s1">&#39;ImageOrientationPatient&#39;</span><span class="p">)</span>
         <span class="n">iopN</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">iop</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="n">iop</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">6</span><span class="p">])</span>
         <span class="n">sliceLocN</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getSliceNormalVector</span><span class="p">()</span>
