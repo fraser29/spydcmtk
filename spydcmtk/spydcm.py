@@ -171,7 +171,7 @@ def getAllDirsUnderRootWithDicoms(rootDir, QUIET=True, FORCE_READ=False):
     return fullDirsWithDicoms
 
 
-def anonymiseInPlace(dicomDirectory, anonName=None, QUIET=False):
+def anonymiseInPlace(dicomDirectory, anonName=None, anonID="", QUIET=False):
     if anonName is None:
         ds = returnFirstDicomFound(dicomDirectory)
         if ds is None:
@@ -180,7 +180,7 @@ def anonymiseInPlace(dicomDirectory, anonName=None, QUIET=False):
     #
     tmpDir = dicomDirectory+".TEMP.WORKING"
     os.rename(dicomDirectory, tmpDir)
-    dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName, HIDE_PROGRESSBAR=QUIET)
+    dcmTools.streamDicoms(tmpDir, dicomDirectory, anonName=anonName, anonID=anonID, HIDE_PROGRESSBAR=QUIET)
     shutil.rmtree(tmpDir)
 
 

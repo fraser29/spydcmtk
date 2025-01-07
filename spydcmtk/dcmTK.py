@@ -392,7 +392,7 @@ class DicomSeries(list):
         Returns:
             str: Name of file saved
         """
-        if outputPath.endswith('vti'):
+        if outputPath.endswith('vti') or outputPath.endswith('pvd'):
             outputPath, fileName = os.path.split(outputPath)
             fileName, _ = os.path.splitext(fileName)
         else:
@@ -459,6 +459,12 @@ class DicomSeries(list):
         tf = [i*j>=0.0 for i,j in zip(iopN, sliceLocN)]
         return all(tf)
 
+    def is3D(self):
+        return self.getNumberOfSlicesPerVolume() > 1
+
+    def is4D(self):
+        return self.getNumberOfTimeSteps() > 1
+
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
             Also return a PatientMatrix object containing meta
@@ -470,7 +476,7 @@ class DicomSeries(list):
                 dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
         I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
-        self.sortBySlice_InstanceNumber()
+        self.sortBySlice_InstanceNumber() # This takes care of order - slices grouped, then time for each slice 
         N = self.getNumberOfTimeSteps()
         A = np.zeros((I, J, K, N))
         if (K*N) != len(self):
@@ -524,16 +530,35 @@ class DicomSeries(list):
 
     def getManufacturer(self):
         return self.getTag(0x00080070, ifNotFound='Unknown')
+
     def IS_GE(self):
         return self.getManufacturer().lower().startswith('ge')
+
     def IS_SIEMENS(self):
         return self.getManufacturer().lower().startswith('siemens')
+
+    def IS_PHILIPS(self):
+        return self.getManufacturer().lower().startswith('philips')
+
+    def IS_BRUKER(self):
+        return self.getManufacturer().lower().startswith('bruker')
 
     def getPulseSequenceName(self):
         if self.IS_GE():
             return self.getTag(0x0019109c)
         else:
             return self.getTag(0x00180024)
+
+    def getVENC(self):
+        """Get VENC value in mm/s
+        """
+        if self.IS_GE():
+            return float(self.getTag(0x001910cc))
+        elif self.IS_SIEMENS():
+            vencStr = self.getTag(0x00511014)
+            return float(vencStr.split("_")[0].replace("v", "")) * 10.0
+        else: # TODO - add other vendors
+            return None
 
     def getInternalPulseSequenceName(self):
         return self.getTag(0x0019109e)
@@ -800,7 +825,7 @@ class DicomStudy(list):
         return DicomSeries(sorted_ds_list)
 
 
-    def writeFDQ(self, seriesNumber_list, outputFileName, VERBOSE=True):
+    def writeFDQ(self, seriesNumber_list, outputFileName, phase_factors=[1,1,1], VERBOSE=True):
         """
         Writes a 4D-flow output as VTS format.
 
@@ -826,6 +851,7 @@ class DicomStudy(list):
                                             intermediate_pvds["PY"],
                                             intermediate_pvds["PZ"]], 
                                             outputFileName, 
+                                            phase_factors=phase_factors,
                                             DEL_ORIGINAL=True)
         if VERBOSE: print(f"Written {fOut}")
         return fOut 

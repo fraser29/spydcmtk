@@ -181,6 +181,9 @@ def instanceNumberSortKey(val):
         return 99e99
 
 def sliceLoc_InstanceNumberSortKey(val):
+    """
+    Sort by slice location 1st (group all slices together), then instance number
+    """
     try:
         return (float(__getTags(val, ['SliceLocation'])['SliceLocation']), float(__getTags(val, ['InstanceNumber'])['InstanceNumber']))
     except (ValueError, IOError, AttributeError):
@@ -398,7 +401,7 @@ def writeOut_ds(ds, outputRootDir, anonName=None, anonID='', UIDupdateDict={}, S
     ds.save_as(destFile, enforce_file_format=True)
     return destFile
 
-def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None):
+def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, SAFE_NAMING=False, anonName=None, anonID=""):
     nFiles = countFilesInDir(inputDir)
     outputDirTEMP = outputDir+".WORKING"
     try:
@@ -418,7 +421,7 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
                 fOut = getSaveFileNameFor_ds(dataset, outputDirTEMP, ANON=anonName is not None)
             os.makedirs(os.path.split(fOut)[0], exist_ok=True)
             if anonName is not None:
-                dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonName, remove_private_tags=False)
+                dataset = anonymiseDicomDS(dataset, anonName=anonName, anonID=anonID, remove_private_tags=False)
             dataset.save_as(fOut, enforce_file_format=True)
         except dicom.filereader.InvalidDicomError:
             continue

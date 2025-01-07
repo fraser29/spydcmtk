@@ -242,9 +242,9 @@ class PatientMeta:
         iop = np.array(self.ImageOrientationPatient)
         vZ = self.SliceVector
         matrix = np.array([
-            [iop[3]*dr, iop[0]*dc, vZ[0]*dz, oo[0]], 
-            [iop[4]*dr, iop[1]*dc, vZ[1]*dz, oo[1]], 
-            [iop[5]*dr, iop[2]*dc, vZ[2]*dz, oo[2]], 
+            [iop[0]*dc, iop[3]*dr, vZ[0]*dz, oo[0]], 
+            [iop[1]*dc, iop[4]*dr, vZ[1]*dz, oo[1]], 
+            [iop[2]*dc, iop[5]*dr, vZ[2]*dz, oo[2]], 
             [0, 0, 0, 1]
         ])
         return matrix
@@ -358,12 +358,13 @@ def arrToVTI(arr: np.ndarray,
         except KeyError:
             thisTime = k1
         if TRUE_ORIENTATION:
+            A3 = np.swapaxes(A3, 0, 1)
             vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
             newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
             vtkfilters.delArraysExcept(newImg, [], pointData=False)
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
         else:
-            A3 = np.swapaxes(A3, 0, 1)
+            # A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
 
         if ds is not None:
@@ -388,12 +389,11 @@ def _buildVTIImage(patientMeta: PatientMeta=None) -> vtk.vtkImageData:
     vti_image = vtk.vtkImageData()
     vti_image.SetSpacing(patientMeta.Spacing[0], patientMeta.Spacing[1], patientMeta.Spacing[2])
     vti_image.SetOrigin(patientMeta.Origin[0], patientMeta.Origin[1], patientMeta.Origin[2])
-    vti_image.SetDimensions(patientMeta.Dimensions[1], patientMeta.Dimensions[0], patientMeta.Dimensions[2])
+    vti_image.SetDimensions(patientMeta.Dimensions[0], patientMeta.Dimensions[1], patientMeta.Dimensions[2])
     return vti_image
 
 
 def __arr3ToVTS(arr: np.ndarray, patientMeta: PatientMeta, ds: Optional[dicom.Dataset] = None, thisTime: Optional[float]=0.0) -> vtk.vtkStructuredGrid:
-    # A3 = np.swapaxes(arr, 0, 1)
     dummyPatientMeta = PatientMeta()
     dummyPatientMeta.setMeta('Dimensions', arr.shape)
     ii = _arrToImagedata(arr, patientMeta=dummyPatientMeta) # No info here, let the transform take care of it
@@ -412,6 +412,7 @@ def arrToVTS(arr: np.ndarray,
     vtkDict = {}
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]
+        A3 = np.swapaxes(A3, 0, 1)
         try:
             thisTime = patientMeta.Times[k1]
         except KeyError:
@@ -489,14 +490,13 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     return combinedImage
 
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, DEL_ORIGINAL=True):
     # TODO Generalise for 2DPC also
     rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
     magFiles = fIO.readPVDFileName(magPVD)
     phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
     times = sorted(magFiles.keys())
     outputFilesDict = {}
-    phase_factors = [1, 1, -1] # This is GE: TODO generalise for SIEMENS / PHILLIPS
     for k1, iTime in enumerate(times):
         iVTS = fIO.readVTKFile(magFiles[iTime])
         thisVelArray = []
@@ -504,7 +504,7 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, DEL_ORIGINAL=True):
             thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
             thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
             aName = vtkfilters.getScalarsArrayName(thisPhase)
-            thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2])
+            thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
         thisVelArray_ = np.array(thisVelArray).T
         vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
         fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
