@@ -431,7 +431,7 @@ def writeArrToVTI(arr: np.ndarray, patientMeta: PatientMeta, filePrefix: str, ou
         arr (np.array): Array of pixel data, shape: nR,nC,nSlice,nTime
         patientMeta (PatientMatrix): PatientMatrix object containing meta to be added as Field data
         filePrefix (str): File name prefix (if nTime>1 then named '{fileprefix}_{timeID:05d}.vti)
-        outputPath (str): Output path (if nTime > 1 then '{fileprefix}.pvd written to outputPath and sub-directory holds *.vti files)
+        outputPath (str): Output path (if nTime > 1 then '{fileprefix}.pvd written to outputPath and sub-directory holds `*.vti` files)
         ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
 
     Raises:

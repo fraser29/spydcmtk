@@ -382,7 +382,7 @@ class DicomSeries(list):
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False):
-        """Write DicomSeries as VTK ImageData (*.vti)
+        """Write DicomSeries as VTK ImageData (`*.vti`)
 
         Args:
             outputPath (str): Directory to save in or full filename to save
@@ -401,7 +401,7 @@ class DicomSeries(list):
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
-        """Write DicomSeries as VTK StructuredImageData (*.vts)
+        """Write DicomSeries as VTK StructuredImageData (`*.vts`)
 
         Args:
             outputPath (str): Directory to save in or full filename to save.

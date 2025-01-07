@@ -90,7 +90,7 @@ class INTERACTIVE():
 
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
-    """ Write a directory of dicom files to a Nifti (*.nii.gz) file. 
+    """ Write a directory of dicom files to a Nifti (`*.nii.gz`) file. 
         Uses dcm2nii so MUST have dcm2nii installed and within path.
 
     Args:
