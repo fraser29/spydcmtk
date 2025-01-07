@@ -10,8 +10,9 @@ This package extends pydicom with a class structure based upon the Patient-Study
 
 ## Version
 
-Current is VERSION 1.2.1 Release. 
+Current is VERSION 1.2.2 Release. 
 
+- 1.2.2: Fix DICOM to VTK conversion bug. Add 4DFlow MRI to VTK conversion capability. 
 - 1.2.1: Add filter by tag name and value. Add build image overview option. Update to use pydicom >=3.0.1
 - 1.2.0: Improved stability of VTK conversion. Bug fixes. Add basic interactive functionality. Add functionality to construct 4D-flow datasets. Add reliance on external library ngawari for basic IO operations, format conversion and vtk filter actions. 
 - 1.1.9: Permit user naming of series directory when writing at series level. Assistance for modifying tag values. 
