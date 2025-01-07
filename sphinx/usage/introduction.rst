@@ -46,6 +46,9 @@ Once installed, you can import the module and utilize its functionality:
     dcmSeries = dcmStudy.getSeriesBySeriesNumber(1)
     # Example writing new DICOM files with anonymization
     dcmStudy.writeToOrganisedFileStructure(tmpDir, anonName='Not A Name')
+    # Example writing a DICOM series to a VTK file
+    dcmSeries.writeToVTS(outputPath) # Will use Dicom tags for automated naming
+    dcmSeries.writeToVTI(outputPath.vti) # Will write to file "outputPath.vti"
 
 
 Contributing
@@ -58,7 +61,7 @@ GitHub Repository: https://github.com/fraser29/spydcmtk
 License
 -------
 
-`spydcmtk` is distributed under the XYZ license. Please refer to the LICENSE file in the project repository for more information.
+`spydcmtk` is distributed under the MIT license. Please refer to the LICENSE file in the project repository for more information.
 
 
 
