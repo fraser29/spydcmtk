@@ -592,6 +592,12 @@ def main():
     ## -------------
     if arguments.outputFolder is not None:
         arguments.outputFolder = os.path.abspath(arguments.outputFolder)
+        # Check if input is subdirectory of output
+        if os.path.commonpath([arguments.inputPath]) == os.path.commonpath([arguments.inputPath, arguments.outputFolder]):
+            print(f'## ERROR: Input directory ({arguments.inputPath}) cannot be a subdirectory of output directory ({arguments.outputFolder})')
+            print('This would cause recursive copying and potential data corruption.')
+            print('EXITING')
+            sys.exit(1)
 
     runActions(arguments, ap)
 
