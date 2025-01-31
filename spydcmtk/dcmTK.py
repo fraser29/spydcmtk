@@ -267,8 +267,25 @@ class DicomSeries(list):
                 if k2 in timesIDs_ToRemove:
                     dsToRm.append(self[c0])
                 c0 += 1
-        for iDS in dsToRm:
+        self._rm_via_DS_List(dsToRm)
+
+
+    def removeInstances(self, instanceIDs_to_remove):
+        dsToRm = []
+        for k1 in range(len(self)):
+            if self.getTag("InstanceNumber", k1, convertToType=int) in instanceIDs_to_remove:
+                dsToRm.append(self[k1])
+        self._rm_via_DS_List(dsToRm)
+
+
+    def _rm_via_DS_List(self, dsList):
+        for iDS in dsList:
             self.remove(iDS)
+
+
+    def deleteTag(self, tag, dsID):
+        tagObj = self.getTagObj(tag, dsID)
+        del tagObj
 
     # ----------------------------------------------------------------------------------------------------
     def resetUIDs(self, studyUID):
