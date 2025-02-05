@@ -151,6 +151,10 @@ def dbDateToDateTime(dbDate):
         return datetime.datetime.strptime(dbDate, '%Y%m%dT%H%M%S')
 
 
+def dateTime_to_dbString(dateTime):
+    return dateTime.strftime('%Y%m%d')
+
+
 def distPts(pt1, pt2):
     try:
         dist = np.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2 + (pt1[2] - pt2[2]) ** 2)
