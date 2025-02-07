@@ -194,6 +194,7 @@ class DicomSeries(list):
             dd.pop('7FE00010') # Remove actual PixelData
             dOut[ds.InstanceNumber] = dd
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
+        return jsonFileOut
 
     def _isSeriesFullyLoaded(self):
         return len(self) == dcmTools.countFilesInDir(self.getRootDir())
@@ -346,6 +347,7 @@ class DicomSeries(list):
         """ Recurse down directory tree - grab dicoms and move to new
             hierarchical folder structure rooted at 'studyOutputDir'
         """
+        self._loadToMemory()
         if SAFE_NAMING_CHECK:
             self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
@@ -492,6 +494,7 @@ class DicomSeries(list):
                 numpy array - shape [nRow, nCol, nSlice, nTime], 
                 dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
+        self._loadToMemory()
         I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
         self.sortBySlice_InstanceNumber() # This takes care of order - slices grouped, then time for each slice 
         N = self.getNumberOfTimeSteps()
