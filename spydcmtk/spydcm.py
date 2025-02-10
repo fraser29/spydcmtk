@@ -415,7 +415,7 @@ def checkArgs(args):
     return any(allActionArgs)
 
 ##  ========= RUN ACTIONS =========
-def runActions(args, ap):
+def _runActions(args, ap):
 
     ####
     if args.dcmdump:
@@ -440,7 +440,9 @@ def runActions(args, ap):
             return 0
         try:
             onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
-            oneFilePerDir = args.inspectQuick or args.INTERACTIVE
+            oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter
+            # If read one file per dir then will read all dicoms upon write out (or conversion). 
+            # Only issue is if dicoms not well organised - TODO - NOTE this somewhere... Maybe bettter ad an option for force read all by user. 
             if not args.QUIET:
                 print(f"READING...")
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, 
@@ -450,6 +452,15 @@ def runActions(args, ap):
                                                                      OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
+
+            if args.seNumber is not None:
+                if len(ListDicomStudies) > 1:
+                    ListDicomStudies = ListDicomStudies.filterByTag('SeriesNumber', args.seNumber)
+                else:
+                    newListOfDicomStudies = []
+                    for iStudy in ListDicomStudies: 
+                        newListOfDicomStudies.append(iStudy.filterByTag('SeriesNumber', args.seNumber))
+                    ListDicomStudies = dcmTK.ListOfDicomStudies(newListOfDicomStudies)
 
             if args.filter is not None:
                 if len(ListDicomStudies) > 1:
@@ -505,9 +516,12 @@ def runActions(args, ap):
                 if not args.QUIET:
                     print(f"WRITTING...")
                 outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder)
-                allDirsPresent = all([os.path.isdir(i) for i in outDirList])
-                res = 0 if allDirsPresent else 1
-                ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
+                if len(outDirList) > 0:
+                    allDirsPresent = all([os.path.isdir(i) for i in outDirList])
+                    res = 0 if allDirsPresent else 1
+                    ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
+                else:
+                    ap.exit(1, f'No dicoms written out for given conditions from {args.inputPath}\n')
         ##
 
 ### ====================================================================================================================
@@ -531,6 +545,8 @@ def main():
         help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
     ap.add_argument('-filter', dest='filter',
         help='Will filter dicoms based on tag name and value. Tag name and value required. If input is multiple studies then act on each.', nargs=2, default=None)
+    ap.add_argument('-seNumber', dest='seNumber',
+        help='Will filter dicoms based on series number. Same as -filter SeriesNumber #', type=str, default=None)
     ap.add_argument('-inspect', dest='inspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-inspectFull', dest='inspectFull',
@@ -599,7 +615,7 @@ def main():
             print('EXITING')
             sys.exit(1)
 
-    runActions(arguments, ap)
+    _runActions(arguments, ap)
 
 
 if __name__ == '__main__':

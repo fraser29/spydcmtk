@@ -1065,7 +1065,8 @@ class ListOfDicomStudies(list):
                 ioutputRootDir = outputRootDir
 
             ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir)
-            outDirs.append(ooD)
+            if ooD is not None:
+                outDirs.append(ooD)
         return outDirs
 
     def writeToZipArchive(self, outputRootDir, CLEAN_UP=True):
