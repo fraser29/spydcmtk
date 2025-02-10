@@ -363,8 +363,8 @@ class TestImagesToVTI(unittest.TestCase):
                 valA = ii.GetPointData().GetArray("PixelData").GetTuple(192648)[0]
                 IDB = ii.ComputePointId([173,51,2])
                 valB = ii.GetPointData().GetArray("PixelData").GetTuple(IDB)[0]
-                self.assertEqual(valA, 227, "Image to VTI data incorrect")
-                self.assertEqual(valB, 224, "Image to VTI data incorrect")
+                self.assertEqual(valA, 191, "Image to VTI data incorrect")
+                self.assertEqual(valB, 218, "Image to VTI data incorrect")
                 #
                 ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=None, CONVERT_TO_GREYSCALE=False)
                 emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
@@ -373,8 +373,8 @@ class TestImagesToVTI(unittest.TestCase):
                 valA = ii2.GetPointData().GetArray("PixelData").GetTuple(485453)[2]
                 IDB = ii2.ComputePointId([168,401,0])
                 valB = ii2.GetPointData().GetArray("PixelData").GetTuple(IDB)[2]
-                self.assertEqual(valA, 224, "Image to VTI data incorrect")
-                self.assertEqual(valB, 227, "Image to VTI data incorrect")
+                self.assertEqual(valA, 218, "Image to VTI data incorrect")
+                self.assertEqual(valB, 191, "Image to VTI data incorrect")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -389,27 +389,39 @@ class TestImagesToDCM(unittest.TestCase):
             if len(fileList) > 0:
                 pat_meta = dcmTK.dcmVTKTK.PatientMeta()
                 pat_meta.initFromDictionary({'Origin': [0.0,0.0,0.0],
-                                             'Spacing': [0.001, 0.001, 0.02]})
+                                             'Spacing': [0.001, 0.001, 0.02],
+                                             'ImageOrientationPatient': [0.0, 1.0, 0.0, 1.0, 0.0, 0.0]})
                 dcmTK.writeImageStackToDicom(fileList, patientMeta=pat_meta, dcmTemplateFile_or_ds=dcm00T,
                                                 outputDir=tmpDir)
                 imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
                 arr, _ = imageDS.getPixelDataAsNumpy()
-                self.assertEqual(arr[179,153,0,0], 5236, "Dicom orientation for image2DCM wrong")
+                self.assertEqual(arr[179,153,0,0], 5493, "Dicom orientation for image2DCM wrong")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
 
 class TestDCM2VTI2DCM(unittest.TestCase):
     def runTest(self):
-        dsList = getTestVolDS()
-        if len(dsList) > 0:
+        dcmSeries = getTestVolDS()
+        A, meta = dcmSeries.getPixelDataAsNumpy()
+        Ashape, A_id = A.shape[:3], A[179,153,44,0]
+        if len(dcmSeries) > 0:
             tmpDir = os.path.join(TEST_OUTPUT, 'tmpDCM2VTI2DCM')
             cleanMakeDirs(tmpDir)
             vtiOut = os.path.join(tmpDir, 'dcm.vti')
-            dsList.writeToVTI(vtiOut)
+            dcmSeries.writeToVTI(vtiOut)
             vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(vtiOut)
-            vtiObj_m = dcmTK.dcmVTKTK.vtkfilters.filterVtiMedian(vtiObj, filterKernalSize=15)
-            dcmTK.writeVTIToDicoms(vtiObj, dsList[0], tmpDir)
+            A2 = dcmTK.dcmVTKTK.vtkfilters.getArrayAsNumpy(vtiObj, "PixelData", RETURN_3D=True)
+            A2shape, A2_id = A2.shape, A2[179,153,44]
+            self.assertEqual(A_id, A2_id, "Pixel data incorrect")
+            self.assertEqual(Ashape, A2shape, "Array shape incorrect")
+            vtiObj_m = dcmTK.dcmVTKTK.vtkfilters.filterVtiMedian(vtiObj, filterKernalSize=3)
+            newDcmDir = dcmTK.writeVTIToDicoms(vtiObj, dcmSeries[0], tmpDir)
+            dcmSeries2 = dcmTK.DicomSeries.setFromDirectory(newDcmDir, HIDE_PROGRESSBAR=True)
+            A3, meta2 = dcmSeries2.getPixelDataAsNumpy()
+            A3shape, A3_id = A3.shape[:3], A3[179,153,44]
+            self.assertEqual(A3_id, A_id, "Pixel data incorrect")
+            self.assertEqual(A3shape, Ashape, "Array shape incorrect")
             if not DEBUG:
                 shutil.rmtree(tmpDir)
 
@@ -451,6 +463,6 @@ if __name__ == '__main__':
 
     # DEBUG = True
     # suite = unittest.TestSuite()
-    # suite.addTest(TestDicom2VTK('runTest'))
+    # suite.addTest(TestImagesToVTI('runTest'))
     # runner = unittest.TextTestRunner()
     # runner.run(suite)

@@ -1240,8 +1240,6 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     else:
         A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
     A = np.reshape(A, vti.GetDimensions(), 'F')
-    A = np.rot90(A)
-    A = np.flipud(A)
     if patientMeta is None:
         patientMeta = dcmVTKTK.PatientMeta()
     patientMeta.initFromVTI(vti)
@@ -1325,7 +1323,6 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
                             outputDir, tagUpdateDict=None):
 
     combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=True)
-    combinedImage = dcmVTKTK.vtkfilterFlipImageData(combinedImage, 1)
     writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,
@@ -1337,7 +1334,6 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
 def getResolution(dataVts):
     o,p1,p2,p3 = [0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0]
     i0,i1,j0,j1,k0,k1 = dataVts.GetExtent()
-    print(i0,i1,j0,j1,k0,k1)
     dataVts.GetPoint(i0,j0,k0, o)
     dataVts.GetPoint(i0+1,j0,k0, p1)
     dataVts.GetPoint(i0,j0+1,k0, p2)

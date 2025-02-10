@@ -438,6 +438,8 @@ def _runActions(args, ap):
         if args.STREAM:
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
+        ##
+        ## NOW READING DICOMS
         try:
             onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
             oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter
@@ -475,11 +477,26 @@ def _runActions(args, ap):
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
         ##
+        ## NOW ACTIONS
         if args.inspect or args.inspectFull or args.inspectQuick:
             for iStudy in ListDicomStudies:
                 print(iStudy.getTopDir())
                 print(iStudy.getStudySummary(args.inspectFull))
                 print('\n')
+
+        elif args.vti2dcm is not None:
+            if not os.path.isfile(args.vti2dcm):
+                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} not found')
+            if not args.vti2dcm.lower().endswith('.vti'):
+                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} is not a valid VTI file')
+            vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(args.vti2dcm)
+            series = ListDicomStudies[0][0]
+            series.sortBySlice_InstanceNumber()
+            dcmDirOut = dcmTK.writeVTIToDicoms(vtiObj, series[0], outputDir=args.outputFolder)
+            if not args.QUIET:
+                print(f'Written {dcmDirOut}')
+        # elif args.nii2dcm is not None:
+        #     dcmTK.dcmVTKTK.fIO.readNifti(args.nii2dcm)
         elif args.INTERACTIVE:
             # TODO - check if multiple studies
             INTER = INTERACTIVE(ListDicomStudies[0], outputPath=args.outputFolder)
@@ -568,6 +585,11 @@ def main():
         help='Will convert each series to vts. Naming: {PName}_{SE#}_{SEDesc}.vts', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
+    #
+    ap.add_argument('-vti2dcm', dest='vti2dcm',
+        help='Will convert VTI to dicom series. Pass reference dicoms as input.', type=str, default=None)
+    # ap.add_argument('-nii2dcm', dest='nii2dcm',
+    #     help='Will convert NII to dicom series. Pass reference dicoms as input.', type=str, default=None)
     #
     ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode', action='store_true')
     #

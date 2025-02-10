@@ -482,10 +482,13 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
         patientMeta = PatientMeta()
     combinedImage.SetOrigin(patientMeta.Origin)
     combinedImage.SetSpacing(patientMeta.Spacing)
-    a = vtkfilters.getScalarsAsNumpy(combinedImage)
+    a = vtkfilters.getScalarsAsNumpy(combinedImage, RETURN_3D=True)
     if CONVERT_TO_GREYSCALE:
-        a = np.mean(a, 1)
-    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True)
+        a = np.mean(a, -1)
+    # Manipulation required to bring jpgs to same orientation as vti
+    a = np.rot90(a, k=-1) 
+    a = np.flipud(a)
+    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True, IS_3D=True)
     vtkfilters.delArraysExcept(combinedImage, [arrayName])
     return combinedImage
 
@@ -630,13 +633,6 @@ class NoVtkError(Exception):
 # =========================================================================
 ## HELPFUL FILTERS
 # =========================================================================
-def vtkfilterFlipImageData(vtiObj, axis):
-    flipper = vtk.vtkImageFlip()
-    flipper.SetFilteredAxes(axis)
-    flipper.SetInputData(vtiObj)
-    flipper.Update()
-    return flipper.GetOutput()
-
 
 def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
     tagsDict = dcmTools.getDicomTagsDict()
