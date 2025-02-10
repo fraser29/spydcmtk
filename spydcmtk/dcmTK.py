@@ -47,6 +47,7 @@ class DicomSeries(list):
         self.HIDE_PROGRESSBAR = HIDE_PROGRESSBAR
         self.FORCE_READ = FORCE_READ
         self.SAFE_NAME_MODE = SAFE_NAME_MODE
+        self.NOT_FULLY_LOADED = False
         list.__init__(self, dsList)
 
     def __str__(self):
@@ -95,7 +96,9 @@ class DicomSeries(list):
             DicomSeries: An instance of DicomSeries class.
         """
         dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        obj = DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        obj.NOT_FULLY_LOADED = ONE_FILE_PER_DIR
+        return obj
 
     @classmethod
     def setFromFileList(cls, fileList, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
@@ -196,14 +199,14 @@ class DicomSeries(list):
         dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
         return jsonFileOut
 
-    def _isSeriesFullyLoaded(self):
-        return len(self) == dcmTools.countFilesInDir(self.getRootDir())
 
     def _loadToMemory(self):
-        if not self._isSeriesFullyLoaded():
+        if self.NOT_FULLY_LOADED:
             rootDir = self.getRootDir()
             self.clear()
             self.extend([dicom.dcmread(os.path.join(rootDir, i), force=self.FORCE_READ) for i in tqdm(os.listdir(rootDir), disable=self.HIDE_PROGRESSBAR)])
+            self.NOT_FULLY_LOADED = False
+
 
     def getSeriesOverview(self, tagList=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
         names, vals = self.getTagListAndNames(tagList)
@@ -714,16 +717,15 @@ class DicomStudy(list):
         dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
         if len(dStudyList) > 1:
             raise ValueError('More than one study found - use ListOfDicomStudies class')
-        # dicomDirs = getAllDirsUnderRootWithDicoms(dirName) # this was meant to work as a quick shortcut - but potential problems if used incorrectly
-        # dSeriesList = []
-        # for iDir in dicomDirs:
-        #     dSeriesList.append(DicomSeries.setFromDirectory(iDir, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR))
         return cls(dStudyList[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
         dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        return DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        obj = DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        for iSeries in obj:
+            iSeries.NOT_FULLY_LOADED = ONE_FILE_PER_DIR
+        return obj
 
 
     def __str__(self):
@@ -998,7 +1000,11 @@ class ListOfDicomStudies(list):
                                                          ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, 
                                                          OVERVIEW=OVERVIEW,
                                                          extn_filter=extn_filter)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        obj = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
+        for iStudy in obj:
+            for iSeries in iStudy:
+                iSeries.NOT_FULLY_LOADED = ONE_FILE_PER_DIR
+        return obj
 
     @classmethod
     def setFromDcmDict(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
