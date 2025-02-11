@@ -16,12 +16,12 @@ URL = 'https://github.com/fraser29/spydcmtk'
 EMAIL = 'callaghan.fm@gmail.com'
 AUTHOR = 'Fraser M. Callaghan'
 REQUIRES_PYTHON = '>=3.9.0'
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 KEYWORDS="medical, imaging, mri, ct, dicom"
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pydicom>=3.0.1', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk>=9.3.0', 'python-gdcm', 'highdicom', 'matplotlib', 'ngawari'
+    'pydicom>=3.0.1', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk>=9.3.0', 'python-gdcm', 'highdicom', 'matplotlib', 'ngawari>=0.1.2'
 ]
 
 

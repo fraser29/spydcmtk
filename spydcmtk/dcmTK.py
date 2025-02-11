@@ -1233,6 +1233,10 @@ def studySummary(pathToDicoms):
 def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
     if type(vtiFile) == str:
         vti = dcmVTKTK.fIO.readVTKFile(vtiFile)
+        if vtiFile.endswith(".nii") or vtiFile.endswith(".nii.gz"):
+            # TODO - need to also adjust patientMeta if this is nifti 
+            vti.SetOrigin([i*0.001 for i in vti.GetOrigin()])
+            vti.SetSpacing([i*0.001 for i in vti.GetSpacing()])
     else:
         vti = vtiFile
     if arrayName is None:
