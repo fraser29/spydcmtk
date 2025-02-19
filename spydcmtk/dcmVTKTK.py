@@ -13,14 +13,10 @@ from typing import Optional, Dict, List, Any
 import pydicom as dicom
 from pydicom.sr.codedict import codes
 from pydicom.uid import generate_uid
-try:
-    from highdicom.seg.content import SegmentDescription
-    from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
-    from highdicom.content import AlgorithmIdentificationSequence
-    from highdicom.seg.sop import Segmentation
-    HIGHDCM = True
-except ImportError:
-    HIGHDCM = False
+from highdicom.seg.content import SegmentDescription
+from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
+from highdicom.content import AlgorithmIdentificationSequence
+from highdicom.seg.sop import Segmentation
 
 try:
     import xml.etree.cElementTree as ET
@@ -493,9 +489,9 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     return combinedImage
 
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, scale_factor=0.001, DEL_ORIGINAL=True):
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, scale_factor=0.001, velArrayName="Vel", DEL_ORIGINAL=True):
     # TODO Generalise for 2DPC also
-    rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
+    rootDir, fName, _ = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
     magFiles = fIO.readPVDFileName(magPVD)
     phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
     times = sorted(magFiles.keys())
@@ -510,23 +506,28 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phas
             thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
         thisVelArray_ = np.array(thisVelArray).T
         thisVelArray_ *= scale_factor
-        vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
+        vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, velArrayName, SET_VECTOR=True)
         fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
         outputFilesDict[iTime] = fOutTemp
-    pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True) # FIXME rename
+    pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True)
     if DEL_ORIGINAL:
         fIO.deleteFilesByPVD(magPVD)
         for iPhaseFile in phasePVD_list:
             fIO.deleteFilesByPVD(iPhaseFile)
     return pvdFileOut
 
-# =========================================================================
-# =========================================================================
+# ===================================================================================================
+# ===================================================================================================
 ## DICOM-SEG
-# =========================================================================
+# ===================================================================================================
+def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    imageData = fIO.readVTKFile(vtiFile)
+    arr = vtkfilters.getArrayAsNumpy(imageData, labelMapArrayName)
+    arr = np.transpose(np.squeeze(arr), axes=[2,0,1])
+    return array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=dcmSegFileOut, algorithm_identification=algorithm_identification)
+
+
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
-    if not HIGHDCM:
-        raise ImportError("Missing highdicom \n Please run: pip install highdicom")
     fullLabelMap = arr.astype(np.ushort)
     sSeg = sorted(set(fullLabelMap.flatten('F')))
     sSeg.remove(0)
@@ -630,10 +631,10 @@ class NoVtkError(Exception):
 
 
 
-# =========================================================================
-# =========================================================================
+# ===================================================================================================
+# ===================================================================================================
 ## HELPFUL FILTERS
-# =========================================================================
+# ===================================================================================================
 
 def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
     tagsDict = dcmTools.getDicomTagsDict()

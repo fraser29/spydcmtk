@@ -671,7 +671,19 @@ class DicomSeries(list):
         return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
 
 
-    def buildOverviewImage(self, outputFileName=None, RETURN_FIG=False):
+    def overviewImage(self, outputFileName=None, RETURN_FIG=False):
+        """
+        Build an overview image of the series.
+
+        Args:
+            outputFileName (str, optional): The name of the file to save the overview image to. Defaults to None.
+            RETURN_FIG (bool, optional): Whether to return the figure. Defaults to False.
+
+        Returns:
+            if RETURN_FIG is True, returns the figure.
+            if outputFileName is not None, saves the figure to the file and returns the file name.
+            otherwise, displays the figure.
+        """
         A = self.getPixelDataAsNumpy()[0]
         i,j,k,n = A.shape
         if k > 1:
