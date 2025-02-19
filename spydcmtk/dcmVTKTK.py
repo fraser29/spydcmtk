@@ -371,7 +371,7 @@ def arrToVTI(arr: np.ndarray,
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
                                                                 "Time": thisTime})
         if outputPath is not None:
-            newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{k1:05d}.vti"))
+            newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vti"))
         vtkDict[thisTime] = newImg
     return vtkDict
 
@@ -419,7 +419,7 @@ def arrToVTS(arr: np.ndarray,
             thisTime = k1
         vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime)
         if outputPath is not None:
-            vts_data = fIO.writeVTKFile(vts_data, os.path.join(outputPath, f"data_{k1:05d}.vts"))
+            vts_data = fIO.writeVTKFile(vts_data, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vts"))
         vtkDict[thisTime] = vts_data
     return vtkDict
 
@@ -493,7 +493,7 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     return combinedImage
 
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, DEL_ORIGINAL=True):
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, scale_factor=0.001, DEL_ORIGINAL=True):
     # TODO Generalise for 2DPC also
     rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
     magFiles = fIO.readPVDFileName(magPVD)
@@ -509,6 +509,7 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phas
             aName = vtkfilters.getScalarsArrayName(thisPhase)
             thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
         thisVelArray_ = np.array(thisVelArray).T
+        thisVelArray_ *= scale_factor
         vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
         fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
         outputFilesDict[iTime] = fOutTemp
