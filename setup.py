@@ -21,7 +21,7 @@ KEYWORDS="medical, imaging, mri, ct, dicom"
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pydicom>=3.0.1', 'numpy>=1.26.2', 'tqdm>=4.66.1', 'vtk>=9.3.0', 'python-gdcm', 'highdicom==0.25.0', 'matplotlib', 'ngawari>=0.1.2'
+    'pydicom>=3.0.1', 'numpy>=2.2.3', 'tqdm>=4.66.1', 'vtk>=9.3.0', 'python-gdcm', 'highdicom==0.25.0', 'matplotlib', 'ngawari>=0.1.2'
 ]
 
 

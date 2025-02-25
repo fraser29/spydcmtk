@@ -560,6 +560,18 @@ def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileO
 
 
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    """Convert a numpy array to DICOM-SEG format.
+    
+    Args:
+        arr: Numpy array of segmentation labels
+        source_dicom_ds_list: List of source DICOM datasets
+        dcmSegFileOut: Output filename (optional)
+        algorithm_identification: Algorithm identification sequence (optional)
+        
+    Returns:
+        DICOM-SEG dataset or filename if dcmSegFileOut is provided
+    """
+
     fullLabelMap = arr.astype(np.ushort)
     sSeg = sorted(set(fullLabelMap.flatten('F')))
     sSeg.remove(0)
@@ -589,21 +601,29 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
             tracking_id='spydcmtk %s'%(segName)
         )
         segDesc_list.append(description_segment)
-    # Create the Segmentation instance
-    seg_dataset = Segmentation(
-        source_images=source_dicom_ds_list,
-        pixel_array=fullLabelMap,
-        segmentation_type=SegmentationTypeValues.BINARY,
-        segment_descriptions=segDesc_list,
-        series_instance_uid=generate_uid(), #source_dicom_ds_list[0].SeriesInstanceUID,
-        series_number=2,
-        sop_instance_uid=generate_uid(), #source_dicom_ds_list[0].SOPInstanceUID,
-        instance_number=1,
-        manufacturer='Manufacturer',
-        manufacturer_model_name='Model',
-        software_versions='v1',
-        device_serial_number='Device XYZ',
-    )
+    
+    try:
+        # Create the Segmentation instance
+        seg_dataset = Segmentation(
+            source_images=source_dicom_ds_list,
+            pixel_array=fullLabelMap,
+            segmentation_type=SegmentationTypeValues.BINARY,
+            segment_descriptions=segDesc_list,
+            series_instance_uid=generate_uid(),
+            series_number=2,
+            sop_instance_uid=generate_uid(),
+            instance_number=1,
+            manufacturer='Manufacturer',
+            manufacturer_model_name='Model',
+            software_versions='v1',
+            device_serial_number='Device XYZ',
+        )
+    except Exception as e:
+        print(f"Error creating segmentation: {str(e)}")
+        print(f"Number of source images: {len(source_dicom_ds_list)}")
+        print(f"Label map shape: {fullLabelMap.shape}")
+        raise
+
     if dcmSegFileOut is not None:
         seg_dataset.save_as(dcmSegFileOut) 
         return dcmSegFileOut
