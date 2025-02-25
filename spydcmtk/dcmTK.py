@@ -9,6 +9,7 @@ from pydicom.uid import generate_uid
 from datetime import datetime
 from tqdm import tqdm
 import json
+from multiprocessing import Pool
 import numpy as np
 import shutil
 import matplotlib.pyplot as plt
@@ -859,7 +860,7 @@ class DicomStudy(list):
         return DicomSeries(sorted_ds_list)
 
 
-    def writeFDQ(self, seriesNumber_list, outputFileName, phase_factors=[1,1,1], VERBOSE=True):
+    def writeFDQ(self, seriesNumber_list, outputFileName, phase_factors=None, phase_offsets=None, working_dir=None, VERBOSE=True):
         """
         Writes a 4D-flow output as VTS format.
 
@@ -870,25 +871,60 @@ class DicomStudy(list):
         Returns:
             str: the pvd file written
         """
-        rootDir, fName = os.path.split(outputFileName)
+        # Check phase factors and offsets:
+        if phase_factors is not None:
+            if len(phase_factors) != 3:
+                raise ValueError(f"phase_factors should be length 3")
+        else:
+            if self[0].IS_GE():
+                phase_factors = [1.0, 1.0, -1.0]
+                phase_offsets = [0.0, 0.0, 0.0]
+            elif self[0].IS_SIEMENS():
+                venc =  self[0].getVENC()
+                c = -1.0 * venc
+                m = (venc * 2.0) / 4096.0 # TODO: Check this
+                phase_factors = [m, m, m]
+                phase_offsets = [c, c, c]
+            elif self[0].IS_PHILIPS(): # TODO: Check this
+                phase_factors = [1.0, 1.0, 1.0]
+                phase_offsets = [0.0, 0.0, 0.0]
+            else:
+                raise ValueError(f"Unknown scanner type")
+        if phase_offsets is not None:
+            if len(phase_offsets) != 3:
+                raise ValueError(f"phase_offsets should be length 3")
+        else:
+            phase_offsets = [0.0, 0.0, 0.0]
+        
+        if working_dir is None:
+            working_dir = os.path.dirname(outputFileName)
         intermediate_pvds = {}
-        if VERBOSE: print("Writing out internediate series:")
-        for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"]):
-            if VERBOSE: print(f"    {label}")
-            dcmSeries = self.getSeriesBySeriesNumber(iSeriesNum)
-            dcmSeries._loadToMemory()
-            iOut = dcmSeries.writeToVTS(os.path.join(rootDir, f"{label}.pvd"))
-            intermediate_pvds[label] = iOut
+        
+        # Create process pool and process all directories in parallel
+        origHIDE = self.HIDE_PROGRESSBAR
+        self.HIDE_PROGRESSBAR = True
+        with Pool() as pool:
+            args = [(self.getSeriesBySeriesNumber(iSeriesNum), label, working_dir)
+                    for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"])]
+            
+            results = pool.map(_process_series_for_fdq, args)
+        
+        # Collect results into intermediate_pvds dictionary
+        intermediate_pvds = dict(results)
+        
         if VERBOSE: print(f"Combining to final 4D-flow PVD")
         fOut = dcmVTKTK.mergePhaseSeries4D(intermediate_pvds["MAG"], 
-                                            [intermediate_pvds["PX"],
-                                            intermediate_pvds["PY"],
-                                            intermediate_pvds["PZ"]], 
-                                            outputFileName, 
-                                            phase_factors=phase_factors,
-                                            DEL_ORIGINAL=True)
+                                        [intermediate_pvds["PX"],
+                                        intermediate_pvds["PY"],
+                                        intermediate_pvds["PZ"]], 
+                                        outputFileName, 
+                                        phase_factors=phase_factors,
+                                        phase_offsets=phase_offsets,
+                                        scale_factor=0.001,
+                                        DEL_ORIGINAL=True)
+        self.HIDE_PROGRESSBAR = origHIDE
         if VERBOSE: print(f"Written {fOut}")
-        return fOut 
+        return fOut
 
 
     def getStudySummaryDict(self, FORCE_STRING_KEYS=False):
@@ -1361,4 +1397,10 @@ def getResolution(dataVts):
 
 def distBetweenTwoPts(a, b):
     return np.sqrt(np.sum((np.asarray(a) - np.asarray(b)) ** 2))
+
+def _process_series_for_fdq(args):
+    series, label, outDir = args
+    series._loadToMemory()
+    iOut = series.writeToVTS(os.path.join(outDir, f"{label}.pvd"))
+    return (label, iOut)
 

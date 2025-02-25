@@ -64,7 +64,7 @@ class INTERACTIVE():
 
     def buildFDQ(self):
         self.dataSummary()
-        seNum_ = self.getUserInput("series numbers for FDQ")
+        seNum_ = self.getUserInput("series numbers for FDQ (MAX, PX, PY, PZ):")
         try: 
             seNum_4 = seNum_.strip().split(' ')
             seNum_4 = [int(i) for i in seNum_4]

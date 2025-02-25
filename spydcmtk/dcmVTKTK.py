@@ -30,6 +30,7 @@ import spydcmtk.dcmTools as dcmTools
 from ngawari import fIO
 from ngawari import ftk
 from ngawari import vtkfilters
+from multiprocessing import Pool
 
 
 mm_to_m = 0.001
@@ -489,27 +490,58 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     return combinedImage
 
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, scale_factor=0.001, velArrayName="Vel", DEL_ORIGINAL=True):
-    # TODO Generalise for 2DPC also
-    rootDir, fName, _ = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
+def _process_phase_time_point(args):
+    """Helper function for parallel processing of 4D flow time points
+    """
+    iTime, magFile, phaseFiles_dicts, phase_factors, phase_offsets, scale_factor, velArrayName, rootDir, fName = args
+    iVTS = fIO.readVTKFile(magFile)
+    thisVelArray = []
+    for k2, iPhase in enumerate(phaseFiles_dicts):
+        thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
+        thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
+        aName = vtkfilters.getScalarsArrayName(thisPhase)
+        thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
+    thisVelArray_ = np.array(thisVelArray).T
+    thisVelArray_ *= scale_factor
+    vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, velArrayName, SET_VECTOR=True)
+    fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{generate_uid()}.WORKING.vts"))
+    return (iTime, fOutTemp)
+
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, phase_offsets, 
+                        scale_factor=0.001, velArrayName="Vels", DEL_ORIGINAL=True):
+    """Take Mag PVD (vts format) and phase PVDs (vts format) and merge into 4D flow dataset
+
+    Args:
+        magPVD (str): Path to magnitude PVD file
+        phasePVD_list (list): List of paths to phase PVD files
+        outputFileName (str): Name of output file
+        phase_factors (list): List of factors to multiply phases by. 
+        phase_offsets (list): List of offsets to add to phases.
+        scale_factor (float): Scale factor to multiply final velocities by. Default is 0.001 (match vel to spatial units)
+        velArrayName (str): Name of velocity array to use in output file. Default is "Vels"
+        DEL_ORIGINAL (bool, optional): Delete original/intermediate files. Defaults to True.
+
+    Returns:
+        str: Name of output file
+    """
+    rootDir, fName = os.path.split(outputFileName)
+    fName = os.path.splitext(fName)[0]
     magFiles = fIO.readPVDFileName(magPVD)
     phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
     times = sorted(magFiles.keys())
     outputFilesDict = {}
-    for k1, iTime in enumerate(times):
-        iVTS = fIO.readVTKFile(magFiles[iTime])
-        thisVelArray = []
-        for k2, iPhase in enumerate(phaseFiles_dicts): 
-            thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
-            thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
-            aName = vtkfilters.getScalarsArrayName(thisPhase)
-            thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
-        thisVelArray_ = np.array(thisVelArray).T
-        thisVelArray_ *= scale_factor
-        vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, velArrayName, SET_VECTOR=True)
-        fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
-        outputFilesDict[iTime] = fOutTemp
+    # Create process pool and process all time points in parallel
+    with Pool() as pool:
+        args = [(iTime, magFiles[iTime], phaseFiles_dicts, phase_factors, phase_offsets, 
+                scale_factor, velArrayName, rootDir, fName) 
+                for iTime in times]
+        
+        results = pool.map(_process_phase_time_point, args)
+    # Collect results into outputFilesDict
+    outputFilesDict = dict(results)
+    # Generate final output file here - then clean up intermediate files
     pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True)
+
     if DEL_ORIGINAL:
         fIO.deleteFilesByPVD(magPVD)
         for iPhaseFile in phasePVD_list:
