@@ -876,16 +876,16 @@ class DicomStudy(list):
             if len(phase_factors) != 3:
                 raise ValueError(f"phase_factors should be length 3")
         else:
-            if self[0].IS_GE():
+            if self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_GE():
                 phase_factors = [1.0, 1.0, -1.0]
                 phase_offsets = [0.0, 0.0, 0.0]
-            elif self[0].IS_SIEMENS():
-                venc =  self[0].getVENC()
+            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_SIEMENS():
+                venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()
                 c = -1.0 * venc
                 m = (venc * 2.0) / 4096.0 # TODO: Check this
                 phase_factors = [m, m, m]
                 phase_offsets = [c, c, c]
-            elif self[0].IS_PHILIPS(): # TODO: Check this
+            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_PHILIPS(): # TODO: Check this
                 phase_factors = [1.0, 1.0, 1.0]
                 phase_offsets = [0.0, 0.0, 0.0]
             else:
