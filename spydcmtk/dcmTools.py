@@ -245,6 +245,18 @@ def walkdir(folder):
             yield os.path.abspath(os.path.join(dirpath, filename))
 
 
+def getDicomDictFromCompressed(compressedFile, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
+                        matchingTagValuePair=None):
+    compressedFileL = compressedFile.lower()
+    if compressedFileL.endswith('tar') or compressedFileL.endswith('tar.gz'):
+        return getDicomDictFromTar(compressedFile, QUIET=QUIET, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY,
+                                   OVERVIEW_ONLY=OVERVIEW_ONLY, matchingTagValuePair=matchingTagValuePair)
+    elif compressedFileL.endswith('zip'):
+        return getDicomDictFromZip(compressedFile, QUIET=QUIET, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY,
+                                   OVERVIEW_ONLY=OVERVIEW_ONLY, matchingTagValuePair=matchingTagValuePair)
+    return None
+
+
 def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
                         matchingTagValuePair=None):
     # for sub dir in tar get first dicom - return list of ds
@@ -432,14 +444,26 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
     os.rename(outputDirTEMP, outputDir)
 
 def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
-    dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
-    studyUID = str(dataset.StudyInstanceUID)
-    seriesUID = str(dataset.SeriesInstanceUID)
-    if studyUID not in dsDict:
-        dsDict[studyUID] =  {}
-    if seriesUID not in dsDict[studyUID]:
-        dsDict[studyUID][seriesUID] = []
-    dsDict[studyUID][seriesUID].append(dataset)
+    dsDict_temp = getDicomDictFromCompressed(dcmFile, OVERVIEW_ONLY=OVERVIEW, FORCE_READ=FORCE_READ)
+    if dsDict_temp is not None: 
+        for iStudyUID in dsDict_temp.keys():
+            if iStudyUID in dsDict.keys():
+                for iSeriesUID in dsDict_temp[iStudyUID].keys():
+                    if iSeriesUID in dsDict[iStudyUID].keys():
+                        dsDict[iStudyUID][iSeriesUID] += dsDict_temp[iStudyUID][iSeriesUID]
+                    else:
+                        dsDict[iStudyUID][iSeriesUID] = dsDict_temp[iStudyUID][iSeriesUID]
+            else:
+                dsDict[iStudyUID] = dsDict_temp[iStudyUID]
+    else:
+        dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
+        studyUID = str(dataset.StudyInstanceUID)
+        seriesUID = str(dataset.SeriesInstanceUID)
+        if studyUID not in dsDict:
+            dsDict[studyUID] =  {}
+        if seriesUID not in dsDict[studyUID]:
+            dsDict[studyUID][seriesUID] = []
+        dsDict[studyUID][seriesUID].append(dataset)
 
 def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
     """Find all dicoms under "rootDir" and organise based upon UIDs
