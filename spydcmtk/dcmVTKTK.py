@@ -198,12 +198,14 @@ class PatientMeta:
             sliceVec = vtkfilters.getFieldData(vtiObj, 'SliceVector')
         except AttributeError:
             sliceVec = [0.0,0.0,1.0]
+        dims = [0,0,0]
+        vtiObj.GetDimensions(dims)
         self._meta = {'PixelSpacing': [dy*scaleFactor, dx*scaleFactor],
                             'ImagePositionPatient': [i*scaleFactor for i in oo],
                             'ImageOrientationPatient': iop,
                             'SpacingBetweenSlices': dz*scaleFactor,
                             'SliceVector': sliceVec,
-                            'Dimensions': vtiObj.GetDimensions(),
+                            'Dimensions': dims,
                             'SliceThickness': dz*scaleFactor,
                             'SliceLocation0': 0.0}
         self._updateMatrix()
@@ -507,8 +509,8 @@ def _process_phase_time_point(args):
     fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{generate_uid()}.WORKING.vts"))
     return (iTime, fOutTemp)
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, phase_offsets, 
-                        scale_factor=0.001, velArrayName="Vels", DEL_ORIGINAL=True):
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, phase_offsets,
+                        velArrayName, scale_factor=0.001, DEL_ORIGINAL=True):
     """Take Mag PVD (vts format) and phase PVDs (vts format) and merge into 4D flow dataset
 
     Args:

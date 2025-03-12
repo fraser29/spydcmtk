@@ -860,7 +860,8 @@ class DicomStudy(list):
         return DicomSeries(sorted_ds_list)
 
 
-    def writeFDQ(self, seriesNumber_list, outputFileName, phase_factors=None, phase_offsets=None, working_dir=None, VERBOSE=True):
+    def writeFDQ(self, seriesNumber_list, outputFileName, velArrayName,
+                phase_factors=None, phase_offsets=None, working_dir=None, VERBOSE=True):
         """
         Writes a 4D-flow output as VTS format.
 
@@ -921,6 +922,7 @@ class DicomStudy(list):
                                         phase_factors=phase_factors,
                                         phase_offsets=phase_offsets,
                                         scale_factor=0.001,
+                                        velArrayName=velArrayName,
                                         DEL_ORIGINAL=True)
         self.HIDE_PROGRESSBAR = origHIDE
         if VERBOSE: print(f"Written {fOut}")
@@ -1291,7 +1293,9 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
         A = dcmVTKTK.vtkfilters.getScalarsAsNumpy(vti)
     else:
         A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
-    A = np.reshape(A, vti.GetDimensions(), 'F')
+    dims = [0,0,0]
+    vti.GetDimensions(dims)
+    A = np.reshape(A, dims, 'F')
     if patientMeta is None:
         patientMeta = dcmVTKTK.PatientMeta()
     patientMeta.initFromVTI(vti)
