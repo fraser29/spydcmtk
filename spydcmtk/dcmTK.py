@@ -420,7 +420,7 @@ class DicomSeries(list):
             fileName, _ = os.path.splitext(fileName)
         else:
             fileName = self._generateFileName(outputNamingTags, '')
-        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION)
+        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
@@ -445,9 +445,9 @@ class DicomSeries(list):
         A, patientMeta = self.getPixelDataAsNumpy()
         return dcmVTKTK.arrToVTS(A, patientMeta, self[0], outputPath)
 
-    def buildVTIDict(self, TRUE_ORIENTATION=False):
+    def buildVTIDict(self, TRUE_ORIENTATION=False, outputPath=None):
         A, patientMeta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION)
+        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
 
     @property
     def sliceLocations(self):
@@ -502,7 +502,10 @@ class DicomSeries(list):
         I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
         self.sortBySlice_InstanceNumber() # This takes care of order - slices grouped, then time for each slice 
         N = self.getNumberOfTimeSteps()
-        A = np.zeros((I, J, K, N))
+        iA = self[0].pixel_array
+        thisDType = iA.dtype
+        thisShape = iA.shape
+        A = np.zeros((I, J, K, N), dtype=thisDType)
         if (K*N) != len(self):
             print(f"DEBUG: Getting numpy array shape: [{I}, {J}, {K}, {N}] (K*N={K*N} == {len(self)})")
             raise FileNotFoundError(f"Missing some DICOM files.")
