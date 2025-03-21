@@ -932,10 +932,10 @@ class DicomStudy(list):
         return fOut
 
 
-    def getStudySummaryDict(self, FORCE_STRING_KEYS=False):
-        pt,pv = self.getPatientOverview()
+    def getStudySummaryDict(self, extraTags=[]):
+        pt,pv = self.getPatientOverview(tagList=SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+extraTags)
         studySummaryDict = dict(zip(pt, pv))
-        st,sv = self.getStudyOverview()
+        st,sv = self.getStudyOverview(tagList=SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST+extraTags)
         stdyDict = dict(zip(st, sv))
         studySummaryDict.update(stdyDict)
         listSerDict = []

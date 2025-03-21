@@ -445,7 +445,11 @@ def writeVTIDict(vtiDict: Dict[float, vtk.vtkImageData], outputPath: str, filePr
         return fIO.writeVTK_PVD_Dict(vtiDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
-        return fIO.writeVTKFile(vtiDict[times[0]], fOut)
+        if type(vtiDict[times[0]]) == str:
+            os.rename(vtiDict[times[0]], fOut)
+        else:
+            fIO.writeVTKFile(vtiDict[times[0]], fOut)
+        return fOut 
 
 def scaleVTI(vti_data: vtk.vtkImageData, factor: float) -> None:
     vti_data.SetOrigin([i*factor for i in vti_data.GetOrigin()])
