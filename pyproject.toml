@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spydcmtk"
+version = "1.2.6"
+description = "Simple python dicom toolkit."
+readme = "README.md"
+requires-python = ">=3.9.0"
+license = {text = "MIT"}
+authors = [
+    {name = "Fraser M. Callaghan", email = "callaghan.fm@gmail.com"}
+]
+keywords = ["medical", "imaging", "mri", "ct", "dicom"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = [
+    "pydicom>=3.0.1",
+    "numpy>=2.2.3",
+    "tqdm>=4.66.1",
+    "vtk>=9.3.0",
+    "python-gdcm",
+    "highdicom==0.25.0",
+    "matplotlib",
+    "ngawari>=0.1.2",
+]
+urls = {Homepage = "https://github.com/fraser29/spydcmtk"}
+
+[project.scripts]
+spydcmtk = "spydcmtk.spydcm:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["spydcmtk"]
+
+[tool.hatch.build]
+include = [
+    "spydcmtk/**/*.py",
+    "spydcmtk/spydcmtk.conf",
+    "spydcmtk/ParaViewGlance.html",
+] 
