@@ -5,7 +5,6 @@
 
 import os
 import datetime
-import json
 import glob
 import numpy as np
 import tarfile
@@ -13,6 +12,7 @@ import shutil
 import zipfile
 import pydicom as dicom
 from tqdm import tqdm
+from ngawari import fIO
 
 from spydcmtk.spydcm_config import SpydcmTK_config
 
@@ -83,34 +83,21 @@ def getDicomTagsDict():
 
 
 def countFilesInDir(dirName):
-    files = []
+    N = 0
     if os.path.isdir(dirName):
-        for path, dirs, filenames in os.walk(dirName):  # @UnusedVariable
-            files.extend(filenames)
-    return len(files)
+        for _, _, filenames in os.walk(dirName):  # @UnusedVariable
+            N += len(filenames)
+    return N
 
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
-    def default(self, obj):
-        self.ensure_ascii = False
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
 
 
 def writeDictionaryToJSON(fileName, dictToWrite):
-    with open(fileName, 'w') as fp:
-        json.dump(dictToWrite, fp, indent=4, sort_keys=True, cls=NumpyEncoder, ensure_ascii=False)
-    return fileName
+    return fIO.writeDictionaryToJSON(fileName, dictToWrite)
+
 
 def parseJsonToDictionary(fileName):
-    with open(fileName, 'r') as fid:
-        myDict = json.load(fid)
-    return myDict
+    return fIO.parseJsonToDictionary(fileName)
+
 
 def fixPath(p):
     return p.encode('utf8', 'ignore').strip().decode()
