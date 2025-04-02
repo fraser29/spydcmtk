@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spydcmtk"
-version = "1.2.7"
+version = "1.2.8"
 description = "Simple python dicom toolkit."
 readme = "README.md"
 requires-python = ">=3.9.0"

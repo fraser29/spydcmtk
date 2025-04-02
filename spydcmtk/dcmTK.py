@@ -617,15 +617,18 @@ class DicomSeries(list):
             'ManufacturerModelName': self.getTag("ManufacturerModelName"),
             'SoftwareVersions': str(self.getTag(0x00181020)),}
         for extraTag in EXTRA_TAGS:
-            outDict[extraTag] = self.getTag(extraTag)
+            try:
+                outDict[extraTag] = self.getTag(extraTag)
+            except:
+                outDict[extraTag] = 'Unknown'
         outDict['nSlice'] = len(self)
         try:
             outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
-        except ValueError:
+        except (TypeError, ValueError):
             outDict['AcquiredResolution'] = f"{outDict['dRow']},{outDict['dCol']}"
         try:
             outDict['AcquiredTemporalResolution'] = self.getTemporalResolution_TR_VPS()
-        except ValueError:
+        except (TypeError, ValueError):
             outDict['AcquiredTemporalResolution'] = 0.0
         for i in outDict.keys():
             try:
