@@ -33,7 +33,7 @@ dependencies = [
     "python-gdcm",
     "highdicom==0.25.0",
     "matplotlib",
-    "ngawari>=0.1.2",
+    "ngawari>=0.1.6",
 ]
 urls = {Homepage = "https://github.com/fraser29/spydcmtk"}
 
