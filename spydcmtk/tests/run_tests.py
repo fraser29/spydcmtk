@@ -242,7 +242,9 @@ class TestImageToDicom(unittest.TestCase):
                          'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataA"), 
                          'SeriesDescription': ([0x0008,0x103e], 'LO', "SeriesWink"), 
                          'StudyID': ([0x0020,0x0010], 'SH', '1099')}
-        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,:3], None, patMeta, tmpDir)
+        # pixArray must by nCxnRxnSxnChannels
+        pixArray = np.expand_dims(pixArray, 3)
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,:3,:], None, patMeta, tmpDir)
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -260,7 +262,9 @@ class TestImageToDicom(unittest.TestCase):
                          'StudyDescription': ([0x0008,0x1030], 'LO', "TestDataB"), 
                          'SeriesDescription': ([0x0008,0x103e], 'LO', "SeriesLaugh"), 
                          'StudyID': ([0x0020,0x0010], 'SH', '1088')}
-        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,3:], None, patMeta, tmpDir, tagUpdateDict=tagUpdateDict)
+        # pixArray must by nCxnRxnSxnChannels
+        pixArray = np.expand_dims(pixArray, 3)
+        dcmTK.writeNumpyArrayToDicom(pixArray[:,:,3:,:], None, patMeta, tmpDir, tagUpdateDict=tagUpdateDict)
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -395,7 +399,7 @@ class TestImagesToDCM(unittest.TestCase):
                                                 outputDir=tmpDir)
                 imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
                 arr, _ = imageDS.getPixelDataAsNumpy()
-                self.assertEqual(arr[179,153,0,0], 5493, "Dicom orientation for image2DCM wrong")
+                self.assertEqual(arr[179,153,0,0], 171, "Dicom orientation for image2DCM wrong")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -463,6 +467,6 @@ if __name__ == '__main__':
 
     # DEBUG = True
     # suite = unittest.TestSuite()
-    # suite.addTest(TestImagesToVTI('runTest'))
+    # suite.addTest(TestImagesToDCM('runTest'))
     # runner = unittest.TextTestRunner()
     # runner.run(suite)

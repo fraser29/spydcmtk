@@ -1299,8 +1299,11 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
         A = dcmVTKTK.vtkfilters.getScalarsAsNumpy(vti)
     else:
         A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
+    if np.ndim(A) == 1:
+        A = np.expand_dims(A, 1)
     dims = [0,0,0]
     vti.GetDimensions(dims)
+    dims.append(A.shape[-1])
     A = np.reshape(A, dims, 'F')
     if patientMeta is None:
         patientMeta = dcmVTKTK.PatientMeta()
@@ -1317,10 +1320,22 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         dsRAW = dicom.dcmread(dcmTemplate_or_ds)
     else:
         dsRAW = dcmTemplate_or_ds
-    nRow, nCol, nSlice = pixelArray.shape
-    if pixelArray.dtype != np.int16:
-        pixelArray = pixelArray * (2**13 / np.max(pixelArray) )
-        pixelArray = pixelArray.astype(np.int16)
+    assert pixelArray.ndim == 4 and pixelArray.shape[3] in [1, 3, 4], "Input must be MxNxSx1, or MxNxSx3 or MxNxSx4 RGB(A) array"
+
+    IS_RGB = False
+    # Strip alpha if present
+    if pixelArray.shape[3] == 4:
+        pixelArray = pixelArray[:, :, :, :3]
+        IS_RGB = True
+    elif pixelArray.shape[3] == 3:
+        IS_RGB = True
+
+    # Ensure uint16
+    NBIT = 16
+    if pixelArray.dtype != np.uint16:
+        pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
+
+    nRow, nCol, nSlice, _ = pixelArray.shape
     mx, mn = np.max(pixelArray), 0
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
@@ -1333,6 +1348,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     SeriesUID = dicom.uid.generate_uid()
     try:
         SeriesNumber = tagUpdateDict.pop('SeriesNumber')
+        try: # Have passed as Tag,VR,Value
+            SeriesNumber = SeriesNumber[2]
+        except TypeError:
+            pass 
     except KeyError:
         try:
             SeriesNumber = dsRAW.SeriesNumber * 100
@@ -1353,9 +1372,9 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
         ds.SamplesPerPixel = 1
-        ds.BitsAllocated = 16
-        ds.BitsStored = 16
-        ds.HighBit = 15
+        ds.BitsAllocated = NBIT
+        ds.BitsStored = NBIT
+        ds.HighBit = NBIT - 1
         ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
         ds.SpacingBetweenSlices = sliceThick
         ds.SmallestImagePixelValue = int(mn)
@@ -1371,20 +1390,30 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.SliceLocation = sliceLoc
         ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
         for iKey in tagUpdateDict.keys():
-            if len(tagUpdateDict[iKey]) == 3:
+            if len(tagUpdateDict[iKey]) == 3: # Tag:0x00101010, VR, value
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
             else:
                 ds[iKey] = tagUpdateDict[iKey]
-        ds.PixelData = pixelArray[:,:,k].tobytes()
+        ##
+        if IS_RGB:
+            ds.SamplesPerPixel = 3
+            ds.PhotometricInterpretation = "RGB"
+            ds.BitsAllocated = NBIT
+            ds.BitsStored = NBIT
+            ds.HighBit = NBIT - 1
+            ds.PixelRepresentation = 0
+            ds.PlanarConfiguration = 0  # Interleaved RGB
+        ##
+        ds.PixelData = pixelArray[:,:,k, :].tobytes()
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
     dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
     return dcmSeries.writeToOrganisedFileStructure(outputDir)
 
 def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds, 
-                            outputDir, tagUpdateDict=None):
+                            outputDir, tagUpdateDict=None, CONVERT_TO_GREYSCALE=True):
 
-    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=True)
+    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=CONVERT_TO_GREYSCALE)
     writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,

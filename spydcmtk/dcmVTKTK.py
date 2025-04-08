@@ -488,10 +488,12 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     a = vtkfilters.getScalarsAsNumpy(combinedImage, RETURN_3D=True)
     if CONVERT_TO_GREYSCALE:
         a = np.mean(a, -1)
+    elif a.shape[3] == 4: # Remove alpha
+        a = a[:,:,:,:3] 
     # Manipulation required to bring jpgs to same orientation as vti
     a = np.rot90(a, k=-1) 
     a = np.flipud(a)
-    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True, IS_3D=True)
+    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, IS_3D=True)
     vtkfilters.delArraysExcept(combinedImage, [arrayName])
     return combinedImage
 
