@@ -5,7 +5,7 @@
 import copy
 import os
 import pydicom as dicom
-from pydicom.uid import generate_uid
+from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 from datetime import datetime
 from tqdm import tqdm
 import json
@@ -1360,10 +1360,20 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     dsList = []
     for k in range(nSlice):
         ds = copy.deepcopy(dsRAW)
+        file_meta = dicom.Dataset()
+        file_meta.MediaStorageSOPClassUID = dicom.uid.SecondaryCaptureImageStorage
+        file_meta.MediaStorageSOPInstanceUID = generate_uid()
+        file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+        ds.file_meta = file_meta
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
-        # ds.SpecificCharacterSet = 'ISO_IR 100'
-        # ds.SOPClassUID = 'SecondaryCaptureImageStorage'
+        #
+        ds.is_little_endian = True
+        ds.is_implicit_VR = False
+        ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
+        ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
+        ds.Modality = "OT"  # Other
+        #
         ds.Rows = nRow
         ds.Columns = nCol
         ds.ImagesInAcquisition = nSlice
