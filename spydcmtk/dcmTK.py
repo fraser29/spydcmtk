@@ -1330,10 +1330,12 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     elif pixelArray.shape[3] == 3:
         IS_RGB = True
 
-    # Ensure uint16
-    NBIT = 16
-    if pixelArray.dtype != np.uint16:
-        pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
+    # Ensure uint8 
+    NBIT = 8
+    if pixelArray.dtype != np.uint8:
+        pixelArray = (pixelArray * 255).astype(np.uint8) if pixelArray.max() <= 1 else pixelArray.astype(np.uint8)
+    # if pixelArray.dtype != np.uint16:
+    #     pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
 
     nRow, nCol, nSlice, _ = pixelArray.shape
     mx, mn = np.max(pixelArray), 0
@@ -1359,12 +1361,16 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
             SeriesNumber = 99
     dsList = []
     for k in range(nSlice):
-        ds = copy.deepcopy(dsRAW)
         file_meta = dicom.Dataset()
         file_meta.MediaStorageSOPClassUID = dicom.uid.SecondaryCaptureImageStorage
         file_meta.MediaStorageSOPInstanceUID = generate_uid()
         file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-        ds.file_meta = file_meta
+        ##
+        ds = dicom.FileDataset(filename_or_obj=None, dataset={}, file_meta=file_meta, preamble=b"\0" * 128)
+        ds.PatientName = dsRAW.PatientName
+        ds.PatientID = dsRAW.PatientID
+        ds.PatientBirthDate = dsRAW.PatientBirthDate
+        ds.PatientSex = dsRAW.PatientSex
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
         #
@@ -1373,6 +1379,11 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
         ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
         ds.Modality = "OT"  # Other
+        ds.StudyDate = dsRAW.StudyDate
+        ds.StudyTime = dsRAW.StudyTime
+        ds.InstitutionName = dsRAW.InstitutionName
+        ds.StudyDescription = dsRAW.StudyDescription
+        ds.StationName = dsRAW.StationName
         #
         ds.Rows = nRow
         ds.Columns = nCol
@@ -1381,10 +1392,19 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         # ds.RawDataRunNumber = k+1
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
-        ds.SamplesPerPixel = 1
-        ds.BitsAllocated = NBIT
-        ds.BitsStored = NBIT
-        ds.HighBit = NBIT - 1
+        if IS_RGB:
+            ds.SamplesPerPixel = 3
+            ds.PhotometricInterpretation = "RGB"
+            ds.BitsAllocated = NBIT
+            ds.BitsStored = NBIT
+            ds.HighBit = NBIT - 1
+            ds.PixelRepresentation = 0
+            ds.PlanarConfiguration = 0  # Interleaved RGB
+        else:
+            ds.SamplesPerPixel = 1
+            ds.BitsAllocated = NBIT
+            ds.BitsStored = NBIT
+            ds.HighBit = NBIT - 1
         ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
         ds.SpacingBetweenSlices = sliceThick
         ds.SmallestImagePixelValue = int(mn)
@@ -1404,15 +1424,6 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
             else:
                 ds[iKey] = tagUpdateDict[iKey]
-        ##
-        if IS_RGB:
-            ds.SamplesPerPixel = 3
-            ds.PhotometricInterpretation = "RGB"
-            ds.BitsAllocated = NBIT
-            ds.BitsStored = NBIT
-            ds.HighBit = NBIT - 1
-            ds.PixelRepresentation = 0
-            ds.PlanarConfiguration = 0  # Interleaved RGB
         ##
         ds.PixelData = pixelArray[:,:,k, :].tobytes()
         ds['PixelData'].VR = 'OW'
