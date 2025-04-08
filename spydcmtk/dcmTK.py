@@ -1379,6 +1379,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
         ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
         ds.Modality = "OT"  # Other
+        ds.StudyInstanceUID = dsRAW.StudyInstanceUID
         ds.StudyDate = dsRAW.StudyDate
         ds.StudyTime = dsRAW.StudyTime
         ds.InstitutionName = dsRAW.InstitutionName
@@ -1405,20 +1406,21 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
             ds.BitsAllocated = NBIT
             ds.BitsStored = NBIT
             ds.HighBit = NBIT - 1
-        ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
-        ds.SpacingBetweenSlices = sliceThick
-        ds.SmallestImagePixelValue = int(mn)
-        ds.LargestImagePixelValue = int(mx)
-        ds.WindowCenter = int(mx / 2)
-        ds.WindowWidth = int(mx / 2)
-        ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
-
-        sliceVec = np.array(patientMeta.SliceVector)
-        ImagePositionPatient = ipp + k*sliceVec*sliceThick
-        ds.ImagePositionPatient = list(ImagePositionPatient)
-        sliceLoc = slice0 + k*sliceThick
-        ds.SliceLocation = sliceLoc
-        ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
+            ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
+            ds.SpacingBetweenSlices = sliceThick
+            ds.SmallestImagePixelValue = int(mn)
+            ds.LargestImagePixelValue = int(mx)
+            ds.WindowCenter = int(mx / 2)
+            ds.WindowWidth = int(mx / 2)
+            ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
+            #
+            sliceVec = np.array(patientMeta.SliceVector)
+            ImagePositionPatient = ipp + k*sliceVec*sliceThick
+            ds.ImagePositionPatient = list(ImagePositionPatient)
+            sliceLoc = slice0 + k*sliceThick
+            ds.SliceLocation = sliceLoc
+            ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
+            #
         for iKey in tagUpdateDict.keys():
             if len(tagUpdateDict[iKey]) == 3: # Tag:0x00101010, VR, value
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
