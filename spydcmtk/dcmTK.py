@@ -1360,6 +1360,23 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         except AttributeError:
             SeriesNumber = 99
     dsList = []
+    dt = datetime.datetime.now()
+    tags_to_copy = { # Tags to get from template and defaults if not found
+        "PatientName": "Anonymous^Name",
+        "PatientID": "000000",
+        "Modality": "OT",
+        "PatientBirthDate": "",
+        "PatientSex": "",
+        "StudyDate": dt.strftime('%Y%m%d'),
+        "StudyTime": dt.strftime('%H%M%S'),
+        "InstitutionName": "",
+        "StudyDescription": "Study",
+        "SeriesDescription": "Image",
+        "StationName": "",
+        "StudyInstanceUID": dicom.uid.generate_uid(),
+        "StudyID": 0,
+        "AccessionNumber": 0,
+    }
     for k in range(nSlice):
         file_meta = dicom.Dataset()
         file_meta.MediaStorageSOPClassUID = dicom.uid.SecondaryCaptureImageStorage
@@ -1367,10 +1384,12 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
         ##
         ds = dicom.FileDataset(filename_or_obj=None, dataset={}, file_meta=file_meta, preamble=b"\0" * 128)
-        ds.PatientName = dsRAW.PatientName
-        ds.PatientID = dsRAW.PatientID
-        ds.PatientBirthDate = dsRAW.PatientBirthDate
-        ds.PatientSex = dsRAW.PatientSex
+        # Copy tags from template DICOM
+        for tag, default in tags_to_copy.items():
+            ds[tag] = dsRAW.get(tag, default)
+        #
+        # Set specific tags for this image conversion
+        # If RGB then no position / orientation information
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
         #
@@ -1378,19 +1397,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         ds.is_implicit_VR = False
         ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
         ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
-        ds.Modality = "OT"  # Other
-        ds.StudyInstanceUID = dsRAW.StudyInstanceUID
-        ds.StudyDate = dsRAW.StudyDate
-        ds.StudyTime = dsRAW.StudyTime
-        ds.InstitutionName = dsRAW.InstitutionName
-        ds.StudyDescription = dsRAW.StudyDescription
-        ds.StationName = dsRAW.StationName
-        #
         ds.Rows = nRow
         ds.Columns = nCol
         ds.ImagesInAcquisition = nSlice
         ds.InStackPositionNumber = k+1
-        # ds.RawDataRunNumber = k+1
         ds.SeriesNumber = SeriesNumber
         ds.InstanceNumber = k+1
         if IS_RGB:
@@ -1421,12 +1431,14 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
             ds.SliceLocation = sliceLoc
             ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
             #
+        # Set tags from method provided
         for iKey in tagUpdateDict.keys():
             if len(tagUpdateDict[iKey]) == 3: # Tag:0x00101010, VR, value
                 ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
             else:
                 ds[iKey] = tagUpdateDict[iKey]
         ##
+        # Set PixelData
         ds.PixelData = pixelArray[:,:,k, :].tobytes()
         ds['PixelData'].VR = 'OW'
         dsList.append(ds)
