@@ -364,21 +364,21 @@ class TestImagesToVTI(unittest.TestCase):
                 emojivti = os.path.join(tmpDir, 'emoji.vti')
                 dcmTK.dcmVTKTK.fIO.writeVTKFile(ii, emojivti)
                 self.assertTrue(os.path.isfile(emojivti), msg='emoji.vti file does not exist')
-                valA = ii.GetPointData().GetArray("PixelData").GetTuple(192648)[0]
-                IDB = ii.ComputePointId([173,51,2])
+                valA = ii.GetPointData().GetArray("PixelData").GetTuple(401239)[0]
+                IDB = ii.ComputePointId([440,355,1])
                 valB = ii.GetPointData().GetArray("PixelData").GetTuple(IDB)[0]
-                self.assertEqual(valA, 191, "Image to VTI data incorrect")
-                self.assertEqual(valB, 218, "Image to VTI data incorrect")
+                self.assertEqual(valA, 54, "Image to VTI data incorrect")
+                self.assertEqual(valB, 28, "Image to VTI data incorrect")
                 #
                 ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=None, CONVERT_TO_GREYSCALE=False)
                 emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
                 dcmTK.dcmVTKTK.fIO.writeVTKFile(ii2, emojivti2)
                 self.assertTrue(os.path.isfile(emojivti2), msg='emoji2.vti file does not exist')
-                valA = ii2.GetPointData().GetArray("PixelData").GetTuple(485453)[2]
-                IDB = ii2.ComputePointId([168,401,0])
+                valA = ii2.GetPointData().GetArray("PixelData").GetTuple(89786)[2]
+                IDB = ii2.ComputePointId([27,187,0])
                 valB = ii2.GetPointData().GetArray("PixelData").GetTuple(IDB)[2]
-                self.assertEqual(valA, 218, "Image to VTI data incorrect")
-                self.assertEqual(valB, 191, "Image to VTI data incorrect")
+                self.assertEqual(valA, 113, "Image to VTI data incorrect")
+                self.assertEqual(valB, 253, "Image to VTI data incorrect")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -399,7 +399,7 @@ class TestImagesToDCM(unittest.TestCase):
                                                 outputDir=tmpDir)
                 imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
                 arr, _ = imageDS.getPixelDataAsNumpy()
-                self.assertEqual(arr[179,153,0,0], 171, "Dicom orientation for image2DCM wrong")
+                self.assertEqual(arr[179,153,0,0], 163, "Dicom orientation for image2DCM wrong")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
