@@ -4,9 +4,9 @@
 
 To update the documentation with changes from the main branch and rebuild:
 
-1. Ensure you are on the `docs` branch:
+1. Ensure you are on the `doc` branch:
    ```bash
-   git checkout docs
+   git checkout doc
    ```
 
 2. Merge changes from the main branch:
@@ -27,7 +27,7 @@ To update the documentation with changes from the main branch and rebuild:
    ```bash
    git add .
    git commit -m "Update documentation from main branch"
-   git push origin docs
+   git push origin doc
    ```
 
 Note: Make sure you have all required Sphinx dependencies installed before rebuilding the documentation.
