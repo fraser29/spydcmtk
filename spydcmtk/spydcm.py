@@ -64,7 +64,7 @@ class INTERACTIVE():
 
     def buildFDQ(self):
         self.dataSummary()
-        seNum_ = self.getUserInput("series numbers for FDQ")
+        seNum_ = self.getUserInput("series numbers for FDQ (MAX, PX, PY, PZ):")
         try: 
             seNum_4 = seNum_.strip().split(' ')
             seNum_4 = [int(i) for i in seNum_4]
@@ -415,7 +415,7 @@ def checkArgs(args):
     return any(allActionArgs)
 
 ##  ========= RUN ACTIONS =========
-def runActions(args, ap):
+def _runActions(args, ap):
 
     ####
     if args.dcmdump:
@@ -438,9 +438,13 @@ def runActions(args, ap):
         if args.STREAM:
             dcmTools.streamDicoms(args.inputPath, args.outputFolder, FORCE_READ=args.FORCE, HIDE_PROGRESSBAR=args.QUIET, SAFE_NAMING=args.SAFE)
             return 0
+        ##
+        ## NOW READING DICOMS
         try:
             onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
-            oneFilePerDir = args.inspectQuick or args.INTERACTIVE
+            oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter
+            # If read one file per dir then will read all dicoms upon write out (or conversion). 
+            # Only issue is if dicoms not well organised - TODO - NOTE this somewhere... Maybe bettter ad an option for force read all by user. 
             if not args.QUIET:
                 print(f"READING...")
             ListDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(args.inputPath, 
@@ -450,6 +454,15 @@ def runActions(args, ap):
                                                                      OVERVIEW=onlyOverview) 
             if args.SAFE:
                 ListDicomStudies.setSafeNameMode()
+
+            if args.seNumber is not None:
+                if len(ListDicomStudies) > 1:
+                    ListDicomStudies = ListDicomStudies.filterByTag('SeriesNumber', args.seNumber)
+                else:
+                    newListOfDicomStudies = []
+                    for iStudy in ListDicomStudies: 
+                        newListOfDicomStudies.append(iStudy.filterByTag('SeriesNumber', args.seNumber))
+                    ListDicomStudies = dcmTK.ListOfDicomStudies(newListOfDicomStudies)
 
             if args.filter is not None:
                 if len(ListDicomStudies) > 1:
@@ -464,11 +477,26 @@ def runActions(args, ap):
             ap.exit(1, f'Error reading {args.inputPath}.\n    {e}')
             # Let IOERROR play out here is not correct input
         ##
+        ## NOW ACTIONS
         if args.inspect or args.inspectFull or args.inspectQuick:
             for iStudy in ListDicomStudies:
                 print(iStudy.getTopDir())
                 print(iStudy.getStudySummary(args.inspectFull))
                 print('\n')
+
+        elif args.vti2dcm is not None:
+            if not os.path.isfile(args.vti2dcm):
+                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} not found')
+            if not args.vti2dcm.lower().endswith('.vti'):
+                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} is not a valid VTI file')
+            vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(args.vti2dcm)
+            series = ListDicomStudies[0][0]
+            series.sortBySlice_InstanceNumber()
+            dcmDirOut = dcmTK.writeVTIToDicoms(vtiObj, series[0], outputDir=args.outputFolder)
+            if not args.QUIET:
+                print(f'Written {dcmDirOut}')
+        # elif args.nii2dcm is not None:
+        #     dcmTK.dcmVTKTK.fIO.readNifti(args.nii2dcm)
         elif args.INTERACTIVE:
             # TODO - check if multiple studies
             INTER = INTERACTIVE(ListDicomStudies[0], outputPath=args.outputFolder)
@@ -505,9 +533,12 @@ def runActions(args, ap):
                 if not args.QUIET:
                     print(f"WRITTING...")
                 outDirList = ListDicomStudies.writeToOrganisedFileStructure(args.outputFolder)
-                allDirsPresent = all([os.path.isdir(i) for i in outDirList])
-                res = 0 if allDirsPresent else 1
-                ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
+                if len(outDirList) > 0:
+                    allDirsPresent = all([os.path.isdir(i) for i in outDirList])
+                    res = 0 if allDirsPresent else 1
+                    ap.exit(res, f'Transfer and sort from {args.inputPath} to {args.outputFolder} COMPLETE\n')
+                else:
+                    ap.exit(1, f'No dicoms written out for given conditions from {args.inputPath}\n')
         ##
 
 ### ====================================================================================================================
@@ -531,6 +562,8 @@ def main():
         help='set to remove private tags during anonymisation [optional - only used if anonName is given, default="False"]', action='store_true')
     ap.add_argument('-filter', dest='filter',
         help='Will filter dicoms based on tag name and value. Tag name and value required. If input is multiple studies then act on each.', nargs=2, default=None)
+    ap.add_argument('-seNumber', dest='seNumber',
+        help='Will filter dicoms based on series number. Same as -filter SeriesNumber #', type=str, default=None)
     ap.add_argument('-inspect', dest='inspect',
         help='Will output a summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-inspectFull', dest='inspectFull',
@@ -552,6 +585,11 @@ def main():
         help='Will convert each series to vts. Naming: {PName}_{SE#}_{SEDesc}.vts', action='store_true')
     ap.add_argument('-html', dest='html',
         help='Will convert each series to html file for web viewing. Naming: outputfolder argument', action='store_true')
+    #
+    ap.add_argument('-vti2dcm', dest='vti2dcm',
+        help='Will convert VTI to dicom series. Pass reference dicoms as input.', type=str, default=None)
+    # ap.add_argument('-nii2dcm', dest='nii2dcm',
+    #     help='Will convert NII to dicom series. Pass reference dicoms as input.', type=str, default=None)
     #
     ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode', action='store_true')
     #
@@ -592,8 +630,14 @@ def main():
     ## -------------
     if arguments.outputFolder is not None:
         arguments.outputFolder = os.path.abspath(arguments.outputFolder)
+        # Check if input is subdirectory of output
+        if os.path.commonpath([arguments.inputPath]) == os.path.commonpath([arguments.inputPath, arguments.outputFolder]):
+            print(f'## ERROR: Input directory ({arguments.inputPath}) cannot be a subdirectory of output directory ({arguments.outputFolder})')
+            print('This would cause recursive copying and potential data corruption.')
+            print('EXITING')
+            sys.exit(1)
 
-    runActions(arguments, ap)
+    _runActions(arguments, ap)
 
 
 if __name__ == '__main__':

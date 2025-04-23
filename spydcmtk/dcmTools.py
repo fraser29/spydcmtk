@@ -5,7 +5,6 @@
 
 import os
 import datetime
-import json
 import glob
 import numpy as np
 import tarfile
@@ -13,6 +12,7 @@ import shutil
 import zipfile
 import pydicom as dicom
 from tqdm import tqdm
+from ngawari import fIO
 
 from spydcmtk.spydcm_config import SpydcmTK_config
 
@@ -83,34 +83,21 @@ def getDicomTagsDict():
 
 
 def countFilesInDir(dirName):
-    files = []
+    N = 0
     if os.path.isdir(dirName):
-        for path, dirs, filenames in os.walk(dirName):  # @UnusedVariable
-            files.extend(filenames)
-    return len(files)
+        for _, _, filenames in os.walk(dirName):  # @UnusedVariable
+            N += len(filenames)
+    return N
 
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
-    def default(self, obj):
-        self.ensure_ascii = False
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
 
 
 def writeDictionaryToJSON(fileName, dictToWrite):
-    with open(fileName, 'w') as fp:
-        json.dump(dictToWrite, fp, indent=4, sort_keys=True, cls=NumpyEncoder, ensure_ascii=False)
-    return fileName
+    return fIO.writeDictionaryToJSON(fileName, dictToWrite)
+
 
 def parseJsonToDictionary(fileName):
-    with open(fileName, 'r') as fid:
-        myDict = json.load(fid)
-    return myDict
+    return fIO.parseJsonToDictionary(fileName)
+
 
 def fixPath(p):
     return p.encode('utf8', 'ignore').strip().decode()
@@ -149,6 +136,10 @@ def dbDateToDateTime(dbDate):
         return datetime.datetime.strptime(dbDate, '%Y%m%d')
     except ValueError:
         return datetime.datetime.strptime(dbDate, '%Y%m%dT%H%M%S')
+
+
+def dateTime_to_dbString(dateTime):
+    return dateTime.strftime('%Y%m%d')
 
 
 def distPts(pt1, pt2):
@@ -239,6 +230,18 @@ def walkdir(folder):
     for dirpath, _, files in os.walk(folder):
         for filename in files:
             yield os.path.abspath(os.path.join(dirpath, filename))
+
+
+def getDicomDictFromCompressed(compressedFile, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
+                        matchingTagValuePair=None):
+    compressedFileL = compressedFile.lower()
+    if compressedFileL.endswith('tar') or compressedFileL.endswith('tar.gz'):
+        return getDicomDictFromTar(compressedFile, QUIET=QUIET, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY,
+                                   OVERVIEW_ONLY=OVERVIEW_ONLY, matchingTagValuePair=matchingTagValuePair)
+    elif compressedFileL.endswith('zip'):
+        return getDicomDictFromZip(compressedFile, QUIET=QUIET, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY,
+                                   OVERVIEW_ONLY=OVERVIEW_ONLY, matchingTagValuePair=matchingTagValuePair)
+    return None
 
 
 def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
@@ -428,14 +431,28 @@ def streamDicoms(inputDir, outputDir, FORCE_READ=False, HIDE_PROGRESSBAR=False, 
     os.rename(outputDirTEMP, outputDir)
 
 def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
-    dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
-    studyUID = str(dataset.StudyInstanceUID)
-    seriesUID = str(dataset.SeriesInstanceUID)
-    if studyUID not in dsDict:
-        dsDict[studyUID] =  {}
-    if seriesUID not in dsDict[studyUID]:
-        dsDict[studyUID][seriesUID] = []
-    dsDict[studyUID][seriesUID].append(dataset)
+    dsDict_temp = getDicomDictFromCompressed(dcmFile, OVERVIEW_ONLY=OVERVIEW, FORCE_READ=FORCE_READ)
+    if dsDict_temp is not None: 
+        for iStudyUID in dsDict_temp.keys():
+            if iStudyUID in dsDict.keys():
+                for iSeriesUID in dsDict_temp[iStudyUID].keys():
+                    if iSeriesUID in dsDict[iStudyUID].keys():
+                        dsDict[iStudyUID][iSeriesUID] += dsDict_temp[iStudyUID][iSeriesUID]
+                    else:
+                        dsDict[iStudyUID][iSeriesUID] = dsDict_temp[iStudyUID][iSeriesUID]
+            else:
+                dsDict[iStudyUID] = dsDict_temp[iStudyUID]
+    else:
+        dataset = dicom.dcmread(dcmFile, stop_before_pixels=OVERVIEW, force=FORCE_READ)
+        studyUID = str(dataset.StudyInstanceUID)
+        seriesUID = str(dataset.SeriesInstanceUID)
+        if studyUID not in dsDict:
+            dsDict[studyUID] =  {}
+        if seriesUID not in dsDict[studyUID]:
+            dsDict[studyUID][seriesUID] = []
+        dsDict[studyUID][seriesUID].append(dataset)
+    return dsDict
+
 
 def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
     """Find all dicoms under "rootDir" and organise based upon UIDs
@@ -452,6 +469,8 @@ def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fal
     Returns:
         dict: A larger dictionary structure of {studyUID: {seriesUID: [list of pydicom datasets]}}
     """
+    if os.path.isfile(rootDir):
+        return readDicomFile_intoDict(rootDir, {}, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
     dsDict = {}
     successReadDirs = set()
     nFiles = countFilesInDir(rootDir)
@@ -480,6 +499,7 @@ def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fal
                 print(f"Error reading {thisFile} - missing a needed dicom tag")
             continue
     return dsDict
+
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
     """Write directory of dicom files to nifti file.
@@ -514,6 +534,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
     if os.path.isfile(latest_json):
         os.rename(latest_json, newFileName.replace(extn, '.json'))
     return newFileName
+
 
 def buildFakeDS():
     meta = dicom.dataset.FileMetaDataset()

@@ -13,14 +13,10 @@ from typing import Optional, Dict, List, Any
 import pydicom as dicom
 from pydicom.sr.codedict import codes
 from pydicom.uid import generate_uid
-try:
-    from highdicom.seg.content import SegmentDescription
-    from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
-    from highdicom.content import AlgorithmIdentificationSequence
-    from highdicom.seg.sop import Segmentation
-    HIGHDCM = True
-except ImportError:
-    HIGHDCM = False
+from highdicom.seg.content import SegmentDescription
+from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
+from highdicom.content import AlgorithmIdentificationSequence
+from highdicom.seg.sop import Segmentation
 
 try:
     import xml.etree.cElementTree as ET
@@ -34,6 +30,7 @@ import spydcmtk.dcmTools as dcmTools
 from ngawari import fIO
 from ngawari import ftk
 from ngawari import vtkfilters
+from multiprocessing import Pool
 
 
 mm_to_m = 0.001
@@ -154,7 +151,7 @@ class PatientMeta:
     def __metaVTI2DCMConversion(self):
         if 'Spacing' in self._meta:
             self._meta['PixelSpacing'] = [self._meta['Spacing'][0], self._meta['Spacing'][1]]
-            if 'SliceThickness' not in self._meta:
+            if len(self._meta['Spacing']) > 2:
                 self._meta['SliceThickness'] = self._meta['Spacing'][2]
         if 'SpacingBetweenSlices' not in self._meta:
             self._meta['SpacingBetweenSlices'] = self._meta['SliceThickness']
@@ -201,12 +198,14 @@ class PatientMeta:
             sliceVec = vtkfilters.getFieldData(vtiObj, 'SliceVector')
         except AttributeError:
             sliceVec = [0.0,0.0,1.0]
+        dims = [0,0,0]
+        vtiObj.GetDimensions(dims)
         self._meta = {'PixelSpacing': [dy*scaleFactor, dx*scaleFactor],
                             'ImagePositionPatient': [i*scaleFactor for i in oo],
                             'ImageOrientationPatient': iop,
                             'SpacingBetweenSlices': dz*scaleFactor,
                             'SliceVector': sliceVec,
-                            'Dimensions': vtiObj.GetDimensions(),
+                            'Dimensions': dims,
                             'SliceThickness': dz*scaleFactor,
                             'SliceLocation0': 0.0}
         self._updateMatrix()
@@ -371,7 +370,7 @@ def arrToVTI(arr: np.ndarray,
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
                                                                 "Time": thisTime})
         if outputPath is not None:
-            newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{k1:05d}.vti"))
+            newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vti"))
         vtkDict[thisTime] = newImg
     return vtkDict
 
@@ -419,7 +418,7 @@ def arrToVTS(arr: np.ndarray,
             thisTime = k1
         vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime)
         if outputPath is not None:
-            vts_data = fIO.writeVTKFile(vts_data, os.path.join(outputPath, f"data_{k1:05d}.vts"))
+            vts_data = fIO.writeVTKFile(vts_data, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vts"))
         vtkDict[thisTime] = vts_data
     return vtkDict
 
@@ -446,7 +445,11 @@ def writeVTIDict(vtiDict: Dict[float, vtk.vtkImageData], outputPath: str, filePr
         return fIO.writeVTK_PVD_Dict(vtiDict, outputPath, filePrefix, 'vti', BUILD_SUBDIR=True)
     else:
         fOut = os.path.join(outputPath, f'{filePrefix}.vti')
-        return fIO.writeVTKFile(vtiDict[times[0]], fOut)
+        if type(vtiDict[times[0]]) == str:
+            os.rename(vtiDict[times[0]], fOut)
+        else:
+            fIO.writeVTKFile(vtiDict[times[0]], fOut)
+        return fOut 
 
 def scaleVTI(vti_data: vtk.vtkImageData, factor: float) -> None:
     vti_data.SetOrigin([i*factor for i in vti_data.GetOrigin()])
@@ -482,47 +485,108 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
         patientMeta = PatientMeta()
     combinedImage.SetOrigin(patientMeta.Origin)
     combinedImage.SetSpacing(patientMeta.Spacing)
-    a = vtkfilters.getScalarsAsNumpy(combinedImage)
+    a = vtkfilters.getScalarsAsNumpy(combinedImage, RETURN_3D=True)
     if CONVERT_TO_GREYSCALE:
-        a = np.mean(a, 1)
-    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, SET_SCALAR=True)
+        a = np.mean(a, -1)
+    elif a.shape[3] == 4: # Remove alpha
+        a = a[:,:,:,:3] 
+    #
+    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, IS_3D=True, SET_SCALAR=True)
     vtkfilters.delArraysExcept(combinedImage, [arrayName])
-    return combinedImage
+    # Manipulation required to bring jpgs to same orientation as vti
+    permute = vtk.vtkImagePermute()
+    permute.SetInputData(combinedImage)
+    permute.SetFilteredAxes(1, 0, 2)
+    permute.Update()
+    flip = vtk.vtkImageFlip()
+    flip.SetInputData(permute.GetOutput())
+    flip.SetFilteredAxis(0)
+    flip.Update()
+    return flip.GetOutput()
 
 
-def mergePhaseSeries4D(magPVD, phasePVD_list, outputPVDName, phase_factors, phase_offsets, DEL_ORIGINAL=True):
-    # TODO Generalise for 2DPC also
-    rootDir, fName, extn = fIO.pvdGetDataFileRoot_Prefix_and_Ext(outputPVDName)
+def _process_phase_time_point(args):
+    """Helper function for parallel processing of 4D flow time points
+    """
+    iTime, magFile, phaseFiles_dicts, phase_factors, phase_offsets, scale_factor, velArrayName, rootDir, fName = args
+    iVTS = fIO.readVTKFile(magFile)
+    thisVelArray = []
+    for k2, iPhase in enumerate(phaseFiles_dicts):
+        thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
+        thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
+        aName = vtkfilters.getScalarsArrayName(thisPhase)
+        thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
+    thisVelArray_ = np.array(thisVelArray).T
+    thisVelArray_ *= scale_factor
+    vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, velArrayName, SET_VECTOR=True)
+    fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{generate_uid()}.WORKING.vts"))
+    return (iTime, fOutTemp)
+
+def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, phase_offsets,
+                        velArrayName, scale_factor=0.001, DEL_ORIGINAL=True):
+    """Take Mag PVD (vts format) and phase PVDs (vts format) and merge into 4D flow dataset
+
+    Args:
+        magPVD (str): Path to magnitude PVD file
+        phasePVD_list (list): List of paths to phase PVD files
+        outputFileName (str): Name of output file
+        phase_factors (list): List of factors to multiply phases by. 
+        phase_offsets (list): List of offsets to add to phases.
+        scale_factor (float): Scale factor to multiply final velocities by. Default is 0.001 (match vel to spatial units)
+        velArrayName (str): Name of velocity array to use in output file. Default is "Vels"
+        DEL_ORIGINAL (bool, optional): Delete original/intermediate files. Defaults to True.
+
+    Returns:
+        str: Name of output file
+    """
+    rootDir, fName = os.path.split(outputFileName)
+    fName = os.path.splitext(fName)[0]
     magFiles = fIO.readPVDFileName(magPVD)
     phaseFiles_dicts = [fIO.readPVDFileName(i) for i in phasePVD_list]
     times = sorted(magFiles.keys())
     outputFilesDict = {}
-    for k1, iTime in enumerate(times):
-        iVTS = fIO.readVTKFile(magFiles[iTime])
-        thisVelArray = []
-        for k2, iPhase in enumerate(phaseFiles_dicts): 
-            thisPhase_time = ftk.getClosestFloat(iTime, list(iPhase.keys()))
-            thisPhase = fIO.readVTKFile(iPhase[thisPhase_time])
-            aName = vtkfilters.getScalarsArrayName(thisPhase)
-            thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
-        thisVelArray_ = np.array(thisVelArray).T
-        vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, "Vel", SET_VECTOR=True)
-        fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{k1:05d}.WORKING.vts"))
-        outputFilesDict[iTime] = fOutTemp
-    pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True) # FIXME rename
+    # Create process pool and process all time points in parallel
+    with Pool() as pool:
+        args = [(iTime, magFiles[iTime], phaseFiles_dicts, phase_factors, phase_offsets, 
+                scale_factor, velArrayName, rootDir, fName) 
+                for iTime in times]
+        
+        results = pool.map(_process_phase_time_point, args)
+    # Collect results into outputFilesDict
+    outputFilesDict = dict(results)
+    # Generate final output file here - then clean up intermediate files
+    pvdFileOut = fIO.writeVTK_PVD_Dict(outputFilesDict, rootDir, fName, "vts", BUILD_SUBDIR=True)
+
     if DEL_ORIGINAL:
         fIO.deleteFilesByPVD(magPVD)
         for iPhaseFile in phasePVD_list:
             fIO.deleteFilesByPVD(iPhaseFile)
     return pvdFileOut
 
-# =========================================================================
-# =========================================================================
+# ===================================================================================================
+# ===================================================================================================
 ## DICOM-SEG
-# =========================================================================
+# ===================================================================================================
+def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    imageData = fIO.readVTKFile(vtiFile)
+    arr = vtkfilters.getArrayAsNumpy(imageData, labelMapArrayName)
+    arr = np.transpose(np.squeeze(arr), axes=[2,0,1])
+    return array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=dcmSegFileOut, algorithm_identification=algorithm_identification)
+
+
 def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
-    if not HIGHDCM:
-        raise ImportError("Missing highdicom \n Please run: pip install highdicom")
+    """Convert a numpy array to DICOM-SEG format.
+    
+    Args:
+        arr: Numpy array of segmentation labels
+        source_dicom_ds_list: List of source DICOM datasets
+        dcmSegFileOut: Output filename (optional)
+        algorithm_identification: Algorithm identification sequence (optional)
+        
+    Returns:
+        DICOM-SEG dataset or filename if dcmSegFileOut is provided
+    """
+
     fullLabelMap = arr.astype(np.ushort)
     sSeg = sorted(set(fullLabelMap.flatten('F')))
     sSeg.remove(0)
@@ -552,21 +616,29 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
             tracking_id='spydcmtk %s'%(segName)
         )
         segDesc_list.append(description_segment)
-    # Create the Segmentation instance
-    seg_dataset = Segmentation(
-        source_images=source_dicom_ds_list,
-        pixel_array=fullLabelMap,
-        segmentation_type=SegmentationTypeValues.BINARY,
-        segment_descriptions=segDesc_list,
-        series_instance_uid=generate_uid(), #source_dicom_ds_list[0].SeriesInstanceUID,
-        series_number=2,
-        sop_instance_uid=generate_uid(), #source_dicom_ds_list[0].SOPInstanceUID,
-        instance_number=1,
-        manufacturer='Manufacturer',
-        manufacturer_model_name='Model',
-        software_versions='v1',
-        device_serial_number='Device XYZ',
-    )
+    
+    try:
+        # Create the Segmentation instance
+        seg_dataset = Segmentation(
+            source_images=source_dicom_ds_list,
+            pixel_array=fullLabelMap,
+            segmentation_type=SegmentationTypeValues.BINARY,
+            segment_descriptions=segDesc_list,
+            series_instance_uid=generate_uid(),
+            series_number=2,
+            sop_instance_uid=generate_uid(),
+            instance_number=1,
+            manufacturer='Manufacturer',
+            manufacturer_model_name='Model',
+            software_versions='v1',
+            device_serial_number='Device XYZ',
+        )
+    except Exception as e:
+        print(f"Error creating segmentation: {str(e)}")
+        print(f"Number of source images: {len(source_dicom_ds_list)}")
+        print(f"Label map shape: {fullLabelMap.shape}")
+        raise
+
     if dcmSegFileOut is not None:
         seg_dataset.save_as(dcmSegFileOut) 
         return dcmSegFileOut
@@ -626,17 +698,10 @@ class NoVtkError(Exception):
 
 
 
-# =========================================================================
-# =========================================================================
+# ===================================================================================================
+# ===================================================================================================
 ## HELPFUL FILTERS
-# =========================================================================
-def vtkfilterFlipImageData(vtiObj, axis):
-    flipper = vtk.vtkImageFlip()
-    flipper.SetFilteredAxes(axis)
-    flipper.SetInputData(vtiObj)
-    flipper.Update()
-    return flipper.GetOutput()
-
+# ===================================================================================================
 
 def addFieldDataFromDcmDataSet(vtkObj, ds, extra_tags={}):
     tagsDict = dcmTools.getDicomTagsDict()
