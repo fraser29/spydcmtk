@@ -1,5 +1,5 @@
 
-from context import spydcmtk # This is useful for testing outside of environment
+from context import spydcmtk # type: ignore # This is useful for testing outside of environment
 
 import os
 import unittest
