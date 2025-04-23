@@ -122,25 +122,65 @@ class DicomSeries(list):
             dcmTools.readDicomFile_intoDict(iFile, dicomDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
         return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
+
     def getRootDir(self):
+        """Return the root directory of the series: os.path.split(self[0].filename)[0]
+        """
         return os.path.split(self[0].filename)[0]
 
+
     def filterByTag(self, tagName, tagValue):
+        """Filter the series by a tag value.
+
+        Args:
+            tagName (str): The name of the tag to filter by.
+            tagValue (str): The value of the tag to filter by.
+
+        Returns:
+            DicomSeries: A new DicomSeries instance with the filtered series.
+        """
         return DicomSeries([i for i in self if i.getTag(tagName) == tagValue], 
                            OVERVIEW=self.OVERVIEW, 
                            HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR, 
                            FORCE_READ=self.FORCE_READ)
 
+
     def getDicomFullFileName(self, dsID=0):
+        """Return the full file name of the dicom file.
+
+        Args:
+            dsID (int, optional): The index of the dicom file to return. Defaults to 0.
+
+        Returns:
+            str: The full file name of the dicom file.
+        """
         return self[dsID].filename
 
+
     def sortByInstanceNumber(self):
+        """Sort the series by instance number.
+        """
         self.sort(key=dcmTools.instanceNumberSortKey)
 
+
     def sortBySlice_InstanceNumber(self):
+        """Sort the series by slice location and instance number.
+        """
         self.sort(key=dcmTools.sliceLoc_InstanceNumberSortKey)
 
+
     def getTag(self, tag, dsID=0, ifNotFound='Unknown', convertToType=None):
+        """Get the value of a tag.
+
+        Args:
+            tag (str): The name of the tag to get.
+            dsID (int, optional): The index of the dicom file to get the tag from. Defaults to 0.
+            ifNotFound (str, optional): The value to return if the tag is not found. Defaults to 'Unknown'.
+            convertToType (function, optional): The function to convert the tag value to. Defaults to None.
+
+        Returns:
+            The value of the tag.
+        """
         try:
             tt = self.getTagObj(tag, dsID)
             if convertToType is not None:
@@ -149,11 +189,27 @@ class DicomSeries(list):
         except KeyError:
             return ifNotFound
 
+
     def setTags_all(self, tag, value):
+        """Set the value of a tag for all dicom files in the series.
+
+        Args:
+            tag (str): The name of the tag to set.
+            value (str): The value to set the tag to.
+        """
         for ds in self:
             ds[tag].value = value
 
     def getTagObj(self, tag, dsID=0):
+        """Get the tag object for a given tag and dicom file index.
+
+        Args:
+            tag (str): The name of the tag to get.
+            dsID (int, optional): The index of the dicom file to get the tag from. Defaults to 0.
+
+        Returns:
+            The tag object.
+        """
         try:
             if str(tag)[:2] == '0x':
                 tag = int(tag, 16)
@@ -161,10 +217,17 @@ class DicomSeries(list):
             pass # Not string
         return self[dsID][tag]
 
+
     def getTagValuesList(self, tagList, RETURN_STR):
         """
         Build table with file name and value from each tag in list.
-        Return list of lists
+        
+        Args:
+            tagList (list): The list of tags to get the values from.
+            RETURN_STR (bool): Whether to return the values as a string.
+
+        Returns:
+            The list of values.
         """
         valueList = []
         for dsID, i in enumerate(self):
@@ -174,7 +237,17 @@ class DicomSeries(list):
             return dcmTools._tagValuesListToString(tagList, valueList)
         return valueList
 
+
     def getTagListAndNames(self, tagList, dsID=0):
+        """Get the list of tag names and values.
+
+        Args:
+            tagList (list): The list of tags to get the values from.
+            dsID (int, optional): The index of the dicom file to get the tag from. Defaults to 0.
+
+        Returns:
+            The list of tag names and values.
+        """
         names, vals = [], []
         for i in tagList:
             try:
@@ -190,7 +263,16 @@ class DicomSeries(list):
                 vals.append('Unknown')
         return names, vals
 
+
     def tagsToJson(self, jsonFileOut):
+        """Convert the series to a json file (minus the pixel data).
+
+        Args:
+            jsonFileOut (str): The file to save the json to.
+
+        Returns:
+            The file to save the json to.
+        """
         dOut = {}
         for ds in self:
             dd = ds.to_json_dict()
@@ -201,6 +283,8 @@ class DicomSeries(list):
 
 
     def _loadToMemory(self):
+        """Load the series into memory. An internal function to load full data to memory when needed if not already loaded.
+        """
         if self.NOT_FULLY_LOADED:
             rootDir = self.getRootDir()
             self.clear()
@@ -209,6 +293,14 @@ class DicomSeries(list):
 
 
     def getSeriesOverview(self, tagList=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
+        """Get the series overview as a tuple of two lists (names, values).
+
+        Args:
+            tagList (list, optional): The list of tags to get the values from. Defaults to SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST. See spydcmtk.conf
+
+        Returns:
+            tuple: A tuple of two lists: the first list contains the names of the tags, and the second list contains the values of the tags.
+        """
         names, vals = self.getTagListAndNames(tagList)
         names.append('ImagesInSeries')
         if len(self) == 1: # ONLY READ ONE FILE PER DIR
@@ -217,7 +309,13 @@ class DicomSeries(list):
             vals.append(len(self))
         return names, vals
 
+
     def getSeriesTimeAsDatetime(self):
+        """Get the series time as a datetime object.
+
+        Returns:
+            datetime: The series time as a datetime object.
+        """
         dos = self.getTag('SeriesDate', ifNotFound="19000101")
         tos = self.getTag('SeriesTime', ifNotFound="000000")
         try:
@@ -225,13 +323,32 @@ class DicomSeries(list):
         except ValueError:
             return datetime.strptime(f"{dos} {tos}", "%Y%m%d %H%M%S")
 
+
     def getImagePositionPatient_np(self, dsID):
+        """Get the image position patient as a numpy array.
+
+        Args:
+            dsID (int, optional): The index of the dicom file to get the image position patient from. Defaults to 0.
+
+        Returns:
+            numpy.ndarray: The image position patient as a numpy array shape (3,).
+        """
         ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=[0.0,0.0,0.0])
         return np.array(ipp)
 
+
     def getImageOrientationPatient_np(self, dsID=0):
-        iop = self.getTag('ImageOrientationPatient', dsID=dsID)
+        """Get the image orientation patient as a numpy array.
+
+        Args:
+            dsID (int, optional): The index of the dicom file to get the image orientation patient from. Defaults to 0.
+
+        Returns:
+            numpy.ndarray: The image orientation patient as a numpy array shape (6,).
+        """
+        iop = self.getTag('ImageOrientationPatient', dsID=dsID, ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
         return np.array(iop)
+
 
     def yieldDataset(self):
         for ds in self:
@@ -240,13 +357,36 @@ class DicomSeries(list):
             else:
                 yield ds
 
+
     def isCompressed(self):
+        """Check if the series is compressed.
+
+        Returns:
+            bool: True if the series is compressed, False otherwise.
+        """
         return dcmTools._isCompressed(self[0])
 
+
     def getSeriesNumber(self):
+        """Get the series number.
+
+        Returns:
+            int: The series number.
+        """
         return int(self.getTag('SeriesNumber', ifNotFound=0))
 
+
     def getSeriesOutDirName(self, SE_RENAME={}):
+        """Build an auto-generated series output directory name. Used for writing to organised file structure.
+        If SAFE_NAME_MODE is True, then the series instance UID is used as part of the directory name.
+        The entries SpydcmTK_config.SERIES_NAMING_TAG_LIST in spydcmtk.conf are used to build the directory name.
+
+        Args:
+            SE_RENAME (dict, optional): A dictionary of series numbers to rename. Defaults to {}.
+
+        Returns:
+            str: The series output directory name.
+        """
         thisSeNum = self.getTag('SeriesNumber', ifNotFound='#')
         suffix = ''
         if (thisSeNum=="#") or self.SAFE_NAME_MODE:
@@ -259,8 +399,14 @@ class DicomSeries(list):
             return SE_RENAME[thisSeNum]
         return dcmTools.cleanString(f"SE{thisSeNum}{suffix}")
 
+
     # ----------------------------------------------------------------------------------------------------
     def removeTimes(self, timesIDs_ToRemove):
+        """Remove times from the series.
+
+        Args:
+            timesIDs_ToRemove (list): The list of times to remove.
+        """
         K = int(self.getNumberOfSlicesPerVolume())
         self.sortBySlice_InstanceNumber()
         N = self.getNumberOfTimeSteps()
@@ -275,6 +421,11 @@ class DicomSeries(list):
 
 
     def removeInstances(self, instanceIDs_to_remove):
+        """Remove instances from the series.
+
+        Args:
+            instanceIDs_to_remove (list): The list of instance IDs to remove.
+        """
         dsToRm = []
         for k1 in range(len(self)):
             if self.getTag("InstanceNumber", k1, convertToType=int) in instanceIDs_to_remove:
@@ -288,9 +439,24 @@ class DicomSeries(list):
 
 
     def deleteTag(self, tag, dsID):
+        """Delete a tag from an entry in the series.
+
+        Args:
+            tag (str): The tag to delete.
+            dsID (int): The index of the dicom file to delete the tag from.
+        """
         tagObj = self.getTagObj(tag, dsID)
         del tagObj
 
+
+    def deleteTags_fromAll(self, tag):
+        """Delete a tag from all entries in the series.
+
+        Args:
+            tag (str): The tag to delete.
+        """
+        for k1 in range(len(self)):
+            self.deleteTag(tag, k1)
     # ----------------------------------------------------------------------------------------------------
     def resetUIDs(self, studyUID):
         """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass last)
@@ -346,13 +512,18 @@ class DicomSeries(list):
                 except TypeError:
                     pass
 
-    def writeToOrganisedFileStructure(self, studyOutputDir, SAFE_NAMING_CHECK=True, seriesOutDirName=None):
-        """ Recurse down directory tree - grab dicoms and move to new
-            hierarchical folder structure rooted at 'studyOutputDir'
+    def writeToOrganisedFileStructure(self, studyOutputDir, seriesOutDirName=None):
+        """ Write the series to an organised file structure.
+            A hierarchical folder structure rooted at 'studyOutputDir'
+
+        Args:
+            studyOutputDir (str): The output directory.
+            seriesOutDirName (str, optional): The name of the series output directory. Defaults to None.
+
+        Returns:
+            str: The series output directory name.
         """
-        self._loadToMemory()
-        if SAFE_NAMING_CHECK:
-            self.checkIfShouldUse_SAFE_NAMING()
+        self.checkIfShouldUse_SAFE_NAMING()
         ADD_TRANSFERSYNTAX = False
         if seriesOutDirName is None:
             seriesOutDirName = self.getSeriesOutDirName()
@@ -845,17 +1016,18 @@ class DicomStudy(list):
 
 
     def mergeSeriesVolumesWithTime(self):
+        """ Convenience method to sort a 4D series by volumes then time.
+        """
         nTimes = len(self)
         triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(nTimes)])
         nPerTime = len(self.getSeriesByTag('TriggerTime', triggerTimes[0], convertToType=float))
         sorted_ds_list = [None for _ in range(nTimes*nPerTime)]
-        print(f"Merging series: n times: {nTimes}, N per time: {nPerTime}")
+        # print(f"Merging series: n times: {nTimes}, N per time: {nPerTime}")
         for i in range(nTimes):
             iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
             iSeries.sortByInstanceNumber()
             for k1, iDS in enumerate(iSeries):
                 if nPerTime > 1:
-                    # thisID = int(iDS['InstanceNumber'].value) + c1*(len(triggerTimes)-1) + c0 -1 # change to 0 index
                     thisID = i + (nTimes * k1)
                 else:
                     thisID = i
@@ -948,6 +1120,7 @@ class DicomStudy(list):
         studySummaryDict['Series'] = listSerDict
         return studySummaryDict
 
+
     def getStudySummary(self, FULL=True):
         pt,pv = self.getPatientOverview()
         patStr = ','.join([' %s:%s'%(str(i), str(j)) for i,j in zip(pt,pv)])
@@ -971,6 +1144,7 @@ class DicomStudy(list):
             strOut += f"\nSTUDY: {studyStr}"
             return strOut
 
+
     def getTagValuesList(self, tagList, RETURN_STR=False):
         output = []
         for i in self:
@@ -979,7 +1153,17 @@ class DicomStudy(list):
             return dcmTools._tagValuesListToString(tagList, output)
         return output
 
+
     def writeToOrganisedFileStructure(self, patientOutputDir, studyPrefix=''):
+        """Write the study to an organised file structure.
+
+        Args:
+            patientOutputDir (str): The output root directory (a Study output directory will be built here).
+            studyPrefix (str, optional): The prefix of the study output directory. Defaults to ''.
+
+        Returns:
+            str: The study output directory name.
+        """
         self.checkIfShouldUse_SAFE_NAMING()
         try:
             studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
@@ -989,12 +1173,21 @@ class DicomStudy(list):
         if os.path.isdir(studyOutputDir):
             os.rename(studyOutputDir, studyOutputDirTemp)
         for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp, 
-                                                  SAFE_NAMING_CHECK=False)
+            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp)
         os.rename(studyOutputDirTemp, studyOutputDir)
         return studyOutputDir
 
+
     def writeToZipArchive(self, patientOutputDir, CLEAN_UP=True):
+        """Write the study to a zip archive. Study is written to disk then zipped.
+
+        Args:
+            patientOutputDir (str): The output directory.
+            CLEAN_UP (bool, optional): Whether to clean up the original written directory. Defaults to True.
+
+        Returns:
+            str: The zip file written.
+        """
         studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir)
         if studyOutputDir is None:
             return
