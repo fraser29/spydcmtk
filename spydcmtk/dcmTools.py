@@ -451,6 +451,8 @@ def readDicomFile_intoDict(dcmFile, dsDict, FORCE_READ=False, OVERVIEW=False):
         if seriesUID not in dsDict[studyUID]:
             dsDict[studyUID][seriesUID] = []
         dsDict[studyUID][seriesUID].append(dataset)
+    return dsDict
+
 
 def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, OVERVIEW=False, extn_filter=None, DEBUG=False):
     """Find all dicoms under "rootDir" and organise based upon UIDs
@@ -467,6 +469,8 @@ def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fal
     Returns:
         dict: A larger dictionary structure of {studyUID: {seriesUID: [list of pydicom datasets]}}
     """
+    if os.path.isfile(rootDir):
+        return readDicomFile_intoDict(rootDir, {}, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
     dsDict = {}
     successReadDirs = set()
     nFiles = countFilesInDir(rootDir)
@@ -495,6 +499,7 @@ def organiseDicomHeirarchyByUIDs(rootDir, HIDE_PROGRESSBAR=False, FORCE_READ=Fal
                 print(f"Error reading {thisFile} - missing a needed dicom tag")
             continue
     return dsDict
+
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
     """Write directory of dicom files to nifti file.
@@ -529,6 +534,7 @@ def writeDirectoryToNII(dcmDir, outputPath, fileName):
     if os.path.isfile(latest_json):
         os.rename(latest_json, newFileName.replace(extn, '.json'))
     return newFileName
+
 
 def buildFakeDS():
     meta = dicom.dataset.FileMetaDataset()

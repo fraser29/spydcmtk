@@ -156,7 +156,7 @@ class DicomSeries(list):
 
     def getTagObj(self, tag, dsID=0):
         try:
-            if tag[:2] == '0x':
+            if str(tag)[:2] == '0x':
                 tag = int(tag, 16)
         except TypeError:
             pass # Not string
@@ -593,8 +593,8 @@ class DicomSeries(list):
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
 
-    def getSeriesInfoDict(self, EXTRA_TAGS=[]):
-        # Default (standard tags):
+    def getSeriesInfoDict(self, EXTRA_TAGS=[], extraTags=[]):
+        extraTags.extend(EXTRA_TAGS)
         outDict = {'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
             'nRow':self.getTag('Rows'),
@@ -616,12 +616,13 @@ class DicomSeries(list):
             'Manufacturer': self.getTag("Manufacturer"),
             'ManufacturerModelName': self.getTag("ManufacturerModelName"),
             'SoftwareVersions': str(self.getTag(0x00181020)),}
-        for extraTag in EXTRA_TAGS:
-            try:
-                outDict[extraTag] = self.getTag(extraTag)
-            except:
-                outDict[extraTag] = 'Unknown'
-        outDict['nSlice'] = len(self)
+        for extraTag in extraTags:
+            if extraTag not in outDict.keys():
+                try:
+                    outDict[extraTag] = self.getTag(extraTag)
+                except:
+                    outDict[extraTag] = 'Unknown'
+        outDict['ImagesInAcquisition'] = len(self)
         try:
             outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
         except (TypeError, ValueError):
@@ -633,7 +634,7 @@ class DicomSeries(list):
         for i in outDict.keys():
             try:
                 if ',' in outDict[i]:
-                    outDict[i] = f'"{outDict[i]}"'
+                    outDict[i] = str(outDict[i])
             except TypeError:
                 pass
         return outDict
@@ -1046,7 +1047,7 @@ class ListOfDicomStudies(list):
                     dcmTools.readDicomFile_intoDict(input, dcmDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
                     return ListOfDicomStudies.setFromDcmDict(dcmDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
                 except dicom.filereader.InvalidDicomError:
-                    raise IOError("ERROR READING DICOMS: SPDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
+                    raise IOError("ERROR READING DICOMS: SPYDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
 
     @classmethod
     def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, extn_filter=None):
