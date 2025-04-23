@@ -2,7 +2,6 @@
 
 """Classes for working with Dicom studies
 """
-import copy
 import os
 import pydicom as dicom
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
@@ -1308,7 +1307,7 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     A = np.reshape(A, dims, 'F')
     if patientMeta is None:
         patientMeta = dcmVTKTK.PatientMeta()
-    patientMeta.initFromVTI(vti)
+        patientMeta.initFromVTI(vti)
     return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMeta, outputDir, tagUpdateDict=tagUpdateDict)
 
 
@@ -1361,22 +1360,22 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         except AttributeError:
             SeriesNumber = 99
     dsList = []
-    dt = datetime.datetime.now()
+    dt = datetime.now()
     tags_to_copy = { # Tags to get from template and defaults if not found
-        "PatientName": "Anonymous^Name",
-        "PatientID": "000000",
-        "Modality": "OT",
-        "PatientBirthDate": "",
-        "PatientSex": "",
-        "StudyDate": dt.strftime('%Y%m%d'),
-        "StudyTime": dt.strftime('%H%M%S'),
-        "InstitutionName": "",
-        "StudyDescription": "Study",
-        "SeriesDescription": "Image",
-        "StationName": "",
-        "StudyInstanceUID": dicom.uid.generate_uid(),
-        "StudyID": 0,
-        "AccessionNumber": 0,
+        "PatientName": [0x00100010, "PN", "Anonymous^Name"],
+        "PatientID": [0x00100020, "LO", "000000"],
+        "Modality": [0x00080060, "CS", "OT"],
+        "PatientBirthDate": [0x00100030, "DA",  ""],
+        "PatientSex": [0x00100040, "CS", ""],
+        "StudyDate": [0x00080020, "DA", dt.strftime('%Y%m%d')],
+        "StudyTime": [0x00080030, "DM", dt.strftime('%H%M%S')],
+        "InstitutionName": [0x00080080, "LO", ""],
+        "StudyDescription": [0x00081030, "LO", "Study"],
+        "SeriesDescription": [0x0008103e, "LO", "Image"],
+        "StationName": [0x00081010, "SH", ""],
+        "StudyInstanceUID": [0x0020000d, "UI", dicom.uid.generate_uid()],
+        "StudyID": [0x00200010, "SH", None],
+        "AccessionNumber": [0x00080050, "SH", None],
     }
     for k in range(nSlice):
         file_meta = dicom.Dataset()
@@ -1384,18 +1383,24 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
         file_meta.MediaStorageSOPInstanceUID = generate_uid()
         file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
         ##
-        ds = dicom.FileDataset(filename_or_obj=None, dataset={}, file_meta=file_meta, preamble=b"\0" * 128)
+        ds = dicom.FileDataset(filename_or_obj=None, dataset={}, file_meta=file_meta, preamble=b"\0" * 128,
+                               is_implicit_VR=False, is_little_endian=True)
         # Copy tags from template DICOM
         for tag, default in tags_to_copy.items():
-            ds[tag] = dsRAW.get(tag, default)
+            iTag = dsRAW.get_item(tag)
+            if iTag is not None:
+                ds[tag] = iTag
+            else:
+                if default[2] is not None:
+                    ds[tag] = dicom.DataElement(default[0], 
+                                                default[1], 
+                                                default[2])
         #
         # Set specific tags for this image conversion
         # If RGB then no position / orientation information
         ds.SeriesInstanceUID = SeriesUID
         ds.SOPInstanceUID = dicom.uid.generate_uid()
         #
-        ds.is_little_endian = True
-        ds.is_implicit_VR = False
         ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
         ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
         ds.Rows = nRow
@@ -1417,21 +1422,23 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
             ds.BitsAllocated = NBIT
             ds.BitsStored = NBIT
             ds.HighBit = NBIT - 1
-            ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
-            ds.SpacingBetweenSlices = sliceThick
-            ds.SmallestImagePixelValue = int(mn)
-            ds.LargestImagePixelValue = int(mx)
-            ds.WindowCenter = int(mx / 2)
-            ds.WindowWidth = int(mx / 2)
-            ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
-            #
-            sliceVec = np.array(patientMeta.SliceVector)
-            ImagePositionPatient = ipp + k*sliceVec*sliceThick
-            ds.ImagePositionPatient = list(ImagePositionPatient)
-            sliceLoc = slice0 + k*sliceThick
-            ds.SliceLocation = sliceLoc
-            ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
-            #
+            ds.PixelRepresentation = 0
+            ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
+        ds.SpacingBetweenSlices = sliceThick
+        ds.SmallestImagePixelValue = int(mn)
+        ds.LargestImagePixelValue = int(mx)
+        ds.WindowCenter = int(mx / 2)
+        ds.WindowWidth = int(mx / 2)
+        ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
+        #
+        sliceVec = np.array(patientMeta.SliceVector)
+        ImagePositionPatient = ipp + k*sliceVec*sliceThick
+        ds.ImagePositionPatient = list(ImagePositionPatient)
+        sliceLoc = slice0 + k*sliceThick
+        ds.SliceLocation = sliceLoc
+        ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
+        #
         # Set tags from method provided
         for iKey in tagUpdateDict.keys():
             if len(tagUpdateDict[iKey]) == 3: # Tag:0x00101010, VR, value

@@ -151,7 +151,7 @@ class PatientMeta:
     def __metaVTI2DCMConversion(self):
         if 'Spacing' in self._meta:
             self._meta['PixelSpacing'] = [self._meta['Spacing'][0], self._meta['Spacing'][1]]
-            if 'SliceThickness' not in self._meta:
+            if len(self._meta['Spacing']) > 2:
                 self._meta['SliceThickness'] = self._meta['Spacing'][2]
         if 'SpacingBetweenSlices' not in self._meta:
             self._meta['SpacingBetweenSlices'] = self._meta['SliceThickness']
@@ -490,12 +490,19 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
         a = np.mean(a, -1)
     elif a.shape[3] == 4: # Remove alpha
         a = a[:,:,:,:3] 
-    # Manipulation required to bring jpgs to same orientation as vti
-    a = np.rot90(a, k=-1) 
-    a = np.flipud(a)
-    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, IS_3D=True)
+    #
+    vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, IS_3D=True, SET_SCALAR=True)
     vtkfilters.delArraysExcept(combinedImage, [arrayName])
-    return combinedImage
+    # Manipulation required to bring jpgs to same orientation as vti
+    permute = vtk.vtkImagePermute()
+    permute.SetInputData(combinedImage)
+    permute.SetFilteredAxes(1, 0, 2)
+    permute.Update()
+    flip = vtk.vtkImageFlip()
+    flip.SetInputData(permute.GetOutput())
+    flip.SetFilteredAxis(0)
+    flip.Update()
+    return flip.GetOutput()
 
 
 def _process_phase_time_point(args):
