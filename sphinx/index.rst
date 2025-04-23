@@ -12,8 +12,8 @@ Welcome to spydcmtk's documentation!
 
    usage/introduction
    usage/quickstart
-   usage/version-history
    usage/dicom-conversion
+   usage/tutorial
 
    modules
 
