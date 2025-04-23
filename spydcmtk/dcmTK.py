@@ -457,9 +457,11 @@ class DicomSeries(list):
         """
         for k1 in range(len(self)):
             self.deleteTag(tag, k1)
+
+
     # ----------------------------------------------------------------------------------------------------
     def resetUIDs(self, studyUID):
-        """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass last)
+        """Reset SOPInstanceUID, SeriesInstanceUID and StudyInstaceUID (must pass StudyInstaceUID)
 
         Args:
             studyUID (str): UID - can use str(generate_uid())
@@ -469,6 +471,7 @@ class DicomSeries(list):
             self[k1].SOPInstanceUID = str(generate_uid())
             self[k1].SeriesInstanceUID = seriesUID
             self[k1].StudyInstanceUID = studyUID
+
 
     def anonymise(self, anonName, anonPatientID, anon_birthdate=True, remove_private_tags=True):
         """Anonymise series inplace
@@ -512,6 +515,7 @@ class DicomSeries(list):
                 except TypeError:
                     pass
 
+
     def writeToOrganisedFileStructure(self, studyOutputDir, seriesOutDirName=None):
         """ Write the series to an organised file structure.
             A hierarchical folder structure rooted at 'studyOutputDir'
@@ -548,6 +552,7 @@ class DicomSeries(list):
         os.rename(seriesOutputDirTemp, seriesOutputDir)
         return seriesOutputDir
 
+
     def _generateFileName(self, tagsToUse, extn):
         if type(tagsToUse) == str:
             fileName = tagsToUse
@@ -557,6 +562,7 @@ class DicomSeries(list):
         if (len(extn) > 0) and (not extn.startswith('.')):
             extn = '.'+extn
         return fileName+extn
+
 
     def writeToNII(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         """Will write DicomSeries as nii.gz file (uses dcm2niix found on local system)
@@ -573,6 +579,7 @@ class DicomSeries(list):
         else:
             fileName = self._generateFileName(outputNamingTags, '.nii.gz')
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
+
 
     def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False):
         """Write DicomSeries as VTK ImageData (`*.vti`)
@@ -593,6 +600,7 @@ class DicomSeries(list):
         vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
+
     def writeToVTS(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription')):
         """Write DicomSeries as VTK StructuredImageData (`*.vts`)
 
@@ -611,28 +619,57 @@ class DicomSeries(list):
         vtsDict = self.buildVTSDict(outputPath)
         return dcmVTKTK.fIO.writeVTK_PVD_Dict(vtsDict, outputPath, filePrefix=fileName, fileExtn='vts', BUILD_SUBDIR=True)
 
+
     def buildVTSDict(self, outputPath=None):
+        """Build a VTK StructuredImageData dictionary from the pixel data.
+
+        Args:
+            outputPath (str, optional): The output path. Defaults to None.
+
+        Returns:
+            dict: The VTK StructuredImageData dictionary.
+        """
         A, patientMeta = self.getPixelDataAsNumpy()
         return dcmVTKTK.arrToVTS(A, patientMeta, self[0], outputPath)
 
+
     def buildVTIDict(self, TRUE_ORIENTATION=False, outputPath=None):
+        """Build a VTK ImageData dictionary from the pixel data.
+
+        Args:
+            TRUE_ORIENTATION (bool, optional): Whether to apply the true orientation to the VTI data. Defaults to False.
+            outputPath (str, optional): The output path. Defaults to None.
+
+        Returns:
+            dict: The VTK ImageData dictionary. Keys: TriggerTime, Values: VTK ImageData.
+        """
         A, patientMeta = self.getPixelDataAsNumpy()
         return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
+
 
     @property
     def sliceLocations(self):
         return sorted([float(self.getTag('SliceLocation', i, ifNotFound=0.0)) for i in range(len(self))])
 
+
     def getNumberOfSlicesPerVolume(self):
         sliceLoc = self.sliceLocations
         return len(set(sliceLoc))
+
 
     def getNumberOfTimeSteps(self):
         sliceLoc = self.sliceLocations
         sliceLocS = set(sliceLoc)
         return sliceLoc.count(sliceLocS.pop())
 
+
     def getSliceNormalVector(self):
+        """Get the normal vector of the slice. 
+            Calculated from the ImageOrientationPatient tag.
+
+        Returns:
+            numpy.ndarray: The normal vector of the slice.
+        """
         self.sortBySlice_InstanceNumber()
         try:
             sliceVec = self.getImagePositionPatient_np(-1) - self.getImagePositionPatient_np(0)
@@ -645,6 +682,7 @@ class DicomSeries(list):
             sliceVec = sliceVec / np.linalg.norm(sliceVec)
         return sliceVec
 
+
     def doesSliceLocationNorm_Match_IOPNormal(self):
         iop = self.getTag('ImageOrientationPatient')
         iopN = np.cross(iop[:3], iop[3:6])
@@ -652,11 +690,14 @@ class DicomSeries(list):
         tf = [i*j>=0.0 for i,j in zip(iopN, sliceLocN)]
         return all(tf)
 
+
     def is3D(self):
         return self.getNumberOfSlicesPerVolume() > 1
 
+
     def is4D(self):
         return self.getNumberOfTimeSteps() > 1
+
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
@@ -689,22 +730,44 @@ class DicomSeries(list):
         patientMeta.initFromDicomSeries(self)
         return A, patientMeta
 
+
     def getScanDuration_secs(self):
         try:
             return self.getTag(0x0019105a, ifNotFound=0.0) / 1000000.0
         except AttributeError:
             return 0.0
 
+
     def _getPixelSpacing(self):
         return [float(i) for i in self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])]
 
+
     def getDeltaRow(self):
+        """Get the pixel spacing in the row direction.
+
+        Returns:
+            float: The pixel spacing in the row direction in mm.
+        """
         return self._getPixelSpacing()[0]
 
+
     def getDeltaCol(self):
+        """Get the pixel spacing in the column direction.
+
+        Returns:
+            float: The pixel spacing in the column direction in mm.
+        """
         return self._getPixelSpacing()[1]
 
+
     def getDeltaSlice(self):
+        """Get the slice spacing of the series.
+            If there is only one slice (or single slice CINE) then the slice spacing is taken from the SpacingBetweenSlices or SliceThickness (if not present) tag.
+            If there is more than one slice then the slice spacing is taken from the mean of the slice locations.
+
+        Returns:
+            float: The slice spacing in mm.
+        """
         self.sortByInstanceNumber()
         p0 = self.getImagePositionPatient_np(0)
         sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
@@ -716,35 +779,52 @@ class DicomSeries(list):
             return float(dZ)
         return np.mean(np.diff(sliceLocS))
 
+
     def getTemporalResolution(self):
+        """Get the temporal resolution of the series.
+            NominalInterval / CardiacNumberOfImages
+            If CardiacNumberOfImages is not present then 1 is assumed.
+            If NominalInterval is not present then 0.0 is assumed.
+
+        Returns:
+            float: The temporal resolution in seconds.
+        """
         try:
             return float(self.getTag('NominalInterval', ifNotFound=0.0)/self.getTag('CardiacNumberOfImages', ifNotFound=1))
         except ZeroDivisionError:
             return 0       
 
+
     def getTemporalResolution_TR_VPS(self):
         return float(self.getTag('RepetitionTime', ifNotFound=0.0)*self.getTag(0x00431007, ifNotFound=1.0))
+
 
     def getManufacturer(self):
         return self.getTag(0x00080070, ifNotFound='Unknown')
 
+
     def IS_GE(self):
         return self.getManufacturer().lower().startswith('ge')
+
 
     def IS_SIEMENS(self):
         return self.getManufacturer().lower().startswith('siemens')
 
+
     def IS_PHILIPS(self):
         return self.getManufacturer().lower().startswith('philips')
 
+
     def IS_BRUKER(self):
         return self.getManufacturer().lower().startswith('bruker')
+
 
     def getPulseSequenceName(self):
         if self.IS_GE():
             return self.getTag(0x0019109c)
         else:
             return self.getTag(0x00180024)
+
 
     def getVENC(self):
         """Get VENC value in mm/s
@@ -757,14 +837,39 @@ class DicomSeries(list):
         else: # TODO - add other vendors
             return None
 
+
     def getInternalPulseSequenceName(self):
         return self.getTag(0x0019109e)
+
 
     def getSeriesDescription(self):
         return self.getTag('SeriesDescription')
 
+
     def getSeriesInfoDict(self, EXTRA_TAGS=[], extraTags=[]):
-        extraTags.extend(EXTRA_TAGS)
+        """Get a dictionary of detailed series information including internally calculated values:
+            - ScanDuration
+            - nTime
+            - nRow
+            - nCols
+            - dRow - pixel spacing in row direction
+            - dCol - pixel spacing in column direction
+            - dSlice - slice thickness
+            - dTime - temporal resolution
+            - SpacingBetweenSlices
+            - FlipAngle
+            - HeartRate
+            - EchoTime
+            - RepetitionTime
+            - MagneticFieldStrength
+
+        Args:
+            EXTRA_TAGS (list, optional): DEPRECIATED - use extraTags instead.
+            extraTags (list, optional): Additional tags to add to the dictionary. Defaults to [].
+
+        Returns:
+            dict: A dictionary of series information.
+        """
         outDict = {'ScanDuration':self.getScanDuration_secs(),
             'nTime':self.getTag('CardiacNumberOfImages'),
             'nRow':self.getTag('Rows'),
@@ -809,6 +914,7 @@ class DicomSeries(list):
                 pass
         return outDict
 
+
     def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
         """Checks is should name dicoms based on UIDs or if a SE-number, Instace-number naming convention is possible.
         Basically checks if there would be any overlaps. 
@@ -828,6 +934,7 @@ class DicomSeries(list):
                 self.SAFE_NAME_MODE = True
                 break
             se_instance_set.add(se_instance_str)
+
 
     def getStudyOutputDir(self, rootDir='', studyPrefix=''):
         """Generate a study output directory name based on config setting STUDY_NAMINF_TAG_LIST
