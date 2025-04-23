@@ -1,5 +1,7 @@
 # Sphinx Documentation
 
+gh-pages is set up to automatically build the documentation from the `doc` branch and deploy it to the `gh-pages` branch.
+
 ## Updating Documentation from Main Branch
 
 To update the documentation with changes from the main branch and rebuild:
