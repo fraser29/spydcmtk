@@ -170,6 +170,8 @@ class PatientMeta:
                 A[:, :, k1, k2] = iA
                 c0 += 1
         dt = dicomSeries.getTemporalResolution()
+        if dt < 0.0000000001:
+            dt = 1.0
         ipp = dicomSeries.getImagePositionPatient_np(0)
         sliceVec = dicomSeries.getSliceNormalVector()
         self._meta = {
