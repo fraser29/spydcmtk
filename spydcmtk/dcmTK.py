@@ -846,7 +846,7 @@ class DicomSeries(list):
         return self.getTag('SeriesDescription')
 
 
-    def getSeriesInfoDict(self, EXTRA_TAGS=[], extraTags=[]):
+    def getSeriesInfoDict(self, extraTags=[], EXTRA_TAGS=[]):
         """Get a dictionary of detailed series information including internally calculated values:
             - ScanDuration
             - nTime
@@ -891,6 +891,9 @@ class DicomSeries(list):
             'Manufacturer': self.getTag("Manufacturer"),
             'ManufacturerModelName': self.getTag("ManufacturerModelName"),
             'SoftwareVersions': str(self.getTag(0x00181020)),}
+        if len(EXTRA_TAGS) > 0:
+            print(f"WARNING: EXTRA_TAGS is DEPRECIATED and will be removed in future versions. Use 'extraTags' instead.")
+        extraTags += EXTRA_TAGS
         for extraTag in extraTags:
             if extraTag not in outDict.keys():
                 try:
