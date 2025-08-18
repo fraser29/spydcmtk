@@ -326,6 +326,7 @@ class DicomSeries(list):
 
     def getImagePositionPatient_np(self, dsID):
         """Get the image position patient as a numpy array.
+        For 3D DICOM files, checks SharedFunctionalGroupsSequence if standard tags not available.
 
         Args:
             dsID (int, optional): The index of the dicom file to get the image position patient from. Defaults to 0.
@@ -333,12 +334,25 @@ class DicomSeries(list):
         Returns:
             numpy.ndarray: The image position patient as a numpy array shape (3,).
         """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=None)
+            if ipp is not None:
+                return np.array(ipp)
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            ipp = self._getImagePositionPatientFromSharedFunctionalGroups()
+            if ipp is not None:
+                return np.array(ipp)
+        
+        # Fallback to standard method or default
         ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=[0.0,0.0,0.0])
         return np.array(ipp)
 
 
     def getImageOrientationPatient_np(self, dsID=0):
         """Get the image orientation patient as a numpy array.
+        For 3D DICOM files, checks SharedFunctionalGroupsSequence if standard tags not available.
 
         Args:
             dsID (int, optional): The index of the dicom file to get the image orientation patient from. Defaults to 0.
@@ -346,6 +360,18 @@ class DicomSeries(list):
         Returns:
             numpy.ndarray: The image orientation patient as a numpy array shape (6,).
         """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            iop = self.getTag('ImageOrientationPatient', dsID=dsID, ifNotFound=None)
+            if iop is not None:
+                return np.array(iop)
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            iop = self._getImageOrientationPatientFromSharedFunctionalGroups()
+            if iop is not None:
+                return np.array(iop)
+        
+        # Fallback to standard method or default
         iop = self.getTag('ImageOrientationPatient', dsID=dsID, ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
         return np.array(iop)
 
@@ -739,8 +765,11 @@ class DicomSeries(list):
         """
         if len(self) == 0:
             return False
-        firstPixelArray = self[0].pixel_array
-        return len(firstPixelArray.shape) > 2
+        try:
+            firstPixelArray = self[0].pixel_array
+            return len(firstPixelArray.shape) > 2
+        except AttributeError:
+            return False
 
 
     def getPixelDataAsNumpy(self):
@@ -785,7 +814,6 @@ class DicomSeries(list):
                 
         else:
             # Handle traditional 2D slice-based DICOM files
-            print("Processing as 2D slice-based DICOM files")
             I, J = int(self.getTag('Rows')), int(self.getTag('Columns'))
             K = int(self.getNumberOfSlicesPerVolume())
             self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
@@ -793,11 +821,8 @@ class DicomSeries(list):
             
             thisDType = firstPixelArray.dtype
             thisShape = firstPixelArray.shape
-            print(f"SIZE IS {thisShape}. IJK is {I}, {J}, {K}. N is {N}")
-            
             A = np.zeros((I, J, K, N), dtype=thisDType)
             if (K*N) != len(self):
-                print(f"DEBUG: Getting numpy array shape: [{I}, {J}, {K}, {N}] (K*N={K*N} == {len(self)})")
                 raise FileNotFoundError(f"Missing some DICOM files.")
             
             c0 = 0
@@ -820,6 +845,21 @@ class DicomSeries(list):
 
 
     def _getPixelSpacing(self):
+        """Get pixel spacing, handling both 2D and 3D DICOM files.
+        For 3D files, checks SharedFunctionalGroupsSequence if standard tags not available.
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            pixelSpacing = self.getTag('PixelSpacing', ifNotFound=None)
+            if pixelSpacing is not None:
+                return [float(i) for i in pixelSpacing]
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            pixelSpacing = self._getPixelSpacingFromSharedFunctionalGroups()
+            if pixelSpacing is not None:
+                return pixelSpacing
+        
+        # Fallback to standard method or default
         return [float(i) for i in self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])]
 
 
@@ -853,8 +893,6 @@ class DicomSeries(list):
         Returns:
             float: The slice spacing in mm needed to construct a proper 3D volume.
         """
-        print(f"DEBUG: deltas {self.getTag('SpacingBetweenSlices')}, {self.getTag('PixelSpacing')}")
-        
         if self.has3DPixelData():
             # For 3D DICOM files, try to get slice spacing from various locations
             dZ = None
@@ -892,6 +930,7 @@ class DicomSeries(list):
 
     def _getSliceSpacingFromSharedFunctionalGroups(self):
         """Extract slice spacing from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
         This handles the nested structure where slice spacing information is stored.
         Prioritizes SpacingBetweenSlices over SliceThickness for proper 3D volume construction.
         
@@ -899,7 +938,7 @@ class DicomSeries(list):
             float or None: The slice spacing in mm if found, None otherwise
         """
         try:
-            # Check if SharedFunctionalGroupsSequence exists
+            # First check SharedFunctionalGroupsSequence
             if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
                 shared_seq = self[0].SharedFunctionalGroupsSequence[0]
                 
@@ -921,9 +960,134 @@ class DicomSeries(list):
                     if hasattr(plane_pos, 'SliceThickness'):
                         return float(plane_pos.SliceThickness)
             
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for slice spacing
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PixelMeasuresSequence within PerFrameFunctionalGroupsSequence
+                if hasattr(per_frame_seq, 'PixelMeasuresSequence') and per_frame_seq.PixelMeasuresSequence:
+                    pixel_measures = per_frame_seq.PixelMeasuresSequence[0]
+                    
+                    # Try to get SpacingBetweenSlices first (preferred for 3D volume construction)
+                    if hasattr(pixel_measures, 'SpacingBetweenSlices'):
+                        return float(pixel_measures.SpacingBetweenSlices)
+                    
+                    # Try SliceThickness as fallback
+                    if hasattr(pixel_measures, 'SliceThickness'):
+                        return float(pixel_measures.SliceThickness)
+                
+                # Check for PlanePositionSequence as another possible location
+                if hasattr(per_frame_seq, 'PlanePositionSequence') and per_frame_seq.PlanePositionSequence:
+                    plane_pos = per_frame_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'SliceThickness'):
+                        return float(plane_pos.SliceThickness)
+            
             return None
         except (AttributeError, IndexError, ValueError, TypeError):
             # If any error occurs during extraction, return None
+            return None
+
+
+    def _getPixelSpacingFromSharedFunctionalGroups(self):
+        """Extract pixel spacing from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [row_spacing, col_spacing] in mm if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                if hasattr(shared_seq, 'PixelMeasuresSequence') and shared_seq.PixelMeasuresSequence:
+                    pixel_measures = shared_seq.PixelMeasuresSequence[0]
+                    
+                    if hasattr(pixel_measures, 'PixelSpacing'):
+                        return [float(i) for i in pixel_measures.PixelSpacing]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for pixel spacing
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                if hasattr(per_frame_seq, 'PixelMeasuresSequence') and per_frame_seq.PixelMeasuresSequence:
+                    pixel_measures = per_frame_seq.PixelMeasuresSequence[0]
+                    
+                    if hasattr(pixel_measures, 'PixelSpacing'):
+                        return [float(i) for i in pixel_measures.PixelSpacing]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return None
+
+
+    def _getImagePositionPatientFromSharedFunctionalGroups(self):
+        """Extract image position patient from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [x, y, z] position in mm if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PlanePositionSequence
+                if hasattr(shared_seq, 'PlanePositionSequence') and shared_seq.PlanePositionSequence:
+                    plane_pos = shared_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'ImagePositionPatient'):
+                        return [float(i) for i in plane_pos.ImagePositionPatient]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for image position
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PlanePositionSequence
+                if hasattr(per_frame_seq, 'PlanePositionSequence') and per_frame_seq.PlanePositionSequence:
+                    plane_pos = per_frame_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'ImagePositionPatient'):
+                        return [float(i) for i in plane_pos.ImagePositionPatient]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return None
+
+
+    def _getImageOrientationPatientFromSharedFunctionalGroups(self):
+        """Extract image orientation patient from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [x1, y1, z1, x2, y2, z2] orientation if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PlaneOrientationSequence
+                if hasattr(shared_seq, 'PlaneOrientationSequence') and shared_seq.PlaneOrientationSequence:
+                    plane_orient = shared_seq.PlaneOrientationSequence[0]
+                    if hasattr(plane_orient, 'ImageOrientationPatient'):
+                        return [float(i) for i in plane_orient.ImageOrientationPatient]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for image orientation
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PlaneOrientationSequence
+                if hasattr(per_frame_seq, 'PlaneOrientationSequence') and per_frame_seq.PlaneOrientationSequence:
+                    plane_orient = per_frame_seq.PlaneOrientationSequence[0]
+                    if hasattr(plane_orient, 'ImageOrientationPatient'):
+                        return [float(i) for i in plane_orient.ImageOrientationPatient]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
             return None
 
 
@@ -973,16 +1137,10 @@ class DicomSeries(list):
             tuple: (deltaRow, deltaCol, deltaSlice) in mm
         """
         if self.has3DPixelData():
-            # For 3D DICOM files, get spacing from tags or use defaults
+            # For 3D DICOM files, get spacing from enhanced methods
             deltaRow = self.getDeltaRow()
             deltaCol = self.getDeltaCol()
             deltaSlice = self.getDeltaSlice()
-            
-            # If we have pixel spacing information, use it
-            pixelSpacing = self.getTag('PixelSpacing', ifNotFound=None)
-            if pixelSpacing is not None:
-                deltaRow = float(pixelSpacing[0])
-                deltaCol = float(pixelSpacing[1])
             
             return (deltaRow, deltaCol, deltaSlice)
         else:
@@ -998,15 +1156,21 @@ class DicomSeries(list):
             bool: True if explicit spacing information is available, False otherwise
         """
         if self.has3DPixelData():
-            # For 3D DICOM files, check for explicit slice thickness and pixel spacing
+            # For 3D DICOM files, check for explicit spacing information
             hasSliceThickness = self.getTag('SliceThickness', ifNotFound=None) is not None
             hasSpacingBetweenSlices = self.getTag('SpacingBetweenSlices', ifNotFound=None) is not None
             hasPixelSpacing = self.getTag('PixelSpacing', ifNotFound=None) is not None
+            hasImagePositionPatient = self.getTag('ImagePositionPatient', ifNotFound=None) is not None
+            hasImageOrientationPatient = self.getTag('ImageOrientationPatient', ifNotFound=None) is not None
             
             # Also check SharedFunctionalGroupsSequence
-            hasSharedFunctionalGroups = self._getSliceSpacingFromSharedFunctionalGroups() is not None
+            hasSharedFunctionalGroups = (self._getSliceSpacingFromSharedFunctionalGroups() is not None or
+                                       self._getPixelSpacingFromSharedFunctionalGroups() is not None or
+                                       self._getImagePositionPatientFromSharedFunctionalGroups() is not None or
+                                       self._getImageOrientationPatientFromSharedFunctionalGroups() is not None)
             
-            return hasSliceThickness or hasSpacingBetweenSlices or hasPixelSpacing or hasSharedFunctionalGroups
+            return (hasSliceThickness or hasSpacingBetweenSlices or hasPixelSpacing or 
+                   hasImagePositionPatient or hasImageOrientationPatient or hasSharedFunctionalGroups)
         else:
             # For traditional 2D slice-based DICOM files, check for slice location information
             return len(self.sliceLocations) > 1
@@ -2022,1050 +2186,4 @@ def _process_series_for_fdq(args):
     return (label, iOut)
 
 
-    def hasVariableSliceThickness(self):
-        """Check if the 3D DICOM file has variable slice thickness.
-        This is important because variable slice thickness is not supported in the current VTK conversion.
-        
-        Returns:
-            bool: True if variable slice thickness is detected, False otherwise
-        """
-        if not self.has3DPixelData():
-            return False  # Only relevant for 3D DICOM files
-        
-        try:
-            # Check if there are multiple frames with different slice thickness values
-            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
-                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
-                
-                # Check for PerFrameFunctionalGroupsSequence which indicates variable parameters
-                if hasattr(shared_seq, 'PerFrameFunctionalGroupsSequence'):
-                    per_frame_seq = shared_seq.PerFrameFunctionalGroupsSequence
-                    
-                    # If there are multiple frames, check if they have different slice thickness
-                    if len(per_frame_seq) > 1:
-                        thicknesses = set()
-                        for frame in per_frame_seq:
-                            if hasattr(frame, 'PixelMeasuresSequence') and frame.PixelMeasuresSequence:
-                                pixel_measures = frame.PixelMeasuresSequence[0]
-                                if hasattr(pixel_measures, 'SliceThickness'):
-                                    thicknesses.add(float(pixel_measures.SliceThickness))
-                        
-                        # If we found multiple different thickness values, it's variable
-                        if len(thicknesses) > 1:
-                            print(f"Warning: Variable slice thickness detected: {thicknesses}")
-                            return True
-            
-            return False
-        except (AttributeError, IndexError, ValueError, TypeError):
-            return False
-
-
-    def getTemporalResolution(self):
-        """Get the temporal resolution of the series.
-            NominalInterval / CardiacNumberOfImages
-            If CardiacNumberOfImages is not present then 1 is assumed.
-            If NominalInterval is not present then 0.0 is assumed.
-
-        Returns:
-            float: The temporal resolution in seconds.
-        """
-        try:
-            return float(self.getTag('NominalInterval', ifNotFound=0.0)/self.getTag('CardiacNumberOfImages', ifNotFound=1))
-        except ZeroDivisionError:
-            return 0       
-
-
-    def getTemporalResolution_TR_VPS(self):
-        return float(self.getTag('RepetitionTime', ifNotFound=0.0)*self.getTag(0x00431007, ifNotFound=1.0))
-
-
-    def getManufacturer(self):
-        return self.getTag(0x00080070, ifNotFound='Unknown')
-
-
-    def IS_GE(self):
-        return self.getManufacturer().lower().startswith('ge')
-
-
-    def IS_SIEMENS(self):
-        return self.getManufacturer().lower().startswith('siemens')
-
-
-    def IS_PHILIPS(self):
-        return self.getManufacturer().lower().startswith('philips')
-
-
-    def IS_BRUKER(self):
-        return self.getManufacturer().lower().startswith('bruker')
-
-
-    def getPulseSequenceName(self):
-        if self.IS_GE():
-            return self.getTag(0x0019109c)
-        else:
-            return self.getTag(0x00180024)
-
-
-    def getVENC(self):
-        """Get VENC value in mm/s
-        """
-        if self.IS_GE():
-            return float(self.getTag(0x001910cc))
-        elif self.IS_SIEMENS():
-            vencStr = self.getTag(0x00511014)
-            return float(vencStr.split("_")[0].replace("v", "")) * 10.0
-        else: # TODO - add other vendors
-            return None
-
-
-    def getInternalPulseSequenceName(self):
-        return self.getTag(0x0019109e)
-
-
-    def getSeriesDescription(self):
-        return self.getTag('SeriesDescription')
-
-
-    def getSeriesInfoDict(self, extraTags=[], EXTRA_TAGS=[]):
-        """Get a dictionary of detailed series information including internally calculated values:
-            - ScanDuration
-            - nTime
-            - nRow
-            - nCols
-            - dRow - pixel spacing in row direction
-            - dCol - pixel spacing in column direction
-            - dSlice - slice thickness
-            - dTime - temporal resolution
-            - SpacingBetweenSlices
-            - FlipAngle
-            - HeartRate
-            - EchoTime
-            - RepetitionTime
-            - MagneticFieldStrength
-
-        Args:
-            EXTRA_TAGS (list, optional): DEPRECIATED - use extraTags instead.
-            extraTags (list, optional): Additional tags to add to the dictionary. Defaults to [].
-
-        Returns:
-            dict: A dictionary of series information.
-        """
-        outDict = {'ScanDuration':self.getScanDuration_secs(),
-            'nTime':self.getTag('CardiacNumberOfImages'),
-            'nRow':self.getTag('Rows'),
-            'nCols':self.getTag('Columns'),
-            'dRow':self.getDeltaRow(),
-            'dCol':self.getDeltaCol(),
-            'dSlice':self.getTag('SliceThickness'),
-            'dTime': self.getTemporalResolution(),
-            'SpacingBetweenSlices':self.getTag('SpacingBetweenSlices'),
-            'FlipAngle':self.getTag('FlipAngle'),
-            'HeartRate':self.getTag('HeartRate'),
-            'EchoTime':self.getTag('EchoTime'),
-            'RepetitionTime':self.getTag('RepetitionTime'),
-            'PulseSequenceName':self.getPulseSequenceName(),
-            'MagneticFieldStrength': self.getTag('MagneticFieldStrength'),
-            'InternalPulseSequenceName':self.getInternalPulseSequenceName(),
-            'ReconstructionDiameter': self.getTag(0x00181100),
-            'AcquisitionMatrix': str(self.getTag(0x00181310)),
-            'Manufacturer': self.getTag("Manufacturer"),
-            'ManufacturerModelName': self.getTag("ManufacturerModelName"),
-            'SoftwareVersions': str(self.getTag(0x00181020)),}
-        if len(EXTRA_TAGS) > 0:
-            print(f"WARNING: EXTRA_TAGS is DEPRECIATED and will be removed in future versions. Use 'extraTags' instead.")
-        extraTags += EXTRA_TAGS
-        for extraTag in extraTags:
-            if extraTag not in outDict.keys():
-                try:
-                    outDict[extraTag] = self.getTag(extraTag)
-                except:
-                    outDict[extraTag] = 'Unknown'
-        outDict['ImagesInAcquisition'] = len(self)
-        try:
-            outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
-        except (TypeError, ValueError):
-            outDict['AcquiredResolution'] = f"{outDict['dRow']},{outDict['dCol']}"
-        try:
-            outDict['AcquiredTemporalResolution'] = self.getTemporalResolution_TR_VPS()
-        except (TypeError, ValueError):
-            outDict['AcquiredTemporalResolution'] = 0.0
-        for i in outDict.keys():
-            try:
-                if ',' in outDict[i]:
-                    outDict[i] = str(outDict[i])
-            except TypeError:
-                pass
-        return outDict
-
-
-    def checkIfShouldUse_SAFE_NAMING(self, se_instance_set=None):
-        """Checks is should name dicoms based on UIDs or if a SE-number, Instace-number naming convention is possible.
-        Basically checks if there would be any overlaps. 
-
-        Args:
-            se_instance_set (set, optional): A set of instance file names (without extension). Defaults to None.
-        """
-        if self.SAFE_NAME_MODE:
-            return
-        if se_instance_set is None:
-            se_instance_set = set()
-        for k1 in range(len(self)):
-            se = self.getTag('SeriesNumber', dsID=k1, ifNotFound='unknown')
-            instance = self.getTag('InstanceNumber', dsID=k1, ifNotFound='unknown')
-            se_instance_str = f"{se}_{instance}"
-            if se_instance_str in se_instance_set:
-                self.SAFE_NAME_MODE = True
-                break
-            se_instance_set.add(se_instance_str)
-
-
-    def getStudyOutputDir(self, rootDir='', studyPrefix=''):
-        """Generate a study output directory name based on config setting STUDY_NAMINF_TAG_LIST
-
-        Args:
-            rootDir (str, optional): The root directory to build study directory in. Defaults to ''.
-            studyPrefix (str, optional): Optional prefix to add to naming. Defaults to ''.
-
-        Returns:
-            str: Path to directory at Study level where dicoms will be written
-        """
-        suffix = ''
-        if self.SAFE_NAME_MODE:
-            suffix += f"{self.getTag('StudyInstanceUID')}"
-        for iTag in SpydcmTK_config.STUDY_NAMING_TAG_LIST:
-            iVal = self.getTag(iTag, ifNotFound='', convertToType=str)
-            if len(iVal) > 0:
-                suffix += '_'+iVal
-        return os.path.join(rootDir, dcmTools.cleanString(studyPrefix+suffix))
-
-
-    def overviewImage(self, outputFileName=None, RETURN_FIG=False):
-        """
-        Build an overview image of the series.
-
-        Args:
-            outputFileName (str, optional): The name of the file to save the overview image to. Defaults to None.
-            RETURN_FIG (bool, optional): Whether to return the figure. Defaults to False.
-
-        Returns:
-            if RETURN_FIG is True, returns the figure.
-            if outputFileName is not None, saves the figure to the file and returns the file name.
-            otherwise, displays the figure.
-        """
-        A = self.getPixelDataAsNumpy()[0]
-        i,j,k,n = A.shape
-        if k > 1:
-            iSlice = k//2
-            Image_list = [A[:,:,iSlice,0], np.rot90(A[i//2,:,:,0],3), np.rot90(A[:,j//2,:,0],3)]
-        else:
-            Image_list = [A[:,:,0,0]]
-        fig, axs = plt.subplots(1, len(Image_list))
-        if len(Image_list) == 1:
-            axs = [axs]  # Convert single Axes to list for consistent indexing
-        for i, iA in enumerate(Image_list):
-            axs[i].imshow(iA, cmap='gray')
-            axs[i].axis('off')
-        fig.tight_layout()
-        if RETURN_FIG:
-            return fig
-        if outputFileName is not None:
-            plt.savefig(outputFileName)
-            plt.close()
-            return outputFileName
-        else:
-            plt.show()
-        
-
-
-# ================================================================================================================
-# DicomStudy
-# ================================================================================================================
-class DicomStudy(list):
-    """
-    Extends list of DicomSeries objects (creating list of list of pydicom.dataset)
-    """
-    def __init__(self, dSeriesList, OVERVIEW=False, HIDE_PROGRESSBAR=False):
-        """
-        Set OVERVIEW = False to read pixel data as well (at a cost)
-        """
-        self.OVERVIEW = OVERVIEW
-        self.HIDE_PROGRESSBAR = HIDE_PROGRESSBAR # FIXME - if set need ot pass down to series also - for the writing
-        list.__init__(self, dSeriesList)
-
-    @classmethod
-    def setFromDictionary(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
-        dStudyList = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-        if len(dStudyList) > 1:
-            raise ValueError('More than one study found - use ListOfDicomStudies class')
-        return cls(dStudyList[0], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
-
-    @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ, ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, OVERVIEW=OVERVIEW)
-        obj = DicomStudy.setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-        for iSeries in obj:
-            iSeries.NOT_FULLY_LOADED = ONE_FILE_PER_DIR
-        return obj
-
-
-    def __str__(self):
-        return '%s: %s: %d series, %d dicoms'%(self.getTag('PatientName'),
-                                                self.getTag('SeriesDescription'),
-                                                len(self),
-                                                self.getNumberOfDicoms())
-
-
-    def setSafeNameMode(self):
-        for iSeries in self:
-            iSeries.SAFE_NAME_MODE = True
-
-    def resetUIDs(self, studyUID=None):
-        if studyUID is None:
-            studyUID = str(generate_uid())
-        for i in self:
-            i.resetUIDs(studyUID)
-
-    def filterByTag(self, tagName, tagValue):
-        return DicomStudy([i for i in self if i.getTag(tagName) == tagValue], 
-                           OVERVIEW=self.OVERVIEW, 
-                           HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
-
-    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
-        for i in self:
-            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
-
-    def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
-        return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
-
-    def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
-        return self[seriesID].getTagListAndNames(tagList, dsID=instanceID)
-
-    def setTags_all(self, tag, value):
-        for i in self:
-            i.setTags_all(tag, value)
-
-    def isCompressed(self):
-        return self[0].isCompressed()
-
-    def getNumberOfDicoms(self):
-        return sum([len(i) for i in self])
-
-    def getTopDir(self):
-        return os.path.split(os.path.split(self[0][0].filename)[0])[0]
-
-    def getSeriesMatchingDescription(self, matchingStrList, RETURN_SERIES_OBJ=False, REDUCE_MULTIPLE=False):
-        matchStrList_lower = [i.lower() for i in matchingStrList]
-        possibles = []
-        for i in self:
-            sDesc = i.getTag('SeriesDescription').lower()
-            if any([j in sDesc  for j in matchStrList_lower ]):
-                possibles.append(i)
-        minID = None
-        if len(possibles) == 0:
-            return None
-        elif (len(possibles) > 1) and REDUCE_MULTIPLE:
-            seNums = [int(i.getTag('SeriesNumber')) for i in possibles]
-            seNums = [i for i in seNums if i!=0]
-            for k1 in range(1, len(seNums)):
-                if seNums[k1] < seNums[minID]:
-                    minID = k1
-        if minID is not None:
-            possibles = possibles[minID]
-        if RETURN_SERIES_OBJ:
-            return possibles
-        return [f'SE{possibles[i].getTag("SeriesnNumber")}:{possibles[i].getTag("SeriesDescription")}' for i in range(len(possibles))]
-
-    def getStudyOverview(self, tagList=SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST):
-        return self.getTagListAndNames(tagList)
-
-    def getPatientOverview(self, tagList=SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST):
-        return self.getTagListAndNames(tagList)
-
-    def getSeriesByID(self, ID):
-        ID = int(ID)
-        for iSeries in self:
-            try:
-                if int(iSeries.getTag('SeriesNumber')) == ID:
-                    return iSeries
-            except TypeError: # If SE# == None (report of Sec Capture etc)
-                pass
-
-    def getSeriesBySeriesNumber(self, seNum):
-        return self.getSeriesByID(seNum)
-
-    def getSeriesByUID(self, UID):
-        for iSeries in self:
-            if iSeries.getTag('SeriesInstanceUID') == UID:
-                return iSeries
-
-
-    def getSeriesByTag(self, tag, value, convertToType=None):
-        for iSeries in self:
-            if iSeries.getTag(tag, convertToType=convertToType) == value:
-                return iSeries
-
-
-    def mergeSeriesVolumesWithTime(self):
-        """ Convenience method to sort a 4D series by volumes then time.
-        """
-        nTimes = len(self)
-        triggerTimes = sorted([self.getTag('TriggerTime', seriesID=i, instanceID=0, ifNotFound=0, convertToType=float) for i in range(nTimes)])
-        nPerTime = len(self.getSeriesByTag('TriggerTime', triggerTimes[0], convertToType=float))
-        sorted_ds_list = [None for _ in range(nTimes*nPerTime)]
-        # print(f"Merging series: n times: {nTimes}, N per time: {nPerTime}")
-        for i in range(nTimes):
-            iSeries = self.getSeriesByTag('TriggerTime', triggerTimes[i], convertToType=float)
-            iSeries.sortByInstanceNumber()
-            for k1, iDS in enumerate(iSeries):
-                if nPerTime > 1:
-                    thisID = i + (nTimes * k1)
-                else:
-                    thisID = i
-                iDS.InstanceNumber = thisID + 1 # 1 index
-                sorted_ds_list[thisID] = iDS
-        if sorted_ds_list.count(None) != 0:
-            raise ValueError('Missing some volumes')
-        return DicomSeries(sorted_ds_list)
-
-
-    def writeFDQ(self, seriesNumber_list, outputFileName, velArrayName,
-                phase_factors=None, phase_offsets=None, working_dir=None, VERBOSE=True):
-        """
-        Writes a 4D-flow output as VTS format.
-
-        Args:
-            seriesNumber_list (list): A list of series numbers identifying mag and 3 phase series. Mag, X, Y, Z phases
-            outputFileName (str): The name of the pvd file to write to.
-
-        Returns:
-            str: the pvd file written
-        """
-        # Check phase factors and offsets:
-        if phase_factors is not None:
-            if len(phase_factors) != 3:
-                raise ValueError(f"phase_factors should be length 3")
-        else:
-            if self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_GE():
-                phase_factors = [1.0, 1.0, -1.0]
-                phase_offsets = [0.0, 0.0, 0.0]
-            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_SIEMENS():
-                venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()
-                c = -1.0 * venc
-                m = (venc * 2.0) / 4096.0 # TODO: Check this
-                phase_factors = [m, m, m]
-                phase_offsets = [c, c, c]
-            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_PHILIPS(): # TODO: Check this
-                phase_factors = [1.0, 1.0, 1.0]
-                phase_offsets = [0.0, 0.0, 0.0]
-            else:
-                raise ValueError(f"Unknown scanner type")
-        if phase_offsets is not None:
-            if len(phase_offsets) != 3:
-                raise ValueError(f"phase_offsets should be length 3")
-        else:
-            phase_offsets = [0.0, 0.0, 0.0]
-        
-        if working_dir is None:
-            working_dir = os.path.dirname(outputFileName)
-        intermediate_pvds = {}
-        
-        # Create process pool and process all directories in parallel
-        origHIDE = self.HIDE_PROGRESSBAR
-        self.HIDE_PROGRESSBAR = True
-        with Pool() as pool:
-            args = [(self.getSeriesBySeriesNumber(iSeriesNum), label, working_dir)
-                    for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"])]
-            
-            results = pool.map(_process_series_for_fdq, args)
-        
-        # Collect results into intermediate_pvds dictionary
-        intermediate_pvds = dict(results)
-        
-        if VERBOSE: print(f"Combining to final 4D-flow PVD")
-        fOut = dcmVTKTK.mergePhaseSeries4D(intermediate_pvds["MAG"], 
-                                        [intermediate_pvds["PX"],
-                                        intermediate_pvds["PY"],
-                                        intermediate_pvds["PZ"]], 
-                                        outputFileName, 
-                                        phase_factors=phase_factors,
-                                        phase_offsets=phase_offsets,
-                                        scale_factor=0.001,
-                                        velArrayName=velArrayName,
-                                        DEL_ORIGINAL=True)
-        self.HIDE_PROGRESSBAR = origHIDE
-        if VERBOSE: print(f"Written {fOut}")
-        return fOut
-
-
-    def getStudySummaryDict(self, extraTags=[]):
-        pt,pv = self.getPatientOverview(tagList=SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+extraTags)
-        studySummaryDict = dict(zip(pt, pv))
-        st,sv = self.getStudyOverview(tagList=SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST+extraTags)
-        stdyDict = dict(zip(st, sv))
-        studySummaryDict.update(stdyDict)
-        listSerDict = []
-        for i in self:
-            szt, szv = i.getSeriesOverview()
-            listSerDict.append(dict(zip(szt, szv)))
-        studySummaryDict['Series'] = listSerDict
-        return studySummaryDict
-
-
-    def getStudySummary(self, FULL=True):
-        pt,pv = self.getPatientOverview()
-        patStr = ','.join([' %s:%s'%(str(i), str(j)) for i,j in zip(pt,pv)])
-        st,sv = self.getStudyOverview()
-        studyStr = ','.join([' %s:%s'%(str(i), str(j)) for i,j in zip(st,sv)])
-        if FULL:
-            sst,_ = self[0].getSeriesOverview()
-            seriesHeader = ','.join([str(i) for i in sst])
-            seriesStr = [','.join([str(i2) for i2 in i.getSeriesOverview()[1]]) for i in self]
-            try:
-                seriesStr = sorted(seriesStr, key=lambda i:int(i.split(',')[0]))
-            except ValueError:
-                pass # Try to sort, but if fail (due to return not int somehow, then no sort)
-            seriesStr_ = '\n\n'+seriesHeader+'\n    '+'\n    '.join(seriesStr)
-            strOut = f"SUBJECT: {patStr}"
-            strOut += f"\nSTUDY: {studyStr}"
-            strOut += seriesStr_
-            return strOut
-        else:
-            strOut = f"SUBJECT: {patStr}"
-            strOut += f"\nSTUDY: {studyStr}"
-            return strOut
-
-
-    def getTagValuesList(self, tagList, RETURN_STR=False):
-        output = []
-        for i in self:
-            output += i.getTagValuesList(tagList, False)
-        if RETURN_STR:
-            return dcmTools._tagValuesListToString(tagList, output)
-        return output
-
-
-    def writeToOrganisedFileStructure(self, patientOutputDir, studyPrefix=''):
-        """Write the study to an organised file structure.
-
-        Args:
-            patientOutputDir (str): The output root directory (a Study output directory will be built here).
-            studyPrefix (str, optional): The prefix of the study output directory. Defaults to ''.
-
-        Returns:
-            str: The study output directory name.
-        """
-        self.checkIfShouldUse_SAFE_NAMING()
-        try:
-            studyOutputDir = self[0].getStudyOutputDir(patientOutputDir, studyPrefix)
-        except IndexError: # Study is empty
-            return None
-        studyOutputDirTemp = studyOutputDir+".WORKING"
-        if os.path.isdir(studyOutputDir):
-            os.rename(studyOutputDir, studyOutputDirTemp)
-        for iSeries in self:
-            iSeries.writeToOrganisedFileStructure(studyOutputDirTemp)
-        os.rename(studyOutputDirTemp, studyOutputDir)
-        return studyOutputDir
-
-
-    def writeToZipArchive(self, patientOutputDir, CLEAN_UP=True):
-        """Write the study to a zip archive. Study is written to disk then zipped.
-
-        Args:
-            patientOutputDir (str): The output directory.
-            CLEAN_UP (bool, optional): Whether to clean up the original written directory. Defaults to True.
-
-        Returns:
-            str: The zip file written.
-        """
-        studyOutputDir = self.writeToOrganisedFileStructure(patientOutputDir)
-        if studyOutputDir is None:
-            return
-        r, f = os.path.split(studyOutputDir)
-        shutil.make_archive(studyOutputDir, 'zip', os.path.join(r, f))
-        fileOut = studyOutputDir+'.zip'
-        if CLEAN_UP:
-            shutil.rmtree(studyOutputDir)
-        return fileOut
-
-    def checkIfShouldUse_SAFE_NAMING(self):
-        se_instance_set = set()
-        for i in self:
-            i.checkIfShouldUse_SAFE_NAMING(se_instance_set)
-
-
-class ListOfDicomStudies(list):
-    """
-    Extends list of DicomStudies objects (creating list of list of list of pydicom.dataset)
-    """
-    def __init__(self, dStudiesList, OVERVIEW=False, HIDE_PROGRESSBAR=False):
-        """
-        Set OVERVIEW = False to read pixel data as well (at a cost)
-        """
-        self.OVERVIEW = OVERVIEW
-        self.HIDE_PROGRESSBAR = HIDE_PROGRESSBAR
-        list.__init__(self, dStudiesList)
-
-    @classmethod
-    def setFromInput(cls, input, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False):
-        if os.path.isdir(input):
-            return ListOfDicomStudies.setFromDirectory(input, OVERVIEW=OVERVIEW, 
-                                                                HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-                                                                FORCE_READ=FORCE_READ, 
-                                                                ONE_FILE_PER_DIR=ONE_FILE_PER_DIR)
-        if os.path.isfile(input):
-            if input.endswith('tar'):
-                return ListOfDicomStudies.setFromTar(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-                                                            FORCE_READ=FORCE_READ)
-            elif input.endswith('tar.gz'):
-                return ListOfDicomStudies.setFromTar(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-                                                            FORCE_READ=FORCE_READ)
-            elif input.endswith('zip'):
-                return ListOfDicomStudies.setFromZip(input, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-                                                            FORCE_READ=FORCE_READ)
-            else:
-                dcmDict = {}
-                try:
-                    dcmTools.readDicomFile_intoDict(input, dcmDict, FORCE_READ=FORCE_READ, OVERVIEW=OVERVIEW)
-                    return ListOfDicomStudies.setFromDcmDict(dcmDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-                except dicom.filereader.InvalidDicomError:
-                    raise IOError("ERROR READING DICOMS: SPYDCMTK capable to read dicom files from directory, zip, tar or tar.gz\n")
-
-    @classmethod
-    def setFromDirectory(cls, dirName, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False, ONE_FILE_PER_DIR=False, extn_filter=None):
-        dicomDict = dcmTools.organiseDicomHeirarchyByUIDs(dirName, 
-                                                         HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, 
-                                                         FORCE_READ=FORCE_READ, 
-                                                         ONE_FILE_PER_DIR=ONE_FILE_PER_DIR, 
-                                                         OVERVIEW=OVERVIEW,
-                                                         extn_filter=extn_filter)
-        obj = ListOfDicomStudies.setFromDcmDict(dicomDict, OVERVIEW, HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-        for iStudy in obj:
-            for iSeries in iStudy:
-                iSeries.NOT_FULLY_LOADED = ONE_FILE_PER_DIR
-        return obj
-
-    @classmethod
-    def setFromDcmDict(cls, dicomDict, OVERVIEW=False, HIDE_PROGRESSBAR=False, FORCE_READ=False):
-        dStudiesList = []
-        for studyUID in dicomDict.keys():
-            dSeriesList = []
-            for seriesUID in dicomDict[studyUID].keys():
-                dSeriesList.append(DicomSeries(dicomDict[studyUID][seriesUID], OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ))
-            dStudiesList.append(DicomStudy(dSeriesList, OVERVIEW, HIDE_PROGRESSBAR))
-        return cls(dStudiesList, OVERVIEW, HIDE_PROGRESSBAR)
-
-    @classmethod
-    def setFromTar(cls, tarFileName, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
-        # Note need OVERVIEW = False as only get access to file (and pixels) on untaring (maybe only if tar.gz) 
-        dicomDict = dcmTools.getDicomDictFromTar(tarFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
-                                    matchingTagValuePair=matchTagPair, QUIET=True)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-
-    @classmethod
-    def setFromZip(cls, zipFileName, HIDE_PROGRESSBAR=False, FORCE_READ=False, FIRST_ONLY=False, matchTagPair=None):
-        dicomDict = dcmTools.getDicomDictFromZip(zipFileName, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY, OVERVIEW_ONLY=False,
-                                    matchingTagValuePair=matchTagPair, QUIET=True)
-        return ListOfDicomStudies.setFromDcmDict(dicomDict, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
-
-
-    def __str__(self):
-        return '%d studies, %d dicoms'%(len(self), self.getNumberOfDicoms())
-
-    def setSafeNameMode(self):
-        for iStudy in self:
-            for iSeries in iStudy:
-                iSeries.SAFE_NAME_MODE = True
-
-    def resetUIDs(self):
-        for i in self:
-            i.resetUIDs()
-
-    def anonymise(self, anonName, anonPatientID, anonBirthdate=True, removePrivateTags=True):
-        for i in self:
-            i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
-
-    def isCompressed(self):
-        return self[0].isCompressed()
-
-    def getNumberOfDicoms(self):
-        return sum([i.getNumberOfDicoms() for i in self])
-
-    def filterByTag(self, tagName, tagValue):
-        return ListOfDicomStudies([i for i in self if i.getTag(tagName) == tagValue], 
-                                  OVERVIEW=self.OVERVIEW, 
-                                  HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR)
-
-    def writeToOrganisedFileStructure(self, outputRootDir):
-        outDirs = []
-        for iStudy in self:
-            suffix = ''
-            for iTag in SpydcmTK_config.SUBJECT_NAMING_TAG_LIST:
-                iVal = iStudy.getTag(iTag, ifNotFound='', convertToType=str)
-                if len(iVal) > 0:
-                    suffix += '_'+iVal
-            if len(suffix) > 0:
-                ioutputRootDir = os.path.join(outputRootDir, dcmTools.cleanString(suffix))
-            else:
-                ioutputRootDir = outputRootDir
-
-            ooD = iStudy.writeToOrganisedFileStructure(ioutputRootDir)
-            if ooD is not None:
-                outDirs.append(ooD)
-        return outDirs
-
-    def writeToZipArchive(self, outputRootDir, CLEAN_UP=True):
-        outDirs = []
-        for iStudy in self:
-            ooD = iStudy.writeToZipArchive(outputRootDir, CLEAN_UP=CLEAN_UP)
-            outDirs.append(ooD)
-        return outDirs
-
-    def getSummaryString(self, FULL=True):
-        output = [i.getStudySummary(FULL) for i in self]
-        return '\n\n'.join(output)
-
-    def getTableOfTagValues(self, DICOM_TAGS, RETURN_STR):
-        output = []
-        for i in self:
-            output += i.getTagValuesList(DICOM_TAGS, False)
-        if RETURN_STR:
-            return dcmTools._tagValuesListToString(DICOM_TAGS, output)
-        return output
-
-    def printSummaryTable(self):
-        overviewList = self.getTableOfTagValues(SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST, False)
-        print(','.join(SpydcmTK_config.SUBJECT_OVERVIEW_TAG_LIST+SpydcmTK_config.STUDY_OVERVIEW_TAG_LIST))
-        for i in overviewList:
-            print(','.join(i))
-
-    def getStudyByDate(self, date_str):
-        return self.getStudyByTag('StudyDate', date_str)
-
-    def getStudyByPID(self, PID):
-        return self.getStudyByTag('PatientID', PID)
-
-    def getStudyByTag(self, tagName, tagValue):
-        for i in self:
-            if i.getTag(tagName) == tagValue:
-                return i
-
-    def buildMSTable(self, DICOM_TAGS=SpydcmTK_config.SERIES_OVERVIEW_TAG_LIST):
-        pass
-        #TODO - need to pass series name or something to query and then calc mean / stdev etc
-
-## =====================================================================================================================
-##   BIDS
-## =====================================================================================================================
-class BIDSConst(object):
-    anat = 'anat'
-    func = 'func'
-    dwi = 'dwi'
-    fmap = 'fmap'
-    code = 'code'
-    configf = 'dcm2bids_config.json'
-
-
-def getJsonDict(niiORjsonFile):
-    if niiORjsonFile.endswith('.nii.gz'):
-        niiORjsonFile = niiORjsonFile.replace('.nii.gz','.json')
-    with open(niiORjsonFile, 'r') as f:
-        jsonDict = json.load(f)
-    return jsonDict
-
-def getTagFromJson(niiORjsonFile, tag):
-    jsonDict = getJsonDict(niiORjsonFile)
-    return jsonDict[tag]
-
-
-class BIDS_Subject(object):
-    """
-    Class to work with a single BIDS subject
-    """
-    def __init__(self, subjID, BIDSDirObj):
-        if subjID.startswith('sub-'):
-            self.subjID = subjID
-        else:
-            self.subjID = 'sub-%s'%(subjID)
-        self.parent = BIDSDirObj
-
-    def __gt__(self, other):
-        return self.subjID > other.subjID
-
-    def __eq__(self, other):
-        return self.subjID == other.subjID
-
-    def getSubjID(self):
-        return self.subjID.replace('sub-', '')
-
-    def getSessionDir(self, session):
-        if not session.startswith('ses-'):
-            session = 'ses-%s'%(session)
-        return os.path.join(self.parent.rootDir, self.subjID, session)
-
-    def getTypeDir(self, TYPE, session):
-        return os.path.join(self.getSessionDir(session), TYPE)
-
-    def _getAllTypeNII(self, TYPE, session):
-        dd = self.getTypeDir(TYPE, session)
-        return [os.path.join(dd, i) for i in os.listdir(dd) if i.endswith('nii.gz')]
-
-    def getNIIMatchingModality(self, modality, TYPE, session):
-        matchingF = [i for i in self._getAllTypeNII(TYPE, session) if i.endswith('_%s.nii.gz'%(modality))]
-        return matchingF
-
-    def getNIIMatchingModality_condition(self, modality, TYPE, session, tag, func):
-        matchingNII = self.getNIIMatchingModality(modality, TYPE, session)
-        if len(matchingNII) == 0:
-            return None
-        elif len(matchingNII) == 1:
-            return matchingNII[0]
-        else: # more than 1 run so need to make decision
-            tagList = [getTagFromJson(i, tag) for i in matchingNII]
-            ID = func(tagList)
-            return matchingNII[ID]
-
-
-class BIDS_Directory(object):
-    """
-    Class to work with BIDS directory
-    """
-    def __init__(self, rootDirectroy):
-        self.rootDir = rootDirectroy
-
-    def getConfigFile(self, configFName=BIDSConst.configf):
-        return os.path.join(self.rootDir, BIDSConst.code, configFName)
-
-    def getSubjList(self):
-        subjIDs = [i for i in os.listdir(self.rootDir) if i.startswith('sub-')]
-        return sorted([BIDS_Subject(i, self) for i in subjIDs])
-
-
-def organiseDicoms(dcmDirectory, outputDirectory, anonName=None, anonID='', FORCE_READ=False, 
-                   HIDE_PROGRESSBAR=False, REMOVE_PRIVATE_TAGS=False):
-    """ Recurse down directory tree - grab dicoms and move to new
-        hierarchical folder structure
-    """
-    if not HIDE_PROGRESSBAR:
-        print('READING...')
-    studies = ListOfDicomStudies.setFromInput(dcmDirectory, FORCE_READ=FORCE_READ, OVERVIEW=False, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR)
-    if not HIDE_PROGRESSBAR:
-        print('WRITTING...')
-    res = studies.writeToOrganisedFileStructure(outputDirectory, anonName=anonName, anonID=anonID, REMOVE_PRIVATE_TAGS=REMOVE_PRIVATE_TAGS)
-    if res is None:
-        print('    ## WARNING - No valid dicoms found')
-
-
-def studySummary(pathToDicoms):
-    """
-    :param pathToDicoms: path to dicoms - anywhere in the tree above - will search down tree till find a dicom
-    :return: a formatted string
-    """
-    dStudies = ListOfDicomStudies.setFromDirectory(pathToDicoms)
-    return dStudies.getSummaryString()
-
-
-
-## =====================================================================================================================
-##   WRITE DICOMS
-## =====================================================================================================================
-def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
-    if type(vtiFile) == str:
-        vti = dcmVTKTK.fIO.readVTKFile(vtiFile)
-        if vtiFile.endswith(".nii") or vtiFile.endswith(".nii.gz"):
-            # TODO - need to also adjust patientMeta if this is nifti 
-            vti.SetOrigin([i*0.001 for i in vti.GetOrigin()])
-            vti.SetSpacing([i*0.001 for i in vti.GetSpacing()])
-    else:
-        vti = vtiFile
-    if arrayName is None:
-        A = dcmVTKTK.vtkfilters.getScalarsAsNumpy(vti)
-    else:
-        A = dcmVTKTK.vtkfilters.getArrayAsNumpy(vti, arrayName)
-    if np.ndim(A) == 1:
-        A = np.expand_dims(A, 1)
-    dims = [0,0,0]
-    vti.GetDimensions(dims)
-    dims.append(A.shape[-1])
-    A = np.reshape(A, dims, 'F')
-    if patientMeta is None:
-        patientMeta = dcmVTKTK.PatientMeta()
-        patientMeta.initFromVTI(vti)
-    return writeNumpyArrayToDicom(A, dcmTemplateFile_or_ds, patientMeta, outputDir, tagUpdateDict=tagUpdateDict)
-
-
-def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir, tagUpdateDict=None):
-    if tagUpdateDict is None:
-        tagUpdateDict = {}
-    if dcmTemplate_or_ds is None:
-        dsRAW = dcmTools.buildFakeDS()
-    elif type(dcmTemplate_or_ds) == str:
-        dsRAW = dicom.dcmread(dcmTemplate_or_ds)
-    else:
-        dsRAW = dcmTemplate_or_ds
-    assert pixelArray.ndim == 4 and pixelArray.shape[3] in [1, 3, 4], "Input must be MxNxSx1, or MxNxSx3 or MxNxSx4 RGB(A) array"
-
-    IS_RGB = False
-    # Strip alpha if present
-    if pixelArray.shape[3] == 4:
-        pixelArray = pixelArray[:, :, :, :3]
-        IS_RGB = True
-    elif pixelArray.shape[3] == 3:
-        IS_RGB = True
-
-    # Ensure uint8 
-    NBIT = 8
-    if pixelArray.dtype != np.uint8:
-        pixelArray = (pixelArray * 255).astype(np.uint8) if pixelArray.max() <= 1 else pixelArray.astype(np.uint8)
-    # if pixelArray.dtype != np.uint16:
-    #     pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
-
-    nRow, nCol, nSlice, _ = pixelArray.shape
-    mx, mn = np.max(pixelArray), 0
-    try:
-        slice0 = tagUpdateDict.pop('SliceLocation0')
-    except KeyError:
-        slice0 = patientMeta.SliceLocation0*dcmVTKTK.m_to_mm
-    
-    sliceThick = patientMeta.SliceThickness*dcmVTKTK.m_to_mm
-    ipp = [i*dcmVTKTK.m_to_mm for i in patientMeta.ImagePositionPatient]
-
-    SeriesUID = dicom.uid.generate_uid()
-    try:
-        SeriesNumber = tagUpdateDict.pop('SeriesNumber')
-        try: # Have passed as Tag,VR,Value
-            SeriesNumber = SeriesNumber[2]
-        except TypeError:
-            pass 
-    except KeyError:
-        try:
-            SeriesNumber = dsRAW.SeriesNumber * 100
-        except AttributeError:
-            SeriesNumber = 99
-    dsList = []
-    dt = datetime.now()
-    tags_to_copy = { # Tags to get from template and defaults if not found
-        "PatientName": [0x00100010, "PN", "Anonymous^Name"],
-        "PatientID": [0x00100020, "LO", "000000"],
-        "Modality": [0x00080060, "CS", "OT"],
-        "PatientBirthDate": [0x00100030, "DA",  ""],
-        "PatientSex": [0x00100040, "CS", ""],
-        "StudyDate": [0x00080020, "DA", dt.strftime('%Y%m%d')],
-        "StudyTime": [0x00080030, "DM", dt.strftime('%H%M%S')],
-        "InstitutionName": [0x00080080, "LO", ""],
-        "StudyDescription": [0x00081030, "LO", "Study"],
-        "SeriesDescription": [0x0008103e, "LO", "Image"],
-        "StationName": [0x00081010, "SH", ""],
-        "StudyInstanceUID": [0x0020000d, "UI", dicom.uid.generate_uid()],
-        "StudyID": [0x00200010, "SH", None],
-        "AccessionNumber": [0x00080050, "SH", None],
-    }
-    for k in range(nSlice):
-        file_meta = dicom.Dataset()
-        file_meta.MediaStorageSOPClassUID = dicom.uid.SecondaryCaptureImageStorage
-        file_meta.MediaStorageSOPInstanceUID = generate_uid()
-        file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-        ##
-        ds = dicom.FileDataset(filename_or_obj=None, dataset={}, file_meta=file_meta, preamble=b"\0" * 128,
-                               is_implicit_VR=False, is_little_endian=True)
-        # Copy tags from template DICOM
-        for tag, default in tags_to_copy.items():
-            iTag = dsRAW.get_item(tag)
-            if iTag is not None:
-                ds[tag] = iTag
-            else:
-                if default[2] is not None:
-                    ds[tag] = dicom.DataElement(default[0], 
-                                                default[1], 
-                                                default[2])
-        #
-        # Set specific tags for this image conversion
-        # If RGB then no position / orientation information
-        ds.SeriesInstanceUID = SeriesUID
-        ds.SOPInstanceUID = dicom.uid.generate_uid()
-        #
-        ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
-        ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
-        ds.Rows = nRow
-        ds.Columns = nCol
-        ds.ImagesInAcquisition = nSlice
-        ds.InStackPositionNumber = k+1
-        ds.SeriesNumber = SeriesNumber
-        ds.InstanceNumber = k+1
-        if IS_RGB:
-            ds.SamplesPerPixel = 3
-            ds.PhotometricInterpretation = "RGB"
-            ds.BitsAllocated = NBIT
-            ds.BitsStored = NBIT
-            ds.HighBit = NBIT - 1
-            ds.PixelRepresentation = 0
-            ds.PlanarConfiguration = 0  # Interleaved RGB
-        else:
-            ds.SamplesPerPixel = 1
-            ds.BitsAllocated = NBIT
-            ds.BitsStored = NBIT
-            ds.HighBit = NBIT - 1
-            ds.PixelRepresentation = 0
-            ds.PhotometricInterpretation = "MONOCHROME2"
-        ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
-        ds.SpacingBetweenSlices = sliceThick
-        ds.SmallestImagePixelValue = int(mn)
-        ds.LargestImagePixelValue = int(mx)
-        ds.WindowCenter = int(mx / 2)
-        ds.WindowWidth = int(mx / 2)
-        ds.PixelSpacing = [i*dcmVTKTK.m_to_mm for i in list(patientMeta.PixelSpacing)]
-        #
-        sliceVec = np.array(patientMeta.SliceVector)
-        ImagePositionPatient = ipp + k*sliceVec*sliceThick
-        ds.ImagePositionPatient = list(ImagePositionPatient)
-        sliceLoc = slice0 + k*sliceThick
-        ds.SliceLocation = sliceLoc
-        ds.ImageOrientationPatient = list(patientMeta.ImageOrientationPatient)
-        #
-        # Set tags from method provided
-        for iKey in tagUpdateDict.keys():
-            if len(tagUpdateDict[iKey]) == 3: # Tag:0x00101010, VR, value
-                ds.add_new(tagUpdateDict[iKey][0], tagUpdateDict[iKey][1], tagUpdateDict[iKey][2])
-            else:
-                ds[iKey] = tagUpdateDict[iKey]
-        ##
-        # Set PixelData
-        ds.PixelData = pixelArray[:,:,k, :].tobytes()
-        ds['PixelData'].VR = 'OW'
-        dsList.append(ds)
-    dcmSeries = DicomSeries(dsList, HIDE_PROGRESSBAR=True)
-    return dcmSeries.writeToOrganisedFileStructure(outputDir)
-
-def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds, 
-                            outputDir, tagUpdateDict=None, CONVERT_TO_GREYSCALE=True):
-
-    combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=CONVERT_TO_GREYSCALE)
-    writeVTIToDicoms(combinedImage, 
-                        dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
-                        outputDir=outputDir,
-                        arrayName='PixelData',
-                        tagUpdateDict=tagUpdateDict,
-                        patientMeta=patientMeta)
-
-
-def getResolution(dataVts):
-    o,p1,p2,p3 = [0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0]
-    i0,i1,j0,j1,k0,k1 = dataVts.GetExtent()
-    dataVts.GetPoint(i0,j0,k0, o)
-    dataVts.GetPoint(i0+1,j0,k0, p1)
-    dataVts.GetPoint(i0,j0+1,k0, p2)
-    dataVts.GetPoint(i0,j0,k0+1, p3)
-    di = abs(distBetweenTwoPts(p1, o))
-    dj = abs(distBetweenTwoPts(p2, o))
-    dk = abs(distBetweenTwoPts(p3, o))
-    return [di, dj, dk]
-
-def distBetweenTwoPts(a, b):
-    return np.sqrt(np.sum((np.asarray(a) - np.asarray(b)) ** 2))
-
-def _process_series_for_fdq(args):
-    series, label, outDir = args
-    series._loadToMemory()
-    iOut = series.writeToVTS(os.path.join(outDir, f"{label}.pvd"))
-    return (label, iOut)
 
