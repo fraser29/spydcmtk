@@ -1,5 +1,8 @@
 # Version History
 
+## [1.2.11] - 2025-08-18
+### Added
+- 3D DICOM file handling.
 
 ## [1.2.10] - 2025-04-28
 ### Added
