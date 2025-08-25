@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.12] - 2025-08-25
+### Fixed
+- Fix bug in vti2dcm command - correctly handle file read errors.
+
 ## [1.2.11] - 2025-08-18
 ### Added
 - 3D DICOM file handling.
