@@ -486,10 +486,11 @@ def _runActions(args, ap):
 
         elif args.vti2dcm is not None:
             if not os.path.isfile(args.vti2dcm):
-                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} not found')
-            if not args.vti2dcm.lower().endswith('.vti'):
-                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} is not a valid VTI file')
-            vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(args.vti2dcm)
+                ap.exit(1, f'ERROR: VTI file {args.vti2dcm} not found\n')
+            try:
+                vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(args.vti2dcm)
+            except OSError as e:
+                ap.exit(1, f'ERROR reading VTI file: {e}\n')
             series = ListDicomStudies[0][0]
             series.sortBySlice_InstanceNumber()
             dcmDirOut = dcmTK.writeVTIToDicoms(vtiObj, series[0], outputDir=args.outputFolder)

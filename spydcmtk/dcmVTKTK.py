@@ -159,29 +159,54 @@ class PatientMeta:
             self._meta['ImagePositionPatient'] = [self._meta['Origin'][0], self._meta['Origin'][1], self._meta['Origin'][2]]
 
     def initFromDicomSeries(self, dicomSeries):
-        I,J,K = int(dicomSeries.getTag('Rows')), int(dicomSeries.getTag('Columns')), int(dicomSeries.getNumberOfSlicesPerVolume())
-        dicomSeries.sortBySlice_InstanceNumber()
-        N = dicomSeries.getNumberOfTimeSteps()
-        A = np.zeros((I, J, K, N))
-        c0 = 0
-        for k1 in range(K):
-            for k2 in range(N):
-                iA = dicomSeries[c0].pixel_array
-                A[:, :, k1, k2] = iA
-                c0 += 1
+        # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
+        firstPixelArray = dicomSeries[0].pixel_array
+        is3DPixelData = len(firstPixelArray.shape) > 2
+        
+        if is3DPixelData:
+            # Handle 3D DICOM files - each file contains a 3D volume
+            I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
+            N = len(dicomSeries)  # Number of time steps = number of files
+            
+            # Check if we have a 4th dimension (e.g., RGB channels)
+            if len(firstPixelArray.shape) == 4:
+                # Handle RGB/RGBA data
+                channels = firstPixelArray.shape[3]
+                A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
+                for n in range(N):
+                    A[:, :, :, n, :] = dicomSeries[n].pixel_array
+            else:
+                # Standard 3D data
+                A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
+                for n in range(N):
+                    A[:, :, :, n] = dicomSeries[n].pixel_array
+        else:
+            # Handle traditional 2D slice-based DICOM files
+            I, J, K = int(dicomSeries.getTag('Rows')), int(dicomSeries.getTag('Columns')), int(dicomSeries.getNumberOfSlicesPerVolume())
+            dicomSeries.sortBySlice_InstanceNumber()
+            N = dicomSeries.getNumberOfTimeSteps()
+            A = np.zeros((I, J, K, N))
+            c0 = 0
+            for k1 in range(K):
+                for k2 in range(N):
+                    iA = dicomSeries[c0].pixel_array
+                    A[:, :, k1, k2] = iA
+                    c0 += 1
+        
         dt = dicomSeries.getTemporalResolution()
         if dt < 0.0000000001:
             dt = 1.0
         ipp = dicomSeries.getImagePositionPatient_np(0)
         sliceVec = dicomSeries.getSliceNormalVector()
+        
         self._meta = {
                     'PixelSpacing': [dicomSeries.getDeltaRow()*mm_to_m, dicomSeries.getDeltaCol()*mm_to_m],
                     'SpacingBetweenSlices': dicomSeries.getDeltaSlice()*mm_to_m,
                     'SliceThickness': dicomSeries.getTag('SliceThickness', convertToType=float, ifNotFound=dicomSeries.getDeltaSlice())*mm_to_m,
                     'SliceLocation0': dicomSeries.getTag('SliceLocation', 0, ifNotFound=0.0, convertToType=float)*mm_to_m,
                     'ImagePositionPatient': [i*mm_to_m for i in ipp], 
-                    'ImageOrientationPatient': dicomSeries.getTag('ImageOrientationPatient'), 
-                    'PatientPosition': dicomSeries.getTag('PatientPosition'), 
+                    'ImageOrientationPatient': dicomSeries.getImageOrientationPatient_np(0), 
+                    'PatientPosition': dicomSeries.getTag("PatientPosition"), 
                     'Times': [dt*n*ms_to_s for n in range(N)], # ms to s
                     'Dimensions': A.shape,
                     'SliceVector': sliceVec,
@@ -350,6 +375,9 @@ def arrToVTI(arr: np.ndarray,
         ValueError: If VTK import not available
     """
     dims = arr.shape
+    if len(dims) == 3:
+        arr = arr[..., np.newaxis]
+        dims = arr.shape
     vtkDict = {}
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]

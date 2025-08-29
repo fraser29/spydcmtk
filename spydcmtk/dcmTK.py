@@ -336,6 +336,7 @@ class DicomSeries(list):
 
     def getImagePositionPatient_np(self, dsID):
         """Get the image position patient as a numpy array.
+        For 3D DICOM files, checks SharedFunctionalGroupsSequence if standard tags not available.
 
         Args:
             dsID (int, optional): The index of the dicom file to get the image position patient from. Defaults to 0.
@@ -343,12 +344,25 @@ class DicomSeries(list):
         Returns:
             numpy.ndarray: The image position patient as a numpy array shape (3,).
         """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=None)
+            if ipp is not None:
+                return np.array(ipp)
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            ipp = self._getImagePositionPatientFromSharedFunctionalGroups()
+            if ipp is not None:
+                return np.array(ipp)
+        
+        # Fallback to standard method or default
         ipp = self.getTag('ImagePositionPatient', dsID=dsID, ifNotFound=[0.0,0.0,0.0])
         return np.array(ipp)
 
 
     def getImageOrientationPatient_np(self, dsID=0):
         """Get the image orientation patient as a numpy array.
+        For 3D DICOM files, checks SharedFunctionalGroupsSequence if standard tags not available.
 
         Args:
             dsID (int, optional): The index of the dicom file to get the image orientation patient from. Defaults to 0.
@@ -356,6 +370,18 @@ class DicomSeries(list):
         Returns:
             numpy.ndarray: The image orientation patient as a numpy array shape (6,).
         """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            iop = self.getTag('ImageOrientationPatient', dsID=dsID, ifNotFound=None)
+            if iop is not None:
+                return np.array(iop)
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            iop = self._getImageOrientationPatientFromSharedFunctionalGroups()
+            if iop is not None:
+                return np.array(iop)
+        
+        # Fallback to standard method or default
         iop = self.getTag('ImageOrientationPatient', dsID=dsID, ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
         return np.array(iop)
 
@@ -663,14 +689,38 @@ class DicomSeries(list):
 
 
     def getNumberOfSlicesPerVolume(self):
-        sliceLoc = self.sliceLocations
-        return len(set(sliceLoc))
+        """Get the number of slices per volume.
+        For traditional 2D slice-based DICOM files, this returns the number of unique slice locations.
+        For 3D DICOM files, this returns the depth dimension from the pixel data.
+        
+        Returns:
+            int: Number of slices per volume
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, return the depth dimension from pixel data
+            return self[0].pixel_array.shape[2] if len(self[0].pixel_array.shape) >= 3 else 1
+        else:
+            # For traditional 2D slice-based DICOM files
+            sliceLoc = self.sliceLocations
+            return len(set(sliceLoc))
 
 
     def getNumberOfTimeSteps(self):
-        sliceLoc = self.sliceLocations
-        sliceLocS = set(sliceLoc)
-        return sliceLoc.count(sliceLocS.pop())
+        """Get the number of time steps.
+        For traditional 2D slice-based DICOM files, this returns the number of time points per slice location.
+        For 3D DICOM files, this returns the number of files (each file is a time point).
+        
+        Returns:
+            int: Number of time steps
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, each file represents a time point
+            return len(self)
+        else:
+            # For traditional 2D slice-based DICOM files
+            sliceLoc = self.sliceLocations
+            sliceLocS = set(sliceLoc)
+            return sliceLoc.count(sliceLocS.pop())
 
 
     def getSliceNormalVector(self):
@@ -702,17 +752,41 @@ class DicomSeries(list):
 
 
     def is3D(self):
-        return self.getNumberOfSlicesPerVolume() > 1
+        """Check if the DICOM series represents 3D data.
+        This can be either:
+        1. Multiple 2D slices that form a 3D volume, or
+        2. Individual DICOM files containing 3D pixel data
+        
+        Returns:
+            bool: True if the series represents 3D data
+        """
+        return self.getNumberOfSlicesPerVolume() > 1 or self.has3DPixelData()
 
 
     def is4D(self):
         return self.getNumberOfTimeSteps() > 1
 
 
+    def has3DPixelData(self):
+        """Check if the DICOM files contain 3D pixel data (volume data) rather than 2D slices.
+        
+        Returns:
+            bool: True if pixel data has more than 2 dimensions, False if 2D slices
+        """
+        if len(self) == 0:
+            return False
+        try:
+            firstPixelArray = self[0].pixel_array
+            return len(firstPixelArray.shape) > 2
+        except AttributeError:
+            return False
+
+
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
             Also return a PatientMatrix object containing meta
             NOTE: Some data is repeated to serve VTK and DICOM conventions
+            Handles both 2D slice-based DICOM files and 3D DICOM files
 
         Returns:
             tuple: 
@@ -720,22 +794,54 @@ class DicomSeries(list):
                 dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
         self._loadToMemory()
-        I,J,K = int(self.getTag('Rows')), int(self.getTag('Columns')), int(self.getNumberOfSlicesPerVolume())
-        self.sortBySlice_InstanceNumber() # This takes care of order - slices grouped, then time for each slice 
-        N = self.getNumberOfTimeSteps()
-        iA = self[0].pixel_array
-        thisDType = iA.dtype
-        thisShape = iA.shape
-        A = np.zeros((I, J, K, N), dtype=thisDType)
-        if (K*N) != len(self):
-            print(f"DEBUG: Getting numpy array shape: [{I}, {J}, {K}, {N}] (K*N={K*N} == {len(self)})")
-            raise FileNotFoundError(f"Missing some DICOM files.")
-        c0 = 0
-        for k1 in range(K):
-            for k2 in range(N):
-                iA = self[c0].pixel_array
-                A[:, :, k1, k2] = iA
-                c0 += 1
+        
+        # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
+        firstPixelArray = self[0].pixel_array
+        is3DPixelData = len(firstPixelArray.shape) > 2
+        
+        if is3DPixelData:
+            # Handle 3D DICOM files - each file contains a 3D volume
+            print("Detected 3D DICOM files - processing as volume data")
+            I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
+            N = len(self)  # Number of time steps = number of files
+            
+            # Check if we have a 4th dimension (e.g., RGB channels)
+            if len(firstPixelArray.shape) == 4:
+                # Handle RGB/RGBA data
+                channels = firstPixelArray.shape[3]
+                A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
+                for n in range(N):
+                    A[:, :, :, n, :] = self[n].pixel_array
+                # Reshape to standard format: (I, J, K*N, channels) for compatibility
+                A = A.reshape((I, J, K*N, channels))
+            else:
+                # Standard 3D data
+                A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
+                for n in range(N):
+                    A[:, :, :, n] = self[n].pixel_array
+                # Reshape to standard format: (I, J, K*N) for compatibility
+                A = A.reshape((I, J, K*N))
+                
+        else:
+            # Handle traditional 2D slice-based DICOM files
+            I, J = int(self.getTag('Rows')), int(self.getTag('Columns'))
+            K = int(self.getNumberOfSlicesPerVolume())
+            self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
+            N = self.getNumberOfTimeSteps()
+            
+            thisDType = firstPixelArray.dtype
+            thisShape = firstPixelArray.shape
+            A = np.zeros((I, J, K, N), dtype=thisDType)
+            if (K*N) != len(self):
+                raise FileNotFoundError(f"Missing some DICOM files.")
+            
+            c0 = 0
+            for k1 in range(K):
+                for k2 in range(N):
+                    iA = self[c0].pixel_array
+                    A[:, :, k1, k2] = iA
+                    c0 += 1
+        
         patientMeta = dcmVTKTK.PatientMeta()
         patientMeta.initFromDicomSeries(self)
         return A, patientMeta
@@ -749,6 +855,21 @@ class DicomSeries(list):
 
 
     def _getPixelSpacing(self):
+        """Get pixel spacing, handling both 2D and 3D DICOM files.
+        For 3D files, checks SharedFunctionalGroupsSequence if standard tags not available.
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, try standard tags first, then SharedFunctionalGroupsSequence
+            pixelSpacing = self.getTag('PixelSpacing', ifNotFound=None)
+            if pixelSpacing is not None:
+                return [float(i) for i in pixelSpacing]
+            
+            # Try to get from SharedFunctionalGroupsSequence
+            pixelSpacing = self._getPixelSpacingFromSharedFunctionalGroups()
+            if pixelSpacing is not None:
+                return pixelSpacing
+        
+        # Fallback to standard method or default
         return [float(i) for i in self.getTag('PixelSpacing', ifNotFound=[0.0,0.0])]
 
 
@@ -772,22 +893,297 @@ class DicomSeries(list):
 
     def getDeltaSlice(self):
         """Get the slice spacing of the series.
-            If there is only one slice (or single slice CINE) then the slice spacing is taken from the SpacingBetweenSlices or SliceThickness (if not present) tag.
-            If there is more than one slice then the slice spacing is taken from the mean of the slice locations.
+            For traditional 2D slice-based DICOM files:
+                If there is only one slice (or single slice CINE) then the slice spacing is taken from the SpacingBetweenSlices or SliceThickness (if not present) tag.
+                If there is more than one slice then the slice spacing is taken from the mean of the slice locations.
+            For 3D DICOM files:
+                The slice spacing is prioritized as: SpacingBetweenSlices > SliceThickness > SharedFunctionalGroupsSequence > default.
+                This ensures proper 3D volume construction by using the actual distance between slices rather than overlapping slice thickness.
 
         Returns:
-            float: The slice spacing in mm.
+            float: The slice spacing in mm needed to construct a proper 3D volume.
         """
-        self.sortByInstanceNumber()
-        p0 = self.getImagePositionPatient_np(0)
-        sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
-        sliceLocS = sorted(list(set(sliceLoc)))
-        if len(sliceLocS) == 1: # May be CINE at same location
+        if self.has3DPixelData():
+            # For 3D DICOM files, try to get slice spacing from various locations
+            dZ = None
+            
+            # First try SpacingBetweenSlices (preferred for 3D volume construction)
             dZ = self.getTag('SpacingBetweenSlices', ifNotFound=None)
+            
+            # If not found, try SliceThickness as fallback
             if dZ is None:
-                dZ = self.getTag('SliceThickness')
-            return float(dZ)
-        return np.mean(np.diff(sliceLocS))
+                dZ = self.getTag('SliceThickness', ifNotFound=None)
+            
+            # If still not found, try to extract from SharedFunctionalGroupsSequence
+            if dZ is None:
+                dZ = self._getSliceSpacingFromSharedFunctionalGroups()
+            
+            if dZ is not None:
+                return float(dZ)
+            else:
+                # If no explicit slice spacing is available, use a reasonable default
+                print("Warning: No slice spacing information found for 3D DICOM file, using default")
+                return 1.0  # Default 1mm spacing
+        else:
+            # For traditional 2D slice-based DICOM files
+            self.sortByInstanceNumber()
+            p0 = self.getImagePositionPatient_np(0)
+            sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
+            sliceLocS = sorted(list(set(sliceLoc)))
+            if len(sliceLocS) == 1: # May be CINE at same location
+                dZ = self.getTag('SpacingBetweenSlices', ifNotFound=None)
+                if dZ is None:
+                    dZ = self.getTag('SliceThickness')
+                return float(dZ)
+            return np.mean(np.diff(sliceLocS))
+
+
+    def _getSliceSpacingFromSharedFunctionalGroups(self):
+        """Extract slice spacing from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        This handles the nested structure where slice spacing information is stored.
+        Prioritizes SpacingBetweenSlices over SliceThickness for proper 3D volume construction.
+        
+        Returns:
+            float or None: The slice spacing in mm if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PixelMeasuresSequence within SharedFunctionalGroupsSequence
+                if hasattr(shared_seq, 'PixelMeasuresSequence') and shared_seq.PixelMeasuresSequence:
+                    pixel_measures = shared_seq.PixelMeasuresSequence[0]
+                    
+                    # Try to get SpacingBetweenSlices first (preferred for 3D volume construction)
+                    if hasattr(pixel_measures, 'SpacingBetweenSlices'):
+                        return float(pixel_measures.SpacingBetweenSlices)
+                    
+                    # Try SliceThickness as fallback
+                    if hasattr(pixel_measures, 'SliceThickness'):
+                        return float(pixel_measures.SliceThickness)
+                
+                # Check for PlanePositionSequence as another possible location
+                if hasattr(shared_seq, 'PlanePositionSequence') and shared_seq.PlanePositionSequence:
+                    plane_pos = shared_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'SliceThickness'):
+                        return float(plane_pos.SliceThickness)
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for slice spacing
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PixelMeasuresSequence within PerFrameFunctionalGroupsSequence
+                if hasattr(per_frame_seq, 'PixelMeasuresSequence') and per_frame_seq.PixelMeasuresSequence:
+                    pixel_measures = per_frame_seq.PixelMeasuresSequence[0]
+                    
+                    # Try to get SpacingBetweenSlices first (preferred for 3D volume construction)
+                    if hasattr(pixel_measures, 'SpacingBetweenSlices'):
+                        return float(pixel_measures.SpacingBetweenSlices)
+                    
+                    # Try SliceThickness as fallback
+                    if hasattr(pixel_measures, 'SliceThickness'):
+                        return float(pixel_measures.SliceThickness)
+                
+                # Check for PlanePositionSequence as another possible location
+                if hasattr(per_frame_seq, 'PlanePositionSequence') and per_frame_seq.PlanePositionSequence:
+                    plane_pos = per_frame_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'SliceThickness'):
+                        return float(plane_pos.SliceThickness)
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            # If any error occurs during extraction, return None
+            return None
+
+
+    def _getPixelSpacingFromSharedFunctionalGroups(self):
+        """Extract pixel spacing from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [row_spacing, col_spacing] in mm if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                if hasattr(shared_seq, 'PixelMeasuresSequence') and shared_seq.PixelMeasuresSequence:
+                    pixel_measures = shared_seq.PixelMeasuresSequence[0]
+                    
+                    if hasattr(pixel_measures, 'PixelSpacing'):
+                        return [float(i) for i in pixel_measures.PixelSpacing]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for pixel spacing
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                if hasattr(per_frame_seq, 'PixelMeasuresSequence') and per_frame_seq.PixelMeasuresSequence:
+                    pixel_measures = per_frame_seq.PixelMeasuresSequence[0]
+                    
+                    if hasattr(pixel_measures, 'PixelSpacing'):
+                        return [float(i) for i in pixel_measures.PixelSpacing]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return None
+
+
+    def _getImagePositionPatientFromSharedFunctionalGroups(self):
+        """Extract image position patient from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [x, y, z] position in mm if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PlanePositionSequence
+                if hasattr(shared_seq, 'PlanePositionSequence') and shared_seq.PlanePositionSequence:
+                    plane_pos = shared_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'ImagePositionPatient'):
+                        return [float(i) for i in plane_pos.ImagePositionPatient]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for image position
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PlanePositionSequence
+                if hasattr(per_frame_seq, 'PlanePositionSequence') and per_frame_seq.PlanePositionSequence:
+                    plane_pos = per_frame_seq.PlanePositionSequence[0]
+                    if hasattr(plane_pos, 'ImagePositionPatient'):
+                        return [float(i) for i in plane_pos.ImagePositionPatient]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return None
+
+
+    def _getImageOrientationPatientFromSharedFunctionalGroups(self):
+        """Extract image orientation patient from SharedFunctionalGroupsSequence for 3D DICOM files.
+        Also checks PerFrameFunctionalGroupsSequence if SharedFunctionalGroupsSequence doesn't have the data.
+        
+        Returns:
+            list or None: [x1, y1, z1, x2, y2, z2] orientation if found, None otherwise
+        """
+        try:
+            # First check SharedFunctionalGroupsSequence
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PlaneOrientationSequence
+                if hasattr(shared_seq, 'PlaneOrientationSequence') and shared_seq.PlaneOrientationSequence:
+                    plane_orient = shared_seq.PlaneOrientationSequence[0]
+                    if hasattr(plane_orient, 'ImageOrientationPatient'):
+                        return [float(i) for i in plane_orient.ImageOrientationPatient]
+            
+            # If not found in SharedFunctionalGroupsSequence, check PerFrameFunctionalGroupsSequence
+            if hasattr(self[0], 'PerFrameFunctionalGroupsSequence') and self[0].PerFrameFunctionalGroupsSequence:
+                # Check the first frame for image orientation
+                per_frame_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                
+                # Check for PlaneOrientationSequence
+                if hasattr(per_frame_seq, 'PlaneOrientationSequence') and per_frame_seq.PlaneOrientationSequence:
+                    plane_orient = per_frame_seq.PlaneOrientationSequence[0]
+                    if hasattr(plane_orient, 'ImageOrientationPatient'):
+                        return [float(i) for i in plane_orient.ImageOrientationPatient]
+            
+            return None
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return None
+
+
+    def hasVariableSliceThickness(self):
+        """Check if the 3D DICOM file has variable slice thickness.
+        This is important because variable slice thickness is not supported in the current VTK conversion.
+        
+        Returns:
+            bool: True if variable slice thickness is detected, False otherwise
+        """
+        if not self.has3DPixelData():
+            return False  # Only relevant for 3D DICOM files
+        
+        try:
+            # Check if there are multiple frames with different slice thickness values
+            if hasattr(self[0], 'SharedFunctionalGroupsSequence') and self[0].SharedFunctionalGroupsSequence:
+                shared_seq = self[0].SharedFunctionalGroupsSequence[0]
+                
+                # Check for PerFrameFunctionalGroupsSequence which indicates variable parameters
+                if hasattr(shared_seq, 'PerFrameFunctionalGroupsSequence'):
+                    per_frame_seq = shared_seq.PerFrameFunctionalGroupsSequence
+                    
+                    # If there are multiple frames, check if they have different slice thickness
+                    if len(per_frame_seq) > 1:
+                        thicknesses = set()
+                        for frame in per_frame_seq:
+                            if hasattr(frame, 'PixelMeasuresSequence') and frame.PixelMeasuresSequence:
+                                pixel_measures = frame.PixelMeasuresSequence[0]
+                                if hasattr(pixel_measures, 'SliceThickness'):
+                                    thicknesses.add(float(pixel_measures.SliceThickness))
+                        
+                        # If we found multiple different thickness values, it's variable
+                        if len(thicknesses) > 1:
+                            print(f"Warning: Variable slice thickness detected: {thicknesses}")
+                            return True
+            
+            return False
+        except (AttributeError, IndexError, ValueError, TypeError):
+            return False
+
+
+    def get3DSpacing(self):
+        """Get the complete 3D spacing information (row, column, slice) in mm.
+        This method is particularly useful for 3D DICOM files and VTK volume conversion.
+        
+        Returns:
+            tuple: (deltaRow, deltaCol, deltaSlice) in mm
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, get spacing from enhanced methods
+            deltaRow = self.getDeltaRow()
+            deltaCol = self.getDeltaCol()
+            deltaSlice = self.getDeltaSlice()
+            
+            return (deltaRow, deltaCol, deltaSlice)
+        else:
+            # For traditional 2D slice-based DICOM files
+            return (self.getDeltaRow(), self.getDeltaCol(), self.getDeltaSlice())
+
+
+    def hasExplicitSpacingInfo(self):
+        """Check if the DICOM series has explicit spacing information.
+        This is useful for determining the quality of spacing data, especially for 3D volumes.
+        
+        Returns:
+            bool: True if explicit spacing information is available, False otherwise
+        """
+        if self.has3DPixelData():
+            # For 3D DICOM files, check for explicit spacing information
+            hasSliceThickness = self.getTag('SliceThickness', ifNotFound=None) is not None
+            hasSpacingBetweenSlices = self.getTag('SpacingBetweenSlices', ifNotFound=None) is not None
+            hasPixelSpacing = self.getTag('PixelSpacing', ifNotFound=None) is not None
+            hasImagePositionPatient = self.getTag('ImagePositionPatient', ifNotFound=None) is not None
+            hasImageOrientationPatient = self.getTag('ImageOrientationPatient', ifNotFound=None) is not None
+            
+            # Also check SharedFunctionalGroupsSequence
+            hasSharedFunctionalGroups = (self._getSliceSpacingFromSharedFunctionalGroups() is not None or
+                                       self._getPixelSpacingFromSharedFunctionalGroups() is not None or
+                                       self._getImagePositionPatientFromSharedFunctionalGroups() is not None or
+                                       self._getImageOrientationPatientFromSharedFunctionalGroups() is not None)
+            
+            return (hasSliceThickness or hasSpacingBetweenSlices or hasPixelSpacing or 
+                   hasImagePositionPatient or hasImageOrientationPatient or hasSharedFunctionalGroups)
+        else:
+            # For traditional 2D slice-based DICOM files, check for slice location information
+            return len(self.sliceLocations) > 1
 
 
     def getTemporalResolution(self):
@@ -1812,4 +2208,6 @@ def _process_series_for_fdq(args):
     series._loadToMemory()
     iOut = series.writeToVTS(os.path.join(outDir, f"{label}.pvd"))
     return (label, iOut)
+
+
 
