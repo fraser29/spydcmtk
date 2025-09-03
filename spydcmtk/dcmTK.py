@@ -264,6 +264,20 @@ class DicomSeries(list):
         return names, vals
 
 
+    def tagsToDictionary(self):
+        dict_out = {}
+        possible_pix_list = ['7FE00010', '7FE00008', '7FE00009', '60xx3000', '00880200'] #, '00287FE0']
+        for ds in self:
+            dd = ds.to_json_dict()
+            for itag in possible_pix_list:
+                try:
+                    dd.pop(itag) # Remove actual PixelData
+                except KeyError:
+                    pass # likely hit this multiple (or even all) 
+            dict_out[ds.InstanceNumber] = dd
+        return dict_out
+    
+
     def tagsToJson(self, jsonFileOut):
         """Convert the series to a json file (minus the pixel data).
 
@@ -273,12 +287,8 @@ class DicomSeries(list):
         Returns:
             The file to save the json to.
         """
-        dOut = {}
-        for ds in self:
-            dd = ds.to_json_dict()
-            dd.pop('7FE00010') # Remove actual PixelData
-            dOut[ds.InstanceNumber] = dd
-        dcmTools.writeDictionaryToJSON(jsonFileOut, dOut)
+        dict_out = self.tagsToDictionary()
+        dcmTools.writeDictionaryToJSON(jsonFileOut, dict_out)
         return jsonFileOut
 
 
@@ -1611,6 +1621,20 @@ class DicomStudy(list):
         self.HIDE_PROGRESSBAR = origHIDE
         if VERBOSE: print(f"Written {fOut}")
         return fOut
+
+
+    def tagsToDictionary(self):
+        dict_out = {}
+        for i in self:
+            dd = i.tagsToDictionary()
+            dict_out[i.getTag("SeriesInstanceUID")] = dd
+        return dict_out
+    
+
+    def tagsToJson(self, jsonFileOut):
+        dict_out = self.tagsToDictionary()
+        dcmTools.writeDictionaryToJSON(jsonFileOut, dict_out)
+        return jsonFileOut
 
 
     def getStudySummaryDict(self, extraTags=[]):
