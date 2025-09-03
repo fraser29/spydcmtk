@@ -27,7 +27,7 @@ If you would like to incorporate `spydcmtk` into your Python project, then some 
 
 
 Work with pixel data and metadata
---------------------------------
+----------------------------------
 
 .. code-block:: python
 
@@ -47,7 +47,7 @@ Work with pixel data and metadata
 
 
 Convert image(s) to DICOM
-------------------------
+--------------------------
 
 .. code-block:: python
 
