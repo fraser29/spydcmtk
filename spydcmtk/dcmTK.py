@@ -2032,6 +2032,8 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     # Ensure uint8 
     NBIT = 8
     if pixelArray.dtype != np.uint8:
+        if np.max(pixelArray) > 255:
+            pixelArray = pixelArray / np.max(pixelArray)
         pixelArray = (pixelArray * 255).astype(np.uint8) if pixelArray.max() <= 1 else pixelArray.astype(np.uint8)
     # if pixelArray.dtype != np.uint16:
     #     pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
