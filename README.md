@@ -65,13 +65,3 @@ For information on files found and variables used run:
 Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
 For detailed documentation please see [spydcmtk-documentation](https://fraser29.github.io/spydcmtk/)
 
-## Works in progress
-
-Basic handling of DicomSegmentation images is added :
-
-- [x] writing a label map to dicom segmentation
-- [x] basic reading a dicom segmentation and writing to vti/vts
-- [ ] handling multi label dicom segmentations
-- [ ] improved, explicit handling of data orientation for
-  - [ ] multi-volume dicom images
-  - [ ] multi-label dicom seg images 

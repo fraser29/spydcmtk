@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spydcmtk"
-version = "1.2.12"
+version = "1.2.13"
 description = "Simple python dicom toolkit."
 readme = "README.md"
 requires-python = ">=3.9.0"
@@ -33,7 +33,7 @@ dependencies = [
     "python-gdcm",
     "highdicom==0.25.0",
     "matplotlib",
-    "ngawari>=0.1.8",
+    "ngawari>=0.1.10",
 ]
 urls = {Homepage = "https://github.com/fraser29/spydcmtk"}
 

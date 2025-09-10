@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.13] - 2025-09-10
+### Fixed
+- Fix bug in writeNumpyArrayToDicom - correctly handle pixelArray with negative values.
+
 ## [1.2.12] - 2025-08-25
 ### Fixed
 - Fix bug in vti2dcm command - correctly handle file read errors.

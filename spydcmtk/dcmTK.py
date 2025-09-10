@@ -2053,14 +2053,17 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     elif pixelArray.shape[3] == 3:
         IS_RGB = True
 
-    # Ensure uint8 
-    NBIT = 8
-    if pixelArray.dtype != np.uint8:
-        if np.max(pixelArray) > 255:
-            pixelArray = pixelArray / np.max(pixelArray)
-        pixelArray = (pixelArray * 255).astype(np.uint8) if pixelArray.max() <= 1 else pixelArray.astype(np.uint8)
-    # if pixelArray.dtype != np.uint16:
-    #     pixelArray = (pixelArray * 65536).astype(np.uint16) if pixelArray.max() <= 1 else pixelArray.astype(np.uint16)
+    # Ensure int16 
+    NBIT = 16 
+    if pixelArray.dtype != np.int16:
+        print(f"WARNING: Converting pixelArray from {pixelArray.dtype} to int16")
+        print(f"    PRE-CONVERSION:Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
+        if np.max(pixelArray) <= 1.0:
+            pixelArray = (pixelArray * 32767).astype(np.int16)
+        else:
+            pixelArray = np.clip(pixelArray, -32767, 32767)
+            pixelArray = (pixelArray * 1.0).astype(np.int16)
+        print(f"    POST-CONVERSION: Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
 
     nRow, nCol, nSlice, _ = pixelArray.shape
     mx, mn = np.max(pixelArray), 0
@@ -2147,7 +2150,10 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
             ds.BitsAllocated = NBIT
             ds.BitsStored = NBIT
             ds.HighBit = NBIT - 1
-            ds.PixelRepresentation = 0
+            if np.min(pixelArray) < 0:
+                ds.PixelRepresentation = 1
+            else:
+                ds.PixelRepresentation = 0
             ds.PhotometricInterpretation = "MONOCHROME2"
         ds.SliceThickness = sliceThick # Can no longer claim overlapping slices if have modified
         ds.SpacingBetweenSlices = sliceThick
