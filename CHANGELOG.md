@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.14] - 2025-09-30
+### Fixed
+- Fix bug DICOM to VTI orientation - swap rows and columns to ensure coordinates correctly converted back to real world units by PatientMatrix. 
+
 ## [1.2.13] - 2025-09-10
 ### Fixed
 - Fix bug in writeNumpyArrayToDicom - correctly handle pixelArray with negative values.

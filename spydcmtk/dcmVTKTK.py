@@ -393,7 +393,7 @@ def arrToVTI(arr: np.ndarray,
             vtkfilters.delArraysExcept(newImg, [], pointData=False)
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
         else:
-            # A3 = np.swapaxes(A3, 0, 1)
+            A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
 
         if ds is not None:
