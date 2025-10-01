@@ -1,19 +1,19 @@
 # Sphinx Documentation
 
-gh-pages is set up to automatically build the documentation from the `doc` branch and deploy it to the `gh-pages` branch.
+gh-pages is set up to automatically build the documentation from the `main` branch and deploy it to the `gh-pages` branch.
 
 ## Updating Documentation from Main Branch
 
 To update the documentation with changes from the main branch and rebuild:
 
-1. Ensure you are on the `doc` branch:
+1. Ensure you are on the `main` branch:
    ```bash
-   git checkout doc
+   git checkout main
    ```
 
-2. Merge changes from the main branch:
+2. [Optional] Merge changes from development branches:
    ```bash
-   git merge main
+   git merge my-dev
    ```
 
 3. Rebuild the Sphinx documentation:
@@ -29,7 +29,7 @@ To update the documentation with changes from the main branch and rebuild:
    ```bash
    git add .
    git commit -m "Update documentation from main branch"
-   git push origin doc
+   git push 
    ```
 
 Note: Make sure you have all required Sphinx dependencies installed before rebuilding the documentation.

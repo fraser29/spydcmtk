@@ -397,7 +397,7 @@ def arrToVTI(arr: np.ndarray,
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
             extra_tags["ImageOrientationPatient"] = [1,0,0,0,1,0]
         else:
-            # A3 = np.swapaxes(A3, 0, 1)
+            A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
 
         if ds is not None:
