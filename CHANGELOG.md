@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.15] - 2025-10-01
+### Feature
+Force FieldData - ImageOrientationPatient [1,0,0,0,1,0] - for VTI TrueOrientation
+
 ## [1.2.14] - 2025-09-30
 ### Fixed
 - Fix bug DICOM to VTI orientation - swap rows and columns to ensure coordinates correctly converted back to real world units by PatientMatrix. 
