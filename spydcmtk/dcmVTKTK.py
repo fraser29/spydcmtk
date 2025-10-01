@@ -386,19 +386,22 @@ def arrToVTI(arr: np.ndarray,
             thisTime = patientMeta.Times[k1]
         except KeyError:
             thisTime = k1
+        #
+        extra_tags = {"SliceVector": patientMeta.SliceVector,
+                        "Time": thisTime}
         if TRUE_ORIENTATION:
             A3 = np.swapaxes(A3, 0, 1)
             vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
             newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
             vtkfilters.delArraysExcept(newImg, [], pointData=False)
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
+            extra_tags["ImageOrientationPatient"] = [1,0,0,0,1,0]
         else:
             # A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
 
         if ds is not None:
-            addFieldDataFromDcmDataSet(newImg, ds, extra_tags={"SliceVector": patientMeta.SliceVector,
-                                                                "Time": thisTime})
+            addFieldDataFromDcmDataSet(newImg, ds, extra_tags=extra_tags)
         if outputPath is not None:
             newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vti"))
         vtkDict[thisTime] = newImg
