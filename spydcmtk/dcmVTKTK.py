@@ -32,11 +32,15 @@ from ngawari import ftk
 from ngawari import vtkfilters
 from multiprocessing import Pool
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from dcmTK import DicomSeries
 
-mm_to_m = 0.001
-cm_to_m = 0.01
-ms_to_s = 0.001
-m_to_mm = 1000.0
+mm_to_m = dcmTools.mm_to_m
+m_to_mm = dcmTools.m_to_mm
+cm_to_m = dcmTools.cm_to_m
+ms_to_s = dcmTools.ms_to_s
+
 
 # =========================================================================
 ## PATIENT MATRIX HELPER
@@ -158,44 +162,13 @@ class PatientMeta:
         if 'Origin' in self._meta:
             self._meta['ImagePositionPatient'] = [self._meta['Origin'][0], self._meta['Origin'][1], self._meta['Origin'][2]]
 
-    def initFromDicomSeries(self, dicomSeries):
+    def initFromDicomSeries(self, dicomSeries: "DicomSeries", A_shape: list) -> None:
         # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
-        firstPixelArray = dicomSeries[0].pixel_array
-        is3DPixelData = len(firstPixelArray.shape) > 2
         
-        if is3DPixelData:
-            # Handle 3D DICOM files - each file contains a 3D volume
-            I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
-            N = len(dicomSeries)  # Number of time steps = number of files
-            
-            # Check if we have a 4th dimension (e.g., RGB channels)
-            if len(firstPixelArray.shape) == 4:
-                # Handle RGB/RGBA data
-                channels = firstPixelArray.shape[3]
-                A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
-                for n in range(N):
-                    A[:, :, :, n, :] = dicomSeries[n].pixel_array
-            else:
-                # Standard 3D data
-                A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
-                for n in range(N):
-                    A[:, :, :, n] = dicomSeries[n].pixel_array
-        else:
-            # Handle traditional 2D slice-based DICOM files
-            I, J, K = int(dicomSeries.getTag('Rows')), int(dicomSeries.getTag('Columns')), int(dicomSeries.getNumberOfSlicesPerVolume())
-            dicomSeries.sortBySlice_InstanceNumber()
-            N = dicomSeries.getNumberOfTimeSteps()
-            A = np.zeros((I, J, K, N))
-            c0 = 0
-            for k1 in range(K):
-                for k2 in range(N):
-                    iA = dicomSeries[c0].pixel_array
-                    A[:, :, k1, k2] = iA
-                    c0 += 1
-        
-        dt = dicomSeries.getTemporalResolution()
+        dt = dicomSeries.getTemporalResolution() # s
         if dt < 0.0000000001:
             dt = 1.0
+        nTimeSteps = dicomSeries.getNumberOfTimeSteps()
         ipp = dicomSeries.getImagePositionPatient_np(0)
         sliceVec = dicomSeries.getSliceNormalVector()
         
@@ -207,8 +180,8 @@ class PatientMeta:
                     'ImagePositionPatient': [i*mm_to_m for i in ipp], 
                     'ImageOrientationPatient': dicomSeries.getImageOrientationPatient_np(0), 
                     'PatientPosition': dicomSeries.getTag("PatientPosition"), 
-                    'Times': [dt*n*ms_to_s for n in range(N)], # ms to s
-                    'Dimensions': A.shape,
+                    'Times': [dt*n for n in range(nTimeSteps)], #  s
+                    'Dimensions': A_shape,
                     'SliceVector': sliceVec,
                 }
         self._updateMatrix()
@@ -538,7 +511,7 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
 def _process_phase_time_point(args):
     """Helper function for parallel processing of 4D flow time points
     """
-    iTime, magFile, phaseFiles_dicts, phase_factors, phase_offsets, scale_factor, velArrayName, rootDir, fName = args
+    iTime, magFile, phaseFiles_dicts, phase_factors, phase_offsets, velArrayName, rootDir, fName = args
     iVTS = fIO.readVTKFile(magFile)
     thisVelArray = []
     for k2, iPhase in enumerate(phaseFiles_dicts):
@@ -547,13 +520,12 @@ def _process_phase_time_point(args):
         aName = vtkfilters.getScalarsArrayName(thisPhase)
         thisVelArray.append(vtkfilters.getArrayAsNumpy(thisPhase, aName)*phase_factors[k2] + phase_offsets[k2])
     thisVelArray_ = np.array(thisVelArray).T
-    thisVelArray_ *= scale_factor
     vtkfilters.setArrayFromNumpy(iVTS, thisVelArray_, velArrayName, SET_VECTOR=True)
     fOutTemp = fIO.writeVTKFile(iVTS, os.path.join(rootDir, f"{fName}_{generate_uid()}.WORKING.vts"))
     return (iTime, fOutTemp)
 
 def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, phase_offsets,
-                        velArrayName, scale_factor=0.001, DEL_ORIGINAL=True):
+                        velArrayName, DEL_ORIGINAL=True):
     """Take Mag PVD (vts format) and phase PVDs (vts format) and merge into 4D flow dataset
 
     Args:
@@ -562,7 +534,6 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, pha
         outputFileName (str): Name of output file
         phase_factors (list): List of factors to multiply phases by. 
         phase_offsets (list): List of offsets to add to phases.
-        scale_factor (float): Scale factor to multiply final velocities by. Default is 0.001 (match vel to spatial units)
         velArrayName (str): Name of velocity array to use in output file. Default is "Vels"
         DEL_ORIGINAL (bool, optional): Delete original/intermediate files. Defaults to True.
 
@@ -578,7 +549,7 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, pha
     # Create process pool and process all time points in parallel
     with Pool() as pool:
         args = [(iTime, magFiles[iTime], phaseFiles_dicts, phase_factors, phase_offsets, 
-                scale_factor, velArrayName, rootDir, fName) 
+                velArrayName, rootDir, fName) 
                 for iTime in times]
         
         results = pool.map(_process_phase_time_point, args)

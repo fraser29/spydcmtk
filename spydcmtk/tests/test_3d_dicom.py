@@ -31,7 +31,6 @@ def test_3d_dicom_handling():
                 print(f"   is3D: {dcm_series.is3D()}")
                 print(f"   getNumberOfSlicesPerVolume: {dcm_series.getNumberOfSlicesPerVolume()}")
                 print(f"   getNumberOfTimeSteps: {dcm_series.getNumberOfTimeSteps()}")
-                print(f"   hasExplicitSpacingInfo: {dcm_series.hasExplicitSpacingInfo()}")
                 print(f"   hasVariableSliceThickness: {dcm_series.hasVariableSliceThickness()}")
                 print(f"   3D Spacing (row, col, slice): {dcm_series.get3DSpacing()}")
                 

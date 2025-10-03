@@ -64,13 +64,13 @@ class INTERACTIVE():
 
     def buildFDQ(self):
         self.dataSummary()
-        seNum_ = self.getUserInput("series numbers for FDQ (MAX, PX, PY, PZ):")
+        seNum_ = self.getUserInput("series numbers for FDQ as: MAG PX PY PZ :")
         try: 
             seNum_4 = seNum_.strip().split(' ')
             seNum_4 = [int(i) for i in seNum_4]
             outputFilename = self.getUserInput("file name (pvd)")
             outputpath = os.path.join(self.outputPath, outputFilename)
-            self.study.writeFDQ(seNum_4, outputpath)
+            self.study.writeFDQ(seNum_4, outputpath, 'Vel')
         except ValueError:
             print("Invalid option. Please try again")
 

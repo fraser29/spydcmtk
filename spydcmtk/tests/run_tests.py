@@ -43,7 +43,7 @@ class TestDicomSeries(unittest.TestCase):
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
         self.assertEqual(len(dcmSeries), 2, "Incorrect dicoms in dcmSeries")
         # ---
-        self.assertEqual(dcmSeries.getNumberOfTimeSteps(), 2, msg="Incorrect read time steps")
+        self.assertEqual(dcmSeries.getNumberOfTimeSteps(), 25, msg="Incorrect read time steps") # this is reading from number cardiac images tag
         self.assertEqual(dcmSeries.getNumberOfSlicesPerVolume(), 1, msg="Incorrect read slices per vol")
         self.assertEqual(dcmSeries.getRootDir(), TEST_DICOMS_DIR, msg="Incorrect filename rootDir")
         self.assertEqual(dcmSeries.isCompressed(), False, msg="Incorrect compression read")
@@ -53,7 +53,7 @@ class TestDicomSeries(unittest.TestCase):
         self.assertAlmostEqual(dcmSeries.sliceLocations[1], -26.291732075, places=7, msg='Slice location incorrect')
         self.assertAlmostEqual(dcmSeries.getDeltaRow(), 1.875, places=7, msg='deltaRow incorrect')
         self.assertAlmostEqual(dcmSeries.getDeltaCol(), 1.875, places=7, msg='deltaCol incorrect')
-        self.assertAlmostEqual(dcmSeries.getTemporalResolution(), 51.92, places=7, msg='deltaTime incorrect')
+        self.assertAlmostEqual(dcmSeries.getTemporalResolution(), 0.05192, places=7, msg='deltaTime incorrect')
         self.assertEqual(dcmSeries.IS_SIEMENS(), True, msg="Incorrect manufacturer")
         self.assertEqual(dcmSeries.getPulseSequenceName(), '*tfi2d1_12', msg="Incorrect sequence name")
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp1')
@@ -97,6 +97,8 @@ class TestDicom2VTK(unittest.TestCase):
             dcmSeries = dcmStudy.getSeriesBySeriesNumber(41)
             if dcmSeries is not None:
                 break
+        # FORCE CARDIAC TIME STEPS HERE TO 2 SO CAN DO NEXT STEPS
+        dcmSeries.setTags_all('CardiacNumberOfImages', 2)
         vtiDict = dcmSeries.buildVTIDict()
         self.assertAlmostEqual(list(vtiDict.keys())[1], 0.05192, places=7, msg='time key in vti dict incorrect')
         tmpDir = os.path.join(TEST_OUTPUT, 'tmp3')

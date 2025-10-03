@@ -19,6 +19,11 @@ from spydcmtk.spydcm_config import SpydcmTK_config
 # =========================================================================
 ## CONSTANTS
 # =========================================================================
+mm_to_m = 0.001
+cm_to_m = 0.01
+ms_to_s = 0.001
+m_to_mm = 1000.0
+
 
 class DicomTags(object):
     # these are based on keyword value

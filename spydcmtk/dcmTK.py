@@ -18,7 +18,7 @@ import spydcmtk.dcmVTKTK as dcmVTKTK
 from spydcmtk.spydcm_config import SpydcmTK_config
 
 
-
+Unknown = "Unknown"
 
 ## =====================================================================================================================
 ##        CLASSES
@@ -169,7 +169,7 @@ class DicomSeries(list):
         self.sort(key=dcmTools.sliceLoc_InstanceNumberSortKey)
 
 
-    def getTag(self, tag, dsID=0, ifNotFound='Unknown', convertToType=None):
+    def getTag(self, tag, dsID=0, ifNotFound=Unknown, convertToType=None):
         """Get the value of a tag.
 
         Args:
@@ -260,7 +260,7 @@ class DicomSeries(list):
                 vals.append(str(dataEle.value))
             except KeyError:
                 names.append(str(i))
-                vals.append('Unknown')
+                vals.append(Unknown)
         return names, vals
 
 
@@ -698,7 +698,11 @@ class DicomSeries(list):
         """
         if self.has3DPixelData():
             # For 3D DICOM files, return the depth dimension from pixel data
-            return self[0].pixel_array.shape[2] if len(self[0].pixel_array.shape) >= 3 else 1
+            try:
+                val = int(self.getTag(0x20011018, ifNotFound=Unknown))
+                return val
+            except:
+                return self[0].pixel_array.shape[2] if len(self[0].pixel_array.shape) >= 3 else 1
         else:
             # For traditional 2D slice-based DICOM files
             sliceLoc = self.sliceLocations
@@ -736,7 +740,7 @@ class DicomSeries(list):
         except:
             sliceVec = [0.0,0.0,0.0] # If no slice locations then assume no normal vector (one image)
         if np.linalg.norm(sliceVec) < 1e-9:
-            iop = self.getTag('ImageOrientationPatient', ifNotFound=[1.0,0.0,0.0,0.0,1.0,0.0])
+            iop = self.getImageOrientationPatient_np()
             sliceVec = np.cross(iop[:3], iop[3:6])
         else:
             sliceVec = sliceVec / np.linalg.norm(sliceVec)
@@ -744,7 +748,7 @@ class DicomSeries(list):
 
 
     def doesSliceLocationNorm_Match_IOPNormal(self):
-        iop = self.getTag('ImageOrientationPatient')
+        iop = self.getImageOrientationPatient_np()
         iopN = np.cross(iop[:3], iop[3:6])
         sliceLocN = self.getSliceNormalVector()
         tf = [i*j>=0.0 for i,j in zip(iopN, sliceLocN)]
@@ -781,6 +785,26 @@ class DicomSeries(list):
         except AttributeError:
             return False
 
+    def isPhilips4DFlow(self):
+        return self.IS_PHILIPS() and \
+            (len(self) == 1) and \
+            (self.getTag("AcquisitionContrast") == "FLOW_ENCODED")
+
+
+    def __pixDataPhilips4DFlow(self, DATA_ID=2):
+        pix = self[0].pixel_array
+        K = self.getNumberOfSlicesPerVolume()
+        I = self.getTag("Columns", convertToType=int)
+        J = self.getTag("Rows", convertToType=int)
+        nT = self.getTag(0x20011017, convertToType=int)
+        A = np.zeros([I,J,K,nT])
+        c0 = K*nT*DATA_ID
+        for k1 in range(K):
+            for k2 in range(nT):
+                A[:,:,k1, k2] = pix[c0, :, :]
+                c0 += 1
+        return A
+
 
     def getPixelDataAsNumpy(self):
         """Get pixel data as numpy array organised by slice and time(if present).
@@ -795,55 +819,58 @@ class DicomSeries(list):
         """
         self._loadToMemory()
         
-        # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
-        firstPixelArray = self[0].pixel_array
-        is3DPixelData = len(firstPixelArray.shape) > 2
-        
-        if is3DPixelData:
-            # Handle 3D DICOM files - each file contains a 3D volume
-            print("Detected 3D DICOM files - processing as volume data")
-            I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
-            N = len(self)  # Number of time steps = number of files
-            
-            # Check if we have a 4th dimension (e.g., RGB channels)
-            if len(firstPixelArray.shape) == 4:
-                # Handle RGB/RGBA data
-                channels = firstPixelArray.shape[3]
-                A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
-                for n in range(N):
-                    A[:, :, :, n, :] = self[n].pixel_array
-                # Reshape to standard format: (I, J, K*N, channels) for compatibility
-                A = A.reshape((I, J, K*N, channels))
-            else:
-                # Standard 3D data
-                A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
-                for n in range(N):
-                    A[:, :, :, n] = self[n].pixel_array
-                # Reshape to standard format: (I, J, K*N) for compatibility
-                A = A.reshape((I, J, K*N))
-                
+        if self.isPhilips4DFlow():
+            A = self.__pixDataPhilips4DFlow()
         else:
-            # Handle traditional 2D slice-based DICOM files
-            I, J = int(self.getTag('Rows')), int(self.getTag('Columns'))
-            K = int(self.getNumberOfSlicesPerVolume())
-            self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
-            N = self.getNumberOfTimeSteps()
+            # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
+            firstPixelArray = self[0].pixel_array
+            is3DPixelData = len(firstPixelArray.shape) > 2
             
-            thisDType = firstPixelArray.dtype
-            thisShape = firstPixelArray.shape
-            A = np.zeros((I, J, K, N), dtype=thisDType)
-            if (K*N) != len(self):
-                raise FileNotFoundError(f"Missing some DICOM files.")
-            
-            c0 = 0
-            for k1 in range(K):
-                for k2 in range(N):
-                    iA = self[c0].pixel_array
-                    A[:, :, k1, k2] = iA
-                    c0 += 1
+            if is3DPixelData:
+                # Handle 3D DICOM files - each file contains a 3D volume
+                print("Detected 3D DICOM files - processing as volume data")
+                I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
+                N = len(self)  # Number of time steps = number of files
+                
+                # Check if we have a 4th dimension (e.g., RGB channels)
+                if len(firstPixelArray.shape) == 4:
+                    # Handle RGB/RGBA data
+                    channels = firstPixelArray.shape[3]
+                    A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
+                    for n in range(N):
+                        A[:, :, :, n, :] = self[n].pixel_array
+                    # Reshape to standard format: (I, J, K*N, channels) for compatibility
+                    A = A.reshape((I, J, K*N, channels))
+                else:
+                    # Standard 3D data
+                    A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
+                    for n in range(N):
+                        A[:, :, :, n] = self[n].pixel_array
+                    # Reshape to standard format: (I, J, K*N) for compatibility
+                    A = A.reshape((I, J, K*N))
+                    
+            else:
+                # Handle traditional 2D slice-based DICOM files
+                I, J = int(self.getTag('Rows')), int(self.getTag('Columns'))
+                K = int(self.getNumberOfSlicesPerVolume())
+                self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
+                N = self.getNumberOfTimeSteps()
+                
+                thisDType = firstPixelArray.dtype
+                thisShape = firstPixelArray.shape
+                A = np.zeros((I, J, K, N), dtype=thisDType)
+                if (K*N) != len(self):
+                    raise FileNotFoundError(f"Missing some DICOM files.")
+                
+                c0 = 0
+                for k1 in range(K):
+                    for k2 in range(N):
+                        iA = self[c0].pixel_array
+                        A[:, :, k1, k2] = iA
+                        c0 += 1
         
         patientMeta = dcmVTKTK.PatientMeta()
-        patientMeta.initFromDicomSeries(self)
+        patientMeta.initFromDicomSeries(self, A.shape)
         return A, patientMeta
 
 
@@ -1158,33 +1185,25 @@ class DicomSeries(list):
             return (self.getDeltaRow(), self.getDeltaCol(), self.getDeltaSlice())
 
 
-    def hasExplicitSpacingInfo(self):
-        """Check if the DICOM series has explicit spacing information.
-        This is useful for determining the quality of spacing data, especially for 3D volumes.
-        
-        Returns:
-            bool: True if explicit spacing information is available, False otherwise
-        """
-        if self.has3DPixelData():
-            # For 3D DICOM files, check for explicit spacing information
-            hasSliceThickness = self.getTag('SliceThickness', ifNotFound=None) is not None
-            hasSpacingBetweenSlices = self.getTag('SpacingBetweenSlices', ifNotFound=None) is not None
-            hasPixelSpacing = self.getTag('PixelSpacing', ifNotFound=None) is not None
-            hasImagePositionPatient = self.getTag('ImagePositionPatient', ifNotFound=None) is not None
-            hasImageOrientationPatient = self.getTag('ImageOrientationPatient', ifNotFound=None) is not None
-            
-            # Also check SharedFunctionalGroupsSequence
-            hasSharedFunctionalGroups = (self._getSliceSpacingFromSharedFunctionalGroups() is not None or
-                                       self._getPixelSpacingFromSharedFunctionalGroups() is not None or
-                                       self._getImagePositionPatientFromSharedFunctionalGroups() is not None or
-                                       self._getImageOrientationPatientFromSharedFunctionalGroups() is not None)
-            
-            return (hasSliceThickness or hasSpacingBetweenSlices or hasPixelSpacing or 
-                   hasImagePositionPatient or hasImageOrientationPatient or hasSharedFunctionalGroups)
-        else:
-            # For traditional 2D slice-based DICOM files, check for slice location information
-            return len(self.sliceLocations) > 1
+    def getNumberOfTimeSteps(self):
+        try:
+            return int(self.getTag('CardiacNumberOfImages'))
+        except:
+            try:
+                return int(self.getTag(0x20011017))
+            except:
+                pass
+        return 1
 
+    def getHeartRate(self):
+        if self.IS_GE():
+            try:
+                return 60.0 / float(self.getTag('NominalInterval', ifNotFound=0.0)*dcmTools.ms_to_s)
+            except ZeroDivisionError:
+                return 0.0
+        elif self.IS_PHILIPS():
+            return float(self.getTag(0x00181088, ifNotFound=0.0))
+        return 0.0
 
     def getTemporalResolution(self):
         """Get the temporal resolution of the series.
@@ -1196,9 +1215,9 @@ class DicomSeries(list):
             float: The temporal resolution in seconds.
         """
         try:
-            return float(self.getTag('NominalInterval', ifNotFound=0.0)/self.getTag('CardiacNumberOfImages', ifNotFound=1))
+            return (60.0 / self.getHeartRate())/self.getNumberOfTimeSteps()
         except ZeroDivisionError:
-            return 0       
+            return 0.0
 
 
     def getTemporalResolution_TR_VPS(self):
@@ -1206,7 +1225,7 @@ class DicomSeries(list):
 
 
     def getManufacturer(self):
-        return self.getTag(0x00080070, ifNotFound='Unknown')
+        return self.getTag(0x00080070, ifNotFound=Unknown)
 
 
     def IS_GE(self):
@@ -1240,6 +1259,13 @@ class DicomSeries(list):
         elif self.IS_SIEMENS():
             vencStr = self.getTag(0x00511014)
             return float(vencStr.split("_")[0].replace("v", "")) * 10.0
+        elif self.IS_PHILIPS():
+            vencDir = self.getTag(0x00189090)
+            vencStr = self.getTag(0x2001101a)
+            for k1 in range(len(vencDir)):
+                if int(vencDir[k1]) == 1:
+                    return float(vencStr[k1])
+            return None
         else: # TODO - add other vendors
             return None
 
@@ -1305,7 +1331,7 @@ class DicomSeries(list):
                 try:
                     outDict[extraTag] = self.getTag(extraTag)
                 except:
-                    outDict[extraTag] = 'Unknown'
+                    outDict[extraTag] = Unknown
         outDict['ImagesInAcquisition'] = len(self)
         try:
             outDict['AcquiredResolution'] = float(outDict['ReconstructionDiameter']) / float(max(self.getTag(0x00181310)))
@@ -1336,8 +1362,8 @@ class DicomSeries(list):
         if se_instance_set is None:
             se_instance_set = set()
         for k1 in range(len(self)):
-            se = self.getTag('SeriesNumber', dsID=k1, ifNotFound='unknown')
-            instance = self.getTag('InstanceNumber', dsID=k1, ifNotFound='unknown')
+            se = self.getTag('SeriesNumber', dsID=k1, ifNotFound=Unknown)
+            instance = self.getTag('InstanceNumber', dsID=k1, ifNotFound=Unknown)
             se_instance_str = f"{se}_{instance}"
             if se_instance_str in se_instance_set:
                 self.SAFE_NAME_MODE = True
@@ -1460,7 +1486,7 @@ class DicomStudy(list):
         for i in self:
             i.anonymise(anonName, anonPatientID, anonBirthdate, removePrivateTags)
 
-    def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound='Unknown', convertToType=None):
+    def getTag(self, tag, seriesID=0, instanceID=0, ifNotFound=Unknown, convertToType=None):
         return self[seriesID].getTag(tag, dsID=instanceID, ifNotFound=ifNotFound, convertToType=convertToType)
 
     def getTagListAndNames(self, tagList, seriesID=0, instanceID=0):
@@ -1572,7 +1598,7 @@ class DicomStudy(list):
                 raise ValueError(f"phase_factors should be length 3")
         else:
             if self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_GE():
-                phase_factors = [1.0, 1.0, -1.0]
+                phase_factors = [0.001, 0.001, -0.001] # just mm/s to m/s
                 phase_offsets = [0.0, 0.0, 0.0]
             elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_SIEMENS():
                 venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()
@@ -1581,8 +1607,12 @@ class DicomStudy(list):
                 phase_factors = [m, m, m]
                 phase_offsets = [c, c, c]
             elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_PHILIPS(): # TODO: Check this
-                phase_factors = [1.0, 1.0, 1.0]
-                phase_offsets = [0.0, 0.0, 0.0]
+                venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()*0.01 # Converted to m/s
+                print(f"PHILIPS 4D-Flow - found VENC={venc}")
+                c = -1.0 * venc
+                m = (venc * 2.0) / 4096.0 # TODO: Check this
+                phase_factors = [m, m, m]
+                phase_offsets = [c, c, c]
             else:
                 raise ValueError(f"Unknown scanner type")
         if phase_offsets is not None:
@@ -1615,7 +1645,6 @@ class DicomStudy(list):
                                         outputFileName, 
                                         phase_factors=phase_factors,
                                         phase_offsets=phase_offsets,
-                                        scale_factor=0.001,
                                         velArrayName=velArrayName,
                                         DEL_ORIGINAL=True)
         self.HIDE_PROGRESSBAR = origHIDE
