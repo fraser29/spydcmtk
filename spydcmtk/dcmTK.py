@@ -791,7 +791,7 @@ class DicomSeries(list):
             (self.getTag("AcquisitionContrast") == "FLOW_ENCODED")
 
 
-    def __pixDataPhilips4DFlow(self, DATA_ID=2):
+    def _pixDataPhilips4DFlow(self, DATA_ID=2):
         pix = self[0].pixel_array
         K = self.getNumberOfSlicesPerVolume()
         I = self.getTag("Columns", convertToType=int)
@@ -820,7 +820,7 @@ class DicomSeries(list):
         self._loadToMemory()
         
         if self.isPhilips4DFlow():
-            A = self.__pixDataPhilips4DFlow()
+            A = self._pixDataPhilips4DFlow()
         else:
             # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
             firstPixelArray = self[0].pixel_array
@@ -1196,7 +1196,7 @@ class DicomSeries(list):
         return 1
 
     def getHeartRate(self):
-        if self.IS_GE():
+        if self.IS_GE() or self.IS_SIEMENS():
             try:
                 return 60.0 / float(self.getTag('NominalInterval', ifNotFound=0.0)*dcmTools.ms_to_s)
             except ZeroDivisionError:
@@ -1601,14 +1601,17 @@ class DicomStudy(list):
                 phase_factors = [0.001, 0.001, -0.001] # just mm/s to m/s
                 phase_offsets = [0.0, 0.0, 0.0]
             elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_SIEMENS():
-                venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()
+                venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()*0.001 # Converted to m/s
+                if VERBOSE: 
+                    print(f"SIEMENS 4D-Flow - found VENC={venc}")
                 c = -1.0 * venc
-                m = (venc * 2.0) / 4096.0 # TODO: Check this
+                m = (venc * 2.0) / 4096.0 # TODO: Check this - maybe check nbits first
                 phase_factors = [m, m, m]
                 phase_offsets = [c, c, c]
-            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_PHILIPS(): # TODO: Check this
+            elif self.getSeriesBySeriesNumber(seriesNumber_list[1]).IS_PHILIPS(): 
                 venc =  self.getSeriesBySeriesNumber(seriesNumber_list[1]).getVENC()*0.01 # Converted to m/s
-                print(f"PHILIPS 4D-Flow - found VENC={venc}")
+                if VERBOSE: 
+                    print(f"PHILIPS 4D-Flow - found VENC={venc}")
                 c = -1.0 * venc
                 m = (venc * 2.0) / 4096.0 # TODO: Check this
                 phase_factors = [m, m, m]
@@ -1626,18 +1629,36 @@ class DicomStudy(list):
         intermediate_pvds = {}
         
         # Create process pool and process all directories in parallel
+        if VERBOSE: 
+            print(f"Running intermediate processing: ")
         origHIDE = self.HIDE_PROGRESSBAR
         self.HIDE_PROGRESSBAR = True
+        if self[1].IS_PHILIPS(): # PHILIPS: RUN SPECIAL CASE FOR MAG
+            if VERBOSE:
+                print(f"Running special case for MAG (using series number {seriesNumber_list[0]})")
+                print(f"   Full series list: {seriesNumber_list}")
+            seriesForMag = self.getSeriesBySeriesNumber(seriesNumber_list[0])
+            A = seriesForMag._pixDataPhilips4DFlow(0)
+            patientMeta = dcmVTKTK.PatientMeta()
+            patientMeta.initFromDicomSeries(seriesForMag, A.shape)
+            vtsDict = dcmVTKTK.arrToVTS(A, patientMeta, seriesForMag[0], working_dir)
+            iOut = dcmVTKTK.fIO.writeVTK_PVD_Dict(vtsDict, working_dir, filePrefix="MAG", fileExtn='vts', BUILD_SUBDIR=True)
+            intermediate_pvds["MAG"] = iOut
         with Pool() as pool:
-            args = [(self.getSeriesBySeriesNumber(iSeriesNum), label, working_dir)
-                    for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"])]
+            if self[1].IS_PHILIPS():
+                args = [(self.getSeriesBySeriesNumber(iSeriesNum), label, working_dir)
+                        for iSeriesNum, label in zip(seriesNumber_list[1:], ["PX", "PY", "PZ"])]
+            else:
+                args = [(self.getSeriesBySeriesNumber(iSeriesNum), label, working_dir)
+                        for iSeriesNum, label in zip(seriesNumber_list, ["MAG", "PX", "PY", "PZ"])]
             
             results = pool.map(_process_series_for_fdq, args)
         
         # Collect results into intermediate_pvds dictionary
-        intermediate_pvds = dict(results)
+        intermediate_pvds.update(dict(results))
         
-        if VERBOSE: print(f"Combining to final 4D-flow PVD")
+        if VERBOSE: 
+            print(f"Combining to final 4D-flow PVD")
         fOut = dcmVTKTK.mergePhaseSeries4D(intermediate_pvds["MAG"], 
                                         [intermediate_pvds["PX"],
                                         intermediate_pvds["PY"],
@@ -1648,7 +1669,8 @@ class DicomStudy(list):
                                         velArrayName=velArrayName,
                                         DEL_ORIGINAL=True)
         self.HIDE_PROGRESSBAR = origHIDE
-        if VERBOSE: print(f"Written {fOut}")
+        if VERBOSE: 
+            print(f"Written {fOut}")
         return fOut
 
 
@@ -2038,7 +2060,7 @@ def studySummary(pathToDicoms):
 ## =====================================================================================================================
 ##   WRITE DICOMS
 ## =====================================================================================================================
-def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None):
+def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, tagUpdateDict=None, patientMeta=None, SWAP_AXES=True):
     if type(vtiFile) == str:
         vti = dcmVTKTK.fIO.readVTKFile(vtiFile)
         if vtiFile.endswith(".nii") or vtiFile.endswith(".nii.gz"):
@@ -2057,6 +2079,8 @@ def writeVTIToDicoms(vtiFile, dcmTemplateFile_or_ds, outputDir, arrayName=None, 
     vti.GetDimensions(dims)
     dims.append(A.shape[-1])
     A = np.reshape(A, dims, 'F')
+    if SWAP_AXES:
+        A = np.swapaxes(A, 1, 0)
     if patientMeta is None:
         patientMeta = dcmVTKTK.PatientMeta()
         patientMeta.initFromVTI(vti)
@@ -2222,7 +2246,8 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
                         outputDir=outputDir,
                         arrayName='PixelData',
                         tagUpdateDict=tagUpdateDict,
-                        patientMeta=patientMeta)
+                        patientMeta=patientMeta, 
+                        SWAP_AXES=False)
 
 
 def getResolution(dataVts):
@@ -2242,7 +2267,6 @@ def distBetweenTwoPts(a, b):
 
 def _process_series_for_fdq(args):
     series, label, outDir = args
-    series._loadToMemory()
     iOut = series.writeToVTS(os.path.join(outDir, f"{label}.pvd"))
     return (label, iOut)
 

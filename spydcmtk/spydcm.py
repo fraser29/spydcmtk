@@ -38,6 +38,14 @@ class INTERACTIVE():
     def getUserInput(self, question="your choice"):
         return input(f"Enter {question}: ")
 
+    def setOutputPath(self):
+        if self.outputPath is None:
+            self.outputPath = self.getUserInput("output path")
+            self.outputPath = os.path.abspath(self.outputPath)
+            if not os.path.isdir(self.outputPath):
+                print(f"Output path {self.outputPath} does not exist. Please enter a valid path.")
+                self.setOutputPath()
+
     def run(self):
         while True:
             self.displayMenu()
@@ -52,11 +60,12 @@ class INTERACTIVE():
 
     def buildVTS(self):
         self.dataSummary()
+        self.setOutputPath()
         seNum = self.getUserInput("series number")
         try: 
             seNum = int(seNum)
             dcmSeries = self.study.getSeriesByID(seNum)
-            outputFilename = self.getUserInput("file name (vts)")
+            outputFilename = self.getUserInput(f"file name to save at {self.outputPath} (vts)")
             outputpath = os.path.join(self.outputPath, outputFilename)
             dcmSeries.writeToVTS(outputpath)
         except ValueError:
@@ -64,11 +73,17 @@ class INTERACTIVE():
 
     def buildFDQ(self):
         self.dataSummary()
-        seNum_ = self.getUserInput("series numbers for FDQ as: MAG PX PY PZ :")
+        self.setOutputPath()
+        if self.study[0].IS_PHILIPS():
+            seNum_ = self.getUserInput("series numbers for FDQ as: PX PY PZ :")
+        else:
+            seNum_ = self.getUserInput("series numbers for FDQ as: MAG PX PY PZ :")
         try: 
             seNum_4 = seNum_.strip().split(' ')
             seNum_4 = [int(i) for i in seNum_4]
-            outputFilename = self.getUserInput("file name (pvd)")
+            if self.study[0].IS_PHILIPS():
+                seNum_4 = [seNum_4[0]] + seNum_4 
+            outputFilename = self.getUserInput(f"file name to save at {self.outputPath} (pvd)")
             outputpath = os.path.join(self.outputPath, outputFilename)
             self.study.writeFDQ(seNum_4, outputpath, 'Vel')
         except ValueError:
@@ -76,8 +91,9 @@ class INTERACTIVE():
 
     def buildOverviewImage(self):
         self.dataSummary()
+        self.setOutputPath()
         seNum = self.getUserInput("series number")
-        outputFilename = self.getUserInput("file name (png) - leave blank to show")
+        outputFilename = self.getUserInput(f"file name to save at {self.outputPath} (png) - leave blank to show")
         if outputFilename == '':
             outputpath = None
         else:
@@ -124,7 +140,7 @@ def buildTableOfDicomParamsForManuscript(topLevelDirectoryList, outputCSVPath, s
                 matchingSeries = ss
             if matchingSeries is not None:
                 for iSeries in matchingSeries:
-                    resDict = iSeries.getSeriesInfoDict(EXTRA_TAGS=SpydcmTK_config.MANUSCRIPT_TABLE_EXTRA_TAG_LIST)
+                    resDict = iSeries.getSeriesInfoDict(extraTags=SpydcmTK_config.MANUSCRIPT_TABLE_EXTRA_TAG_LIST)
                     resDict["Identifier"] = dcmTools.getDicomFileIdentifierStr(iSeries[0])
                     dfData.append(resDict)
     stats = {}
@@ -592,7 +608,7 @@ def main():
     # ap.add_argument('-nii2dcm', dest='nii2dcm',
     #     help='Will convert NII to dicom series. Pass reference dicoms as input.', type=str, default=None)
     #
-    ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode', action='store_true')
+    ap.add_argument('-I', dest='INTERACTIVE', help='Will read input and launch interactive mode (provide options -i and optionally -o)', action='store_true')
     #
     ap.add_argument('-config', dest='configFile', help='Path to configuration file to use.', type=str, default=None)
     # -- program behaviour guidence -- #
