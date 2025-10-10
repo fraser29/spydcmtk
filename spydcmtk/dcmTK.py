@@ -709,24 +709,6 @@ class DicomSeries(list):
             return len(set(sliceLoc))
 
 
-    def getNumberOfTimeSteps(self):
-        """Get the number of time steps.
-        For traditional 2D slice-based DICOM files, this returns the number of time points per slice location.
-        For 3D DICOM files, this returns the number of files (each file is a time point).
-        
-        Returns:
-            int: Number of time steps
-        """
-        if self.has3DPixelData():
-            # For 3D DICOM files, each file represents a time point
-            return len(self)
-        else:
-            # For traditional 2D slice-based DICOM files
-            sliceLoc = self.sliceLocations
-            sliceLocS = set(sliceLoc)
-            return sliceLoc.count(sliceLocS.pop())
-
-
     def getSliceNormalVector(self):
         """Get the normal vector of the slice. 
             Calculated from the ImageOrientationPatient tag.
@@ -1195,6 +1177,9 @@ class DicomSeries(list):
                 return int(self.getTag(0x20011017))
             except:
                 pass
+        if self.has3DPixelData():
+            # For 3D DICOM files, each file represents a time point
+            return len(self)
         return 1
 
     def getHeartRate(self):
