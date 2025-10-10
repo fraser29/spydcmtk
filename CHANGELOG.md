@@ -1,5 +1,11 @@
 # Version History
 
+## [1.2.16] - 2025-10-07
+### Fixed
+- Added Siemens and Philips 4D-Flow processing.
+- Fix bug in writeVTIToDicoms - correctly handle SWAP_AXES parameter.
+- Update Tests
+
 ## [1.2.15] - 2025-10-01
 ### Feature
 Force FieldData - ImageOrientationPatient [1,0,0,0,1,0] - for VTI TrueOrientation
