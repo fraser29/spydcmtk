@@ -855,12 +855,14 @@ class DicomSeries(list):
                 K = int(self.getNumberOfSlicesPerVolume())
                 self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
                 N = self.getNumberOfTimeSteps()
+                if N == 0:
+                    N = 1
                 
                 thisDType = firstPixelArray.dtype
                 thisShape = firstPixelArray.shape
                 A = np.zeros((I, J, K, N), dtype=thisDType)
                 if (K*N) != len(self):
-                    raise FileNotFoundError(f"Missing some DICOM files.")
+                    raise FileNotFoundError(f"Missing some DICOM files. {K}*{N}!={len(self)}")
                 
                 c0 = 0
                 for k1 in range(K):

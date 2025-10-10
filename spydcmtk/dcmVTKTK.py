@@ -357,7 +357,7 @@ def arrToVTI(arr: np.ndarray,
         ###        
         try:
             thisTime = patientMeta.Times[k1]
-        except KeyError:
+        except (KeyError, IndexError):
             thisTime = k1
         #
         extra_tags = {"SliceVector": patientMeta.SliceVector,
