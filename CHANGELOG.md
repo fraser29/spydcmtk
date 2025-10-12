@@ -1,5 +1,10 @@
 # Version History
 
+## [1.2.17] - 2025-10-12
+### Fixed
+- Fix edge case on temporal time steps returning zero. Affected DCM-2-VTI
+
+
 ## [1.2.16] - 2025-10-07
 ### Fixed
 - Added Siemens and Philips 4D-Flow processing.

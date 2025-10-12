@@ -1170,17 +1170,20 @@ class DicomSeries(list):
 
 
     def getNumberOfTimeSteps(self):
+        value = 1
         try:
-            return int(self.getTag('CardiacNumberOfImages'))
+            value = int(self.getTag('CardiacNumberOfImages'))
         except:
             try:
-                return int(self.getTag(0x20011017))
+                value = int(self.getTag(0x20011017))
             except:
                 pass
         if self.has3DPixelData():
             # For 3D DICOM files, each file represents a time point
-            return len(self)
-        return 1
+            value = len(self)
+        if value == 0:
+            value = 1 # default to 1 if no value is found or is zero
+        return value
 
     def getHeartRate(self):
         if self.IS_GE() or self.IS_SIEMENS():
