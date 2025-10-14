@@ -838,7 +838,7 @@ class DicomSeries(list):
                 self.sortBySlice_InstanceNumber()  # This takes care of order - slices grouped, then time for each slice 
                 N = self.getNumberOfTimeSteps()
                 if N == 0:
-                    N = 1
+                    N = len(self) / K
                 
                 thisDType = firstPixelArray.dtype
                 thisShape = firstPixelArray.shape
@@ -1170,17 +1170,16 @@ class DicomSeries(list):
 
 
     def getNumberOfTimeSteps(self):
-        value = 1
-        try:
-            value = int(self.getTag('CardiacNumberOfImages'))
-        except:
-            try:
-                value = int(self.getTag(0x20011017))
-            except:
-                pass
+        value = int(self.getTag('CardiacNumberOfImages', ifNotFound=0))
+        if value == 0:
+            value = int(self.getTag(0x20011017, ifNotFound=0))
         if self.has3DPixelData():
             # For 3D DICOM files, each file represents a time point
             value = len(self)
+        if value == 0:
+            p0 = self.getImagePositionPatient_np(0)
+            sliceLoc = [distBetweenTwoPts(p0, self.getImagePositionPatient_np(i)) for i in range(len(self))]
+            value = len(self) // len(list(set(sliceLoc)))
         if value == 0:
             value = 1 # default to 1 if no value is found or is zero
         return value
