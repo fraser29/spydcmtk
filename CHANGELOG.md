@@ -1,9 +1,12 @@
 # Version History
 
+## [1.2.18] - 2025-10-15
+### Fixed
+- Fix another edge case bug in time steps and dcm2numpy.
+
 ## [1.2.17] - 2025-10-12
 ### Fixed
 - Fix edge case on temporal time steps returning zero. Affected DCM-2-VTI
-
 
 ## [1.2.16] - 2025-10-07
 ### Fixed
