@@ -494,7 +494,7 @@ def readImageStackToVTI(imageFileNames: List[str], patientMeta: PatientMeta=None
     a = vtkfilters.getScalarsAsNumpy(combinedImage, RETURN_3D=True)
     if CONVERT_TO_GREYSCALE:
         a = np.mean(a, -1)
-    elif a.shape[3] == 4: # Remove alpha
+    elif (len(a.shape) > 3) and (a.shape[3] == 4): # Remove alpha
         a = a[:,:,:,:3] 
     #
     vtkfilters.setArrayFromNumpy(combinedImage, a, arrayName, IS_3D=True, SET_SCALAR=True)

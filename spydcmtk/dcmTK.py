@@ -2233,7 +2233,7 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
     writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,
-                        arrayName='PixelData',
+                        arrayName=None, # Get scalars
                         tagUpdateDict=tagUpdateDict,
                         patientMeta=patientMeta, 
                         SWAP_AXES=False)
