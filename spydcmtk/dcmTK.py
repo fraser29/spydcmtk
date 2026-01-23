@@ -2088,24 +2088,31 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     assert pixelArray.ndim == 4 and pixelArray.shape[3] in [1, 3, 4], "Input must be MxNxSx1, or MxNxSx3 or MxNxSx4 RGB(A) array"
 
     IS_RGB = False
-    # Strip alpha if present
-    if pixelArray.shape[3] == 4:
+    if pixelArray.shape[3] == 4: # Strip alpha if present
         pixelArray = pixelArray[:, :, :, :3]
         IS_RGB = True
     elif pixelArray.shape[3] == 3:
         IS_RGB = True
 
-    # Ensure int16 
-    NBIT = 16 
-    if pixelArray.dtype != np.int16:
+    # Ensure int 8 or 16
+    dt = np.dtype(type(pixelArray)) if np.isscalar(pixelArray) else pixelArray.dtype
+    if np.issubdtype(dt, np.integer):
+        NBIT = np.iinfo(dt).bits
+    else:
+        NBIT = 16
         print(f"WARNING: Converting pixelArray from {pixelArray.dtype} to int16")
-        print(f"    PRE-CONVERSION:Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
-        if np.max(pixelArray) <= 1.0:
-            pixelArray = (pixelArray * 32767).astype(np.int16)
+        arr = np.nan_to_num(pixelArray, nan=0.0, posinf=0.0, neginf=0.0)
+        print(f"    PRE-CONVERSION:Max: {np.max(arr)}, Min: {np.min(arr)}")
+        if np.max(arr) <= 1.0:
+            arr = (arr * 32767).astype(np.int16)
+        elif (arr.min() > -32767) and (arr.max() < 32767): # Case when e.g. float - but within int16 (15) bounds
+            # arr = np.clip(arr, -32767, 32767) # User may run this before passs array to ensure
+            arr = (arr * 1.0).astype(np.int16)
         else:
-            pixelArray = np.clip(pixelArray, -32767, 32767)
-            pixelArray = (pixelArray * 1.0).astype(np.int16)
-        print(f"    POST-CONVERSION: Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
+            arr = arr - arr.min()
+            arr = arr / arr.max()
+            arr = (arr * 32767).astype(np.int16)
+        print(f"    POST-CONVERSION: Max: {np.max(arr)}, Min: {np.min(arr)}")
 
     nRow, nCol, nSlice, _ = pixelArray.shape
     mx, mn = np.max(pixelArray), 0
