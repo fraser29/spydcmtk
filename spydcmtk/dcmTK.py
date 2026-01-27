@@ -2101,21 +2101,21 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     else:
         NBIT = 16
         print(f"WARNING: Converting pixelArray from {pixelArray.dtype} to int16")
-        arr = np.nan_to_num(pixelArray, nan=0.0, posinf=0.0, neginf=0.0)
-        print(f"    PRE-CONVERSION:Max: {np.max(arr)}, Min: {np.min(arr)}")
-        if np.max(arr) <= 1.0:
-            arr = (arr * 32767).astype(np.int16)
-        elif (arr.min() > -32767) and (arr.max() < 32767): # Case when e.g. float - but within int16 (15) bounds
+        pixelArray = np.nan_to_num(pixelArray, nan=0.0, posinf=0.0, neginf=0.0)
+        # print(f"    PRE-CONVERSION:Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
+        if np.max(pixelArray) <= 1.0:
+            pixelArray = (pixelArray * 32767).astype(np.int16)
+        elif (pixelArray.min() > -32767) and (pixelArray.max() < 32767): # Case when e.g. float - but within int16 (15) bounds
             # arr = np.clip(arr, -32767, 32767) # User may run this before passs array to ensure
-            arr = (arr * 1.0).astype(np.int16)
+            pixelArray = (pixelArray * 1.0).astype(np.int16)
         else:
-            arr = arr - arr.min()
-            arr = arr / arr.max()
-            arr = (arr * 32767).astype(np.int16)
-        print(f"    POST-CONVERSION: Max: {np.max(arr)}, Min: {np.min(arr)}")
+            pixelArray = pixelArray - pixelArray.min()
+            pixelArray = pixelArray / pixelArray.max()
+            pixelArray = (pixelArray * 32767).astype(np.int16)
+        print(f"    POST-CONVERSION: Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
 
     nRow, nCol, nSlice, _ = pixelArray.shape
-    mx, mn = np.max(pixelArray), 0
+    mx, mn = np.max(pixelArray), np.min(pixelArray)
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
