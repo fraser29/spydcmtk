@@ -563,3 +563,32 @@ def buildFakeDS():
     ds.add_new([0x0010,0x0020], 'LO', '12345')
     return ds
 
+
+def vector_clustering(vectors, angle_tol_deg=10):
+    """
+    A simple clustering vectors based on angular tolerance.
+    Args:
+        vectors (numpy.ndarray): Array of vectors to cluster.
+        angle_tol_deg (float): Angular tolerance in degrees.
+
+    Returns:
+        numpy.ndarray: Cluster labels.
+    """
+    vectors = np.asarray(vectors)
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    cos_tol = np.cos(np.deg2rad(angle_tol_deg))
+    N = len(vectors)
+    labels = -np.ones(N, dtype=int)
+    cluster_id = 0
+    for i in range(N):
+        if labels[i] != -1:
+            continue
+        seed = vectors[i]
+        dots = vectors @ seed
+        members = dots >= cos_tol
+        labels[members] = cluster_id
+        cluster_vectors = vectors[members]
+        center = cluster_vectors.mean(axis=0)
+        center /= np.linalg.norm(center)
+        cluster_id += 1
+    return labels
