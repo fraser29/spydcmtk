@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.20] - 2026-02-23
+### Feature
+- Add functionality to split multi-volume series into single-volume series based on slice normal clustering.
+
 ## [1.2.19] - 2026-01-27
 ### Feature
 - Cleaner handling of images to DICOM. Respect initial image format (e.g. 8 bit image remain 8 bit DICOM)

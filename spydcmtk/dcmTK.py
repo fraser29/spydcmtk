@@ -420,9 +420,9 @@ class DicomSeries(list):
         return np.array(iop)
 
 
-    def yieldDataset(self):
+    def yieldDataset(self): 
         for ds in self:
-            if self.OVERVIEW:
+            if self.OVERVIEW: # This is OK
                 yield  dicom.dcmread(ds.filename, stop_before_pixels=False, force=True)
             else:
                 yield ds
@@ -1319,7 +1319,7 @@ class DicomSeries(list):
             - MagneticFieldStrength
 
         Args:
-            EXTRA_TAGS (list, optional): DEPRECIATED - use extraTags instead.
+            EXTRA_TAGS (list, optional): DEPRECATED - use extraTags instead.
             extraTags (list, optional): Additional tags to add to the dictionary. Defaults to [].
 
         Returns:
@@ -1347,7 +1347,7 @@ class DicomSeries(list):
             'ManufacturerModelName': self.getTag("ManufacturerModelName"),
             'SoftwareVersions': str(self.getTag(0x00181020)),}
         if len(EXTRA_TAGS) > 0:
-            print(f"WARNING: EXTRA_TAGS is DEPRECIATED and will be removed in future versions. Use 'extraTags' instead.")
+            print(f"WARNING: EXTRA_TAGS is DEPRECATED and will be removed in future versions. Use 'extraTags' instead.")
         extraTags += EXTRA_TAGS
         for extraTag in extraTags:
             if extraTag not in outDict.keys():
