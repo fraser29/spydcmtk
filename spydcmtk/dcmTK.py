@@ -123,6 +123,185 @@ class DicomSeries(list):
         return DicomSeries._setFromDictionary(dicomDict, OVERVIEW=OVERVIEW, HIDE_PROGRESSBAR=HIDE_PROGRESSBAR, FORCE_READ=FORCE_READ)
 
 
+    def splitMultiVolumeSeries(self, normalAngleTolDeg=2.0, iopTol=2e-3, MIN_CLUSTER_SIZE=1, SORT_EACH_SERIES=True):
+        """Split a "multi-orientation" series (e.g. localizers) into a list of per-orientation series.
+
+        This is useful when a single SeriesInstanceUID contains multiple stacks acquired with different
+        `ImageOrientationPatient` values (commonly 2-3 orthogonal localizer volumes).
+
+        Clustering strategy:
+        - First cluster by slice-normal direction (derived from IOP) using an angular tolerance.
+        - Then (within each normal cluster) refine by full IOP (row+col direction cosines) within a small L2 tolerance.
+
+        Notes:
+        - This does *not* modify UIDs; it only returns new `DicomSeries` objects containing subsets of the datasets.
+        - For Enhanced / multi-frame DICOM (len(self)==1 but per-frame orientations differ), this currently treats the
+          entire object as one orientation because splitting frames would require rewriting datasets.
+
+        Args:
+            normalAngleTolDeg (float, optional): Angular tolerance in degrees for slice normal clustering. Defaults to 2.0.
+            iopTol (float, optional): L2 tolerance for (canonicalized) IOP clustering within a normal cluster. Defaults to 2e-3.
+            MIN_CLUSTER_SIZE (int, optional): Drop clusters with fewer than this many instances. Defaults to 1.
+            SORT_EACH_SERIES (bool, optional): Sort each output series by slice+instance for consistency. Defaults to True.
+
+        Returns:
+            list[DicomSeries]: List of new series (subsets) split by orientation.
+        """
+        if len(self) == 0:
+            return []
+
+        # Multi-frame / "3D pixel data in one file" is not handled here in a meaningful split sense.
+        # Still return the series in a list for API consistency.
+        if self.has3DPixelData() and len(self) == 1:
+            return [DicomSeries(list(self),
+                                OVERVIEW=self.OVERVIEW,
+                                HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR,
+                                FORCE_READ=self.FORCE_READ,
+                                SAFE_NAME_MODE=self.SAFE_NAME_MODE)]
+
+        def _unit(v):
+            v = np.asarray(v, dtype=float)
+            n = float(np.linalg.norm(v))
+            if n < 1e-12:
+                return None
+            return v / n
+
+        def _canonical_iop6(iop6):
+            """Return a stable 6-vector for comparison (unit row/col, sign-normalized)."""
+            iop6 = np.asarray(iop6, dtype=float).reshape(6,)
+            r = _unit(iop6[:3])
+            c = _unit(iop6[3:6])
+            if r is None or c is None:
+                return None, None
+
+            # Orthonormalize: keep r, make c orthogonal within the plane.
+            n = _unit(np.cross(r, c))
+            if n is None:
+                return None, None
+            c = _unit(np.cross(n, r))
+            if c is None:
+                return None, None
+
+            # Deterministic sign for r (flip both r and c together to preserve handedness).
+            k = int(np.argmax(np.abs(r)))
+            if r[k] < 0:
+                r = -r
+                c = -c
+                n = -n
+
+            # Deterministic sign for n (plane direction) to reduce +/- ambiguity.
+            kn = int(np.argmax(np.abs(n)))
+            if n[kn] < 0:
+                r = -r
+                c = -c
+                n = -n
+
+            return np.concatenate([r, c]), n
+
+        def _angle_match(u, v, cosTol):
+            # u, v assumed unit and sign-normalized, so dot in [0,1]
+            return float(np.dot(u, v)) >= cosTol
+
+        cosTol = float(np.cos(np.deg2rad(float(normalAngleTolDeg))))
+
+        # Step 1: compute canonical features per instance
+        feats = []
+        for k in range(len(self)):
+            try:
+                iop = self.getImageOrientationPatient_np(dsID=k)
+            except Exception:
+                iop = None
+            if iop is None:
+                feats.append((k, None, None))
+                continue
+            iop6c, n = _canonical_iop6(iop)
+            feats.append((k, iop6c, n))
+
+        # Step 2: cluster by normal direction (plane)
+        normal_clusters = []  # list of dict: {'rep': n, 'members': [idx,...]}
+        unknown_members = []
+        for k, iop6c, n in feats:
+            if n is None:
+                unknown_members.append(k)
+                continue
+
+            assigned = False
+            for cl in normal_clusters:
+                if _angle_match(n, cl['rep'], cosTol):
+                    cl['members'].append(k)
+                    # Update representative as normalized mean (keeps stability).
+                    nn = _unit(cl['rep'] + n)
+                    if nn is not None:
+                        cl['rep'] = nn
+                    assigned = True
+                    break
+            if not assigned:
+                normal_clusters.append({'rep': n, 'members': [k]})
+
+        # Step 3: refine within each normal cluster by full IOP (row/col) within iopTol
+        out_series = []
+        for ncl in normal_clusters:
+            subclusters = []  # {'rep': iop6c, 'members': [idx,...]}
+            for k in ncl['members']:
+                iop6c = feats[k][1]
+                if iop6c is None:
+                    continue
+                assigned = False
+                for scl in subclusters:
+                    if float(np.linalg.norm(iop6c - scl['rep'])) <= float(iopTol):
+                        scl['members'].append(k)
+                        # Update rep (simple mean); keep it near unit-length by re-canonicalizing.
+                        rep = (scl['rep'] + iop6c) / 2.0
+                        rep2, _ = _canonical_iop6(rep)
+                        if rep2 is not None:
+                            scl['rep'] = rep2
+                        assigned = True
+                        break
+                if not assigned:
+                    subclusters.append({'rep': iop6c, 'members': [k]})
+
+            for scl in subclusters:
+                if len(scl['members']) < int(MIN_CLUSTER_SIZE):
+                    continue
+                ds_list = [self[i] for i in scl['members']]
+                s = DicomSeries(ds_list,
+                                OVERVIEW=self.OVERVIEW,
+                                HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR,
+                                FORCE_READ=self.FORCE_READ,
+                                SAFE_NAME_MODE=self.SAFE_NAME_MODE)
+                s.NOT_FULLY_LOADED = self.NOT_FULLY_LOADED
+                if SORT_EACH_SERIES:
+                    try:
+                        s.sortBySlice_InstanceNumber()
+                    except Exception:
+                        try:
+                            s.sortByInstanceNumber()
+                        except Exception:
+                            pass
+                out_series.append(s)
+
+        # Keep "unknown orientation" images as their own series at the end (if any)
+        if len(unknown_members) >= int(MIN_CLUSTER_SIZE):
+            ds_list = [self[i] for i in unknown_members]
+            s = DicomSeries(ds_list,
+                            OVERVIEW=self.OVERVIEW,
+                            HIDE_PROGRESSBAR=self.HIDE_PROGRESSBAR,
+                            FORCE_READ=self.FORCE_READ,
+                            SAFE_NAME_MODE=self.SAFE_NAME_MODE)
+            s.NOT_FULLY_LOADED = self.NOT_FULLY_LOADED
+            if SORT_EACH_SERIES:
+                try:
+                    s.sortBySlice_InstanceNumber()
+                except Exception:
+                    try:
+                        s.sortByInstanceNumber()
+                    except Exception:
+                        pass
+            out_series.append(s)
+
+        return out_series
+
+
     def getRootDir(self):
         """Return the root directory of the series: os.path.split(self[0].filename)[0]
         """
