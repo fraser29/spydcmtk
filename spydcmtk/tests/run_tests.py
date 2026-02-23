@@ -330,7 +330,7 @@ class TestImagesToDCM(unittest.TestCase):
                                                 outputDir=tmpDir)
                 imageDS = dcmTK.DicomSeries.setFromDirectory(tmpDir, HIDE_PROGRESSBAR=True)
                 arr, _ = imageDS.getPixelDataAsNumpy()
-                self.assertEqual(arr[179,153,0,0], 163, "Dicom orientation for image2DCM wrong")
+                self.assertEqual(arr[179,153,0], 163, "Dicom orientation for image2DCM wrong")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 

@@ -2267,27 +2267,34 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
     assert pixelArray.ndim == 4 and pixelArray.shape[3] in [1, 3, 4], "Input must be MxNxSx1, or MxNxSx3 or MxNxSx4 RGB(A) array"
 
     IS_RGB = False
-    # Strip alpha if present
-    if pixelArray.shape[3] == 4:
+    if pixelArray.shape[3] == 4: # Strip alpha if present
         pixelArray = pixelArray[:, :, :, :3]
         IS_RGB = True
     elif pixelArray.shape[3] == 3:
         IS_RGB = True
 
-    # Ensure int16 
-    NBIT = 16 
-    if pixelArray.dtype != np.int16:
+    # Ensure int 8 or 16
+    dt = np.dtype(type(pixelArray)) if np.isscalar(pixelArray) else pixelArray.dtype
+    if np.issubdtype(dt, np.integer):
+        NBIT = np.iinfo(dt).bits
+    else:
+        NBIT = 16
         print(f"WARNING: Converting pixelArray from {pixelArray.dtype} to int16")
-        print(f"    PRE-CONVERSION:Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
+        pixelArray = np.nan_to_num(pixelArray, nan=0.0, posinf=0.0, neginf=0.0)
+        # print(f"    PRE-CONVERSION:Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
         if np.max(pixelArray) <= 1.0:
             pixelArray = (pixelArray * 32767).astype(np.int16)
-        else:
-            pixelArray = np.clip(pixelArray, -32767, 32767)
+        elif (pixelArray.min() > -32767) and (pixelArray.max() < 32767): # Case when e.g. float - but within int16 (15) bounds
+            # arr = np.clip(arr, -32767, 32767) # User may run this before passs array to ensure
             pixelArray = (pixelArray * 1.0).astype(np.int16)
+        else:
+            pixelArray = pixelArray - pixelArray.min()
+            pixelArray = pixelArray / pixelArray.max()
+            pixelArray = (pixelArray * 32767).astype(np.int16)
         print(f"    POST-CONVERSION: Max: {np.max(pixelArray)}, Min: {np.min(pixelArray)}")
 
     nRow, nCol, nSlice, _ = pixelArray.shape
-    mx, mn = np.max(pixelArray), 0
+    mx, mn = np.max(pixelArray), np.min(pixelArray)
     try:
         slice0 = tagUpdateDict.pop('SliceLocation0')
     except KeyError:
@@ -2412,7 +2419,7 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
     writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,
-                        arrayName='PixelData',
+                        arrayName=None, # Get scalars
                         tagUpdateDict=tagUpdateDict,
                         patientMeta=patientMeta, 
                         SWAP_AXES=False)

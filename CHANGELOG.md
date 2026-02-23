@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.19] - 2026-01-27
+### Feature
+- Cleaner handling of images to DICOM. Respect initial image format (e.g. 8 bit image remain 8 bit DICOM)
+
 ## [1.2.18] - 2025-10-15
 ### Fixed
 - Fix another edge case bug in time steps and dcm2numpy.
