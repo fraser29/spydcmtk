@@ -370,7 +370,10 @@ def arrToVTI(arr: np.ndarray,
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
             extra_tags["ImageOrientationPatient"] = [1,0,0,0,1,0]
         else:
-            A3 = np.swapaxes(A3, 0, 1)
+            # TODO FIXME - this is all wrong. Need to rethink and recalculate.
+            # Stategy: best align XYZ, consider negative. Adjust PatMat to match
+            # A3 = np.flip(A3, axis=0)
+            # A3 = np.swapaxes(A3, 0, 1)
             newImg = _arrToImagedata(A3, patientMeta)
 
         if ds is not None:
@@ -382,6 +385,7 @@ def arrToVTI(arr: np.ndarray,
 
 def _arrToImagedata(A3: np.ndarray, patientMeta: PatientMeta) -> vtk.vtkImageData:
     newImg = _buildVTIImage(patientMeta)
+    newImg.SetDimensions(A3.shape)
     npArray = np.reshape(A3, np.prod(A3.shape), 'F').astype(np.int16)
     aArray = numpy_support.numpy_to_vtk(npArray, deep=1)
     aArray.SetName('PixelData')

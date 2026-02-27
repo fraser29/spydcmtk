@@ -810,7 +810,7 @@ class DicomSeries(list):
             
             if is3DPixelData:
                 # Handle 3D DICOM files - each file contains a 3D volume
-                print("Detected 3D DICOM files - processing as volume data")
+                print(f"Detected 3D DICOM files - processing as volume data {firstPixelArray.shape}")
                 I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
                 N = len(self)  # Number of time steps = number of files
                 
@@ -821,15 +821,11 @@ class DicomSeries(list):
                     A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
                     for n in range(N):
                         A[:, :, :, n, :] = self[n].pixel_array
-                    # Reshape to standard format: (I, J, K*N, channels) for compatibility
-                    A = A.reshape((I, J, K*N, channels))
                 else:
                     # Standard 3D data
                     A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
                     for n in range(N):
                         A[:, :, :, n] = self[n].pixel_array
-                    # Reshape to standard format: (I, J, K*N) for compatibility
-                    A = A.reshape((I, J, K*N))
                     
             else:
                 # Handle traditional 2D slice-based DICOM files
