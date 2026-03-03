@@ -47,10 +47,11 @@
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">spydcmtk</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">DICOM CONVERSION</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dicom-to-numpy-array">DICOM to Numpy Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-nifti">DICOM to Nifti</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-html">DICOM to HTML</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-vtk">DICOM to VTK</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#general-conversions">GENERAL CONVERSIONS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#working-with-patient-coordinates">WORKING WITH PATIENT COORDINATES</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
@@ -84,6 +85,13 @@
   <section id="dicom-conversion">
 <h1>DICOM CONVERSION<a class="headerlink" href="#dicom-conversion" title="Link to this heading"></a></h1>
 <p>Some format conversions are provided by this package:</p>
+<section id="dicom-to-numpy-array">
+<h2>DICOM to Numpy Array<a class="headerlink" href="#dicom-to-numpy-array" title="Link to this heading"></a></h2>
+<p>DicomSeries class has a method getPixelDataAsNumpy() that returns a tuple of a numpy array and a PatientMeta object.</p>
+<p>The returned numpy array is of shape [nColumns, nRows, nSlices, nTime], OR [nColumns, nRows, nSlices, nTime, nChannels].
+The PatientMeta object contains metadata about the DICOM series.</p>
+<p>Example:</p>
+</section>
 <section id="dicom-to-nifti">
 <h2>DICOM to Nifti<a class="headerlink" href="#dicom-to-nifti" title="Link to this heading"></a></h2>
 <p>Relies on <a class="reference external" href="https://github.com/rordenlab/dcm2niix">dcm2niix</a>, which must be installed and in path (or set in config file).</p>
@@ -103,9 +111,10 @@
 <li><p>VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion.</p></li>
 </ul>
 </section>
-<section id="general-conversions">
-<h2>GENERAL CONVERSIONS<a class="headerlink" href="#general-conversions" title="Link to this heading"></a></h2>
-<p>For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a number of properties that can be used to get the basic dicom meta data.</p>
+<section id="working-with-patient-coordinates">
+<h2>WORKING WITH PATIENT COORDINATES<a class="headerlink" href="#working-with-patient-coordinates" title="Link to this heading"></a></h2>
+<p>For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a helpful interface to move between image and patient coordinates. It also provides a number of properties that can be used to get the basic dicom meta data.</p>
+<p>Example:</p>
 </section>
 </section>
 
