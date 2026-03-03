@@ -3,6 +3,25 @@ DICOM CONVERSION
 
 Some format conversions are provided by this package:
 
+DICOM to Numpy Array
+^^^^^^^^^^^^^^^^^^^^
+
+DicomSeries class has a method getPixelDataAsNumpy() that returns a tuple of a numpy array and a PatientMeta object.
+
+The returned numpy array is of shape [nColumns, nRows, nSlices, nTime], OR [nColumns, nRows, nSlices, nTime, nChannels].
+The PatientMeta object contains metadata about the DICOM series.
+
+Example:
+
+.. code-block:: python
+    import spydcmtk
+    dcmSeries = spydcmtk.dcmTK.DicomSeries.setFromDirectory(dicom_directory, HIDE_PROGRESSBAR=True)
+    A, patMeta = dcmSeries.getPixelDataAsNumpy()
+    print(A.shape)
+    plt.imshow(A[:,:,0,0])
+    plt.show()
+
+
 DICOM to Nifti
 ^^^^^^^^^^^^^^
 
@@ -26,7 +45,16 @@ Format conversions are:
 
 - VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion.
 
-GENERAL CONVERSIONS
-^^^^^^^^^^^^^^^^^^^^
+WORKING WITH PATIENT COORDINATES
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a number of properties that can be used to get the basic dicom meta data. 
+For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a helpful interface to move between image and patient coordinates. It also provides a number of properties that can be used to get the basic dicom meta data. 
+
+Example:
+
+.. code-block:: python
+    import spydcmtk
+    dcmSeries = spydcmtk.dcmTK.DicomSeries.setFromDirectory(dicom_directory, HIDE_PROGRESSBAR=True)
+    A, patMeta = dcmSeries.getPixelDataAsNumpy()
+    xyz = patMeta.imageToPatientCoordinates(np.array([I, J, K]))
+    print(xyz)

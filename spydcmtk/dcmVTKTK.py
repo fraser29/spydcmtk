@@ -363,19 +363,16 @@ def arrToVTI(arr: np.ndarray,
         extra_tags = {"SliceVector": patientMeta.SliceVector,
                         "Time": thisTime}
         if TRUE_ORIENTATION:
-            A3 = np.swapaxes(A3, 0, 1)
+            # A3 = np.swapaxes(A3, 0, 1)
             vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
             newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
             vtkfilters.delArraysExcept(newImg, [], pointData=False)
             vtkfilters.delArraysExcept(newImg, ['PixelData'])
             extra_tags["ImageOrientationPatient"] = [1,0,0,0,1,0]
         else:
-            # TODO FIXME - this is all wrong. Need to rethink and recalculate.
-            # Stategy: best align XYZ, consider negative. Adjust PatMat to match
-            # A3 = np.flip(A3, axis=0)
-            # A3 = np.swapaxes(A3, 0, 1)
+            # NO ORIENTATION CONSIDERED HERE - VTI IS AXIS ALIGNED. 
+            # FIELD DATA HAS ALL INFORMATION FOR PATIENT MATRIX
             newImg = _arrToImagedata(A3, patientMeta)
-
         if ds is not None:
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags=extra_tags)
         if outputPath is not None:
@@ -421,7 +418,6 @@ def arrToVTS(arr: np.ndarray,
     vtkDict = {}
     for k1 in range(dims[-1]):
         A3 = arr[:,:,:,k1]
-        A3 = np.swapaxes(A3, 0, 1)
         try:
             thisTime = patientMeta.Times[k1]
         except KeyError:

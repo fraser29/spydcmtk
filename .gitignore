@@ -135,3 +135,7 @@ sandbox*.py
 
 _build/
 
+# test data
+spydcmtk/tests/TEST_CONVERSION/
+spydcmtk/tests/TEST_OUTPUT/
+run_tests_conversion.py

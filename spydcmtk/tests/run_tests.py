@@ -127,16 +127,10 @@ class TestDicomPixDataArray(unittest.TestCase):
         dcmStudy = listOfStudies.getStudyByTag('StudyInstanceUID', '1.2.826.0.1.3680043.8.498.46701999696935009211199968005189443301')
         dcmSeries = dcmStudy.getSeriesBySeriesNumber(99)
         A, patientMeta = dcmSeries.getPixelDataAsNumpy()
-        self.assertEqual(A[17,13,0], 1935, msg='Pixel1 data not matching expected') 
-        self.assertEqual(A[17,13,1], 2168, msg='Pixel2 data not matching expected') 
-        self.assertEqual(A[17,13,2], 1773, msg='Pixel3 data not matching expected') 
+        self.assertEqual(A[17,13,0], 3056, msg='Pixel1 data not matching expected') 
+        self.assertEqual(A[17,13,1], 3055, msg='Pixel2 data not matching expected') 
+        self.assertEqual(A[17,13,2], 2007, msg='Pixel3 data not matching expected') 
         self.assertEqual(patientMeta.Origin[2], 0.0003, msg='Origin data not matching expected') 
-        # if DEBUG:
-        #     import matplotlib.pyplot as plt
-        #     for k1 in range(A.shape[-1]):
-        #         for k2 in range(A.shape[-2]):
-        #             plt.imshow(A[:,:,k2, k1])
-        #             plt.show()
 
 
 class TestDicom2HTML(unittest.TestCase):
@@ -298,8 +292,8 @@ class TestImagesToVTI(unittest.TestCase):
                 valA = ii.GetPointData().GetArray("PixelData").GetTuple(401239)[0]
                 IDB = ii.ComputePointId([440,355,1])
                 valB = ii.GetPointData().GetArray("PixelData").GetTuple(IDB)[0]
-                self.assertEqual(valA, 54, "Image to VTI data incorrect")
-                self.assertEqual(valB, 28, "Image to VTI data incorrect")
+                self.assertAlmostEqual(valA, 51, 3, "Image to VTI data incorrect")
+                self.assertAlmostEqual(valB, 14, 3, "Image to VTI data incorrect")
                 #
                 ii2 = dcmTK.dcmVTKTK.readImageStackToVTI(fileList, patientMeta=None, CONVERT_TO_GREYSCALE=False)
                 emojivti2 = os.path.join(tmpDir, 'emoji2.vti')
@@ -308,8 +302,8 @@ class TestImagesToVTI(unittest.TestCase):
                 valA = ii2.GetPointData().GetArray("PixelData").GetTuple(89786)[2]
                 IDB = ii2.ComputePointId([27,187,0])
                 valB = ii2.GetPointData().GetArray("PixelData").GetTuple(IDB)[2]
-                self.assertEqual(valA, 113, "Image to VTI data incorrect")
-                self.assertEqual(valB, 253, "Image to VTI data incorrect")
+                self.assertAlmostEqual(valA, 57, 3, "Image to VTI data incorrect")
+                self.assertAlmostEqual(valB, 228, 3, "Image to VTI data incorrect")
         if not DEBUG:
             shutil.rmtree(tmpDir)
 
@@ -347,7 +341,7 @@ class TestDCM2VTI2DCM(unittest.TestCase):
             dcmSeries.writeToVTI(vtiOut)
             vtiObj = dcmTK.dcmVTKTK.fIO.readVTKFile(vtiOut)
             A2 = dcmTK.dcmVTKTK.vtkfilters.getArrayAsNumpy(vtiObj, "PixelData", RETURN_3D=True)
-            A2shape, A2_id = A2.shape, A2[153,179,44]
+            A2shape, A2_id = A2.shape, A2[179,153,44]
             self.assertEqual(A_id, A2_id, "Pixel data incorrect")
             self.assertEqual(Ashape, A2shape, "Array shape incorrect")
             vtiObj_m = dcmTK.dcmVTKTK.vtkfilters.filterVtiMedian(vtiObj, filterKernalSize=3)

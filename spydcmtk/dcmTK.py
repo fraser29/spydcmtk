@@ -735,8 +735,9 @@ class DicomSeries(list):
             try:
                 val = int(self.getTag(0x20011018, ifNotFound=Unknown))
                 return val
-            except:
-                return self[0].pixel_array.shape[2] if len(self[0].pixel_array.shape) >= 3 else 1
+            except ValueError:
+                A4D = self.getPixelDataAsNumpy()[0] # Always returns [C,R,S,T] so shape[2] is the number of "slices"
+                return A4D.shape[2]
         else:
             # For traditional 2D slice-based DICOM files
             sliceLoc = self.sliceLocations
@@ -830,8 +831,8 @@ class DicomSeries(list):
 
         Returns:
             tuple: 
-                numpy array - shape [nRow, nCol, nSlice, nTime], 
-                dictionary - keys: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
+                numpy array - shape [nColumns, nRows, nSlices, nTime], OR [nColumns, nRows, nSlices, nTime, nChannels]
+                patientMeta - dcmVTKTK.PatientMeta object containing metadata: Spacing, Origin, ImageOrientationPatient, PatientPosition, Dimensions, Times
         """
         self._loadToMemory()
         
@@ -844,7 +845,6 @@ class DicomSeries(list):
             
             if is3DPixelData:
                 # Handle 3D DICOM files - each file contains a 3D volume
-                print(f"Detected 3D DICOM files - processing as volume data {firstPixelArray.shape}")
                 I, J, K = firstPixelArray.shape[:3]  # First 3 dimensions are spatial
                 N = len(self)  # Number of time steps = number of files
                 
@@ -855,12 +855,29 @@ class DicomSeries(list):
                     A = np.zeros((I, J, K, N, channels), dtype=firstPixelArray.dtype)
                     for n in range(N):
                         A[:, :, :, n, :] = self[n].pixel_array
+                    # What to format to [C,R,S,T,channels]
+                    A = np.transpose(A, axes=[2,1,0,3,4])
                 else:
                     # Standard 3D data
                     A = np.zeros((I, J, K, N), dtype=firstPixelArray.dtype)
                     for n in range(N):
                         A[:, :, :, n] = self[n].pixel_array
-                    
+                    # What to format to [C,R,S,T]
+                    A = np.transpose(A, axes=[2,1,0,3])
+                try: # Check if should flip slice axis:
+                    iop = self.getImageOrientationPatient_np()
+                    shared_seq = self[0].PerFrameFunctionalGroupsSequence[0]
+                    ipp0 = np.array(shared_seq.PlanePositionSequence[0].ImagePositionPatient)
+                    shared_seq = self[0].PerFrameFunctionalGroupsSequence[1]
+                    ipp1 = np.array(shared_seq.PlanePositionSequence[0].ImagePositionPatient)
+                    sliceVec = ipp1 - ipp0
+                    sliceVec = sliceVec / np.linalg.norm(sliceVec)
+                    iop_cross = np.cross(iop[:3], iop[3:6])
+                    dot_res = np.dot(sliceVec, iop_cross)
+                    if dot_res < 0.0:
+                        A = np.flip(A, axis=2)
+                except:
+                    pass # Something failed - not dealing with complex DICOM tag nesting. 
             else:
                 # Handle traditional 2D slice-based DICOM files
                 I, J = int(self.getTag('Rows')), int(self.getTag('Columns'))
@@ -882,7 +899,8 @@ class DicomSeries(list):
                         iA = self[c0].pixel_array
                         A[:, :, k1, k2] = iA
                         c0 += 1
-        
+                A = np.transpose(A, axes=[1,0,2,3])
+
         patientMeta = dcmVTKTK.PatientMeta()
         patientMeta.initFromDicomSeries(self, A.shape)
         return A, patientMeta
