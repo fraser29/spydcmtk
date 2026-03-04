@@ -89,7 +89,7 @@
 <h2>DICOM to Numpy Array<a class="headerlink" href="#dicom-to-numpy-array" title="Link to this heading"></a></h2>
 <p>DicomSeries class has a method getPixelDataAsNumpy() that returns a tuple of a numpy array and a PatientMeta object.</p>
 <p>The returned numpy array is of shape [nColumns, nRows, nSlices, nTime], OR [nColumns, nRows, nSlices, nTime, nChannels].
-The PatientMeta object contains metadata about the DICOM series.</p>
+The PatientMeta object contains metadata about the orientation of the image.</p>
 <p>Example:</p>
 </section>
 <section id="dicom-to-nifti">
@@ -105,15 +105,28 @@ The PatientMeta object contains metadata about the DICOM series.</p>
 <p>A DICOM to VTK format conversion is provided. See VTK format documentation <a class="reference external" href="https://examples.vtk.org/site/VTKFileFormats/">here</a>.</p>
 <p>Format conversions are:</p>
 <ul class="simple">
-<li><p>DICOM to image data (vti format). Suitable for 3D image volumes. This format is axis-aligned (there is no embedded transformation). But “Field Data” embedded in the file are included as “ImageOrientationPatient” which, along with the Image Origin and Image Spacing methods can be used to construct a transformation matrix allowing conversion from image to real-world coordinate space.</p></li>
-<li><p>DICOM to structured dataset (vts format). This will result in a dataset that is in the true real world (patient) coordinate space. NOTE: Due to VTK format such a file has a larger (disc) size than a VTI file.</p></li>
-<li><p>DICOM to image data format but in the true image coordinates. This will be an axis-aligned image but covering the true image coordinates - image dimensions will be different from the original. This is basically a resample of the VTS output to a VTI dataset.</p></li>
-<li><p>VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion.</p></li>
+<li><ol class="upperalpha simple">
+<li><p>DICOM to image data (vti format). Suitable for 3D image volumes. This format is axis-aligned (this is data in 3D space with no embedded transformation). But “Field Data” embedded in the file are included as “ImageOrientationPatient” which, along with the Image Origin and Image Spacing methods can be used to construct a transformation matrix allowing conversion from image to real-world coordinate space. <em>See “WORKING WITH PATIENT COORDINATES” section below for more details.</em> The slice axis will correspond to the ImageData z-axis (x-y is inplane - irrespective of the acquisition orientation).</p></li>
+</ol>
+</li>
+<li><ol class="upperalpha simple" start="2">
+<li><p>DICOM to structured dataset (vts format). This will result in a dataset that is in the true real world (patient) coordinate space. NOTE: Due to VTK format such a file has a much larger (disc) size than a VTI file.</p></li>
+</ol>
+</li>
+<li><ol class="upperalpha simple" start="3">
+<li><p>DICOM to image data format but in the true image coordinates. This will be an axis-aligned image but covering the true image coordinates - image dimensions will be different from the original. This is basically a resample of the VTS output to a VTI dataset. If your DICOM data is axis-aligned then this is a good option.</p></li>
+</ol>
+</li>
+<li><ol class="upperalpha simple" start="4">
+<li><p>DICOM to image data format (as (A)) but with embedded direction axes. <strong>NOTE:</strong> This has variable support in visualisation and markup software.</p></li>
+</ol>
+</li>
+<li><p>VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion. Due to the conversion steps the output DICOMS may be sliced along a different axis to the original.</p></li>
 </ul>
 </section>
 <section id="working-with-patient-coordinates">
 <h2>WORKING WITH PATIENT COORDINATES<a class="headerlink" href="#working-with-patient-coordinates" title="Link to this heading"></a></h2>
-<p>For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a helpful interface to move between image and patient coordinates. It also provides a number of properties that can be used to get the basic dicom meta data.</p>
+<p>For general DICOM manipulation and analysis the class PatientMeta found in dcmVTKTK.py is useful. It provides a helpful interface to move between image and patient coordinates. It also provides a number of properties that can be used to get the basic dicom meta data. This should be used if working with option (A) above.</p>
 <p>Example:</p>
 </section>
 </section>
