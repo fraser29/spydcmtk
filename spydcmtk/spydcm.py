@@ -283,7 +283,7 @@ def directoryToVTS(dcmDirectory, outputFolder,
     return _listDicomStudiesToVTI(ListDicomStudies, outputFolder=outputFolder, outputNamingTags=outputNamingTags, VTS=True)
 
 
-def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, TRUE_ORIENTATION=False, VTS=False):
+def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, QUIET=True, TRUE_ORIENTATION=False, DIRECTION_VECTORS=False, VTS=False):
     outputFiles = []
     for iDS in ListDicomStudies:
         for iSeries in iDS:
@@ -291,7 +291,7 @@ def _listDicomStudiesToVTI(ListDicomStudies, outputFolder, outputNamingTags=Spyd
                 # print(f"DICOMS TO VTS IS NOT IMPLEMENTED YET")
                 fOut = iSeries.writeToVTS(outputPath=outputFolder, outputNamingTags=outputNamingTags)
             else:
-                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION)
+                fOut = iSeries.writeToVTI(outputPath=outputFolder, outputNamingTags=outputNamingTags, TRUE_ORIENTATION=TRUE_ORIENTATION, DIRECTION_VECTORS=DIRECTION_VECTORS)
             outputFiles.append(fOut)
             if not QUIET:
                 print(f'Written {fOut}')
@@ -530,7 +530,7 @@ def _runActions(args, ap):
                         if not args.QUIET:
                             print(f'Written {fOut}')
             elif args.vti:
-                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, TRUE_ORIENTATION=args.TRUE_VTI_ORIENTATION)
+                _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, TRUE_ORIENTATION=args.TRUE_VTI_ORIENTATION, DIRECTION_VECTORS=args.DIRECTION_VECTORS)
             elif args.vts:
                 _listDicomStudiesToVTI(ListDicomStudies=ListDicomStudies, outputFolder=args.outputFolder, QUIET=args.QUIET, VTS=True)
             elif args.html:
@@ -598,6 +598,7 @@ def main():
     ap.add_argument('-vti', dest='vti',
         help='Will convert each series to vti. Naming: {PName}_{SE#}_{SEDesc}.vti', action='store_true')
     ap.add_argument('-TRUE_VTI_ORIENTATION', dest='TRUE_VTI_ORIENTATION', help='Will resample vti data at true location (output different dimensiuons)', action='store_true')
+    ap.add_argument('-DIRECTION_VECTORS', dest='DIRECTION_VECTORS', help='Will include direction vectors in the VTI data. Not used if TRUE_VTI_ORIENTATION is True.', action='store_true')
     ap.add_argument('-vts', dest='vts',
         help='Will convert each series to vts. Naming: {PName}_{SE#}_{SEDesc}.vts', action='store_true')
     ap.add_argument('-html', dest='html',

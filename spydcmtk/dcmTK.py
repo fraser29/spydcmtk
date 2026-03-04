@@ -651,13 +651,15 @@ class DicomSeries(list):
         return dcmTools.writeDirectoryToNII(self.getRootDir(), outputPath, fileName=fileName)
 
 
-    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False):
+    def writeToVTI(self, outputPath, outputNamingTags=('PatientName', 'SeriesNumber', 'SeriesDescription'), TRUE_ORIENTATION=False, DIRECTION_VECTORS=False):
         """Write DicomSeries as VTK ImageData (`*.vti`)
 
         Args:
             outputPath (str): Directory to save in or full filename to save
             outputNamingTags (tuple, optional): Tags to use for naming, only used if full outputpath not given. Defaults to ('PatientName', 'SeriesNumber', 'SeriesDescription').
             TRUE_ORIENTATION (bool, optional): To apply matrix to VTI data. Defaults to False.
+            DIRECTION_VECTORS (bool, optional): Whether to include direction vectors in the VTI data. Defaults to False. Not used if TRUE_ORIENTATION is True.
+                NOTE: This has variable support in visualisation and markup software. 
 
         Returns:
             str: Name of file saved
@@ -667,7 +669,7 @@ class DicomSeries(list):
             fileName, _ = os.path.splitext(fileName)
         else:
             fileName = self._generateFileName(outputNamingTags, '')
-        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
+        vtiDict = self.buildVTIDict(TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath, DIRECTION_VECTORS=DIRECTION_VECTORS)
         return dcmVTKTK.writeVTIDict(vtiDict, outputPath, fileName)
 
 
@@ -703,18 +705,20 @@ class DicomSeries(list):
         return dcmVTKTK.arrToVTS(A, patientMeta, self[0], outputPath)
 
 
-    def buildVTIDict(self, TRUE_ORIENTATION=False, outputPath=None):
+    def buildVTIDict(self, TRUE_ORIENTATION=False, outputPath=None, DIRECTION_VECTORS=False):
         """Build a VTK ImageData dictionary from the pixel data.
 
         Args:
             TRUE_ORIENTATION (bool, optional): Whether to apply the true orientation to the VTI data. Defaults to False.
             outputPath (str, optional): The output path. Defaults to None.
-
+            DIRECTION_VECTORS (bool, optional): Whether to include direction vectors in the VTI data. Defaults to False.
+                NOTE: This has variable support in visualisation and markup software. 
+                
         Returns:
             dict: The VTK ImageData dictionary. Keys: TriggerTime, Values: VTK ImageData.
         """
         A, patientMeta = self.getPixelDataAsNumpy()
-        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath)
+        return dcmVTKTK.arrToVTI(A, patientMeta, self[0], TRUE_ORIENTATION=TRUE_ORIENTATION, outputPath=outputPath, DIRECTION_VECTORS=DIRECTION_VECTORS)
 
 
     @property

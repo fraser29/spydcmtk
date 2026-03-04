@@ -239,7 +239,8 @@ class PatientMeta:
         dr, dc, dz = self.Spacing
         oo = self.ImagePositionPatient
         iop = np.array(self.ImageOrientationPatient)
-        vZ = self.SliceVector
+        vZ = np.cross(iop[:3], iop[3:6])
+        # vZ = self.SliceVector
         matrix = np.array([
             [iop[0]*dc, iop[3]*dr, vZ[0]*dz, oo[0]], 
             [iop[1]*dc, iop[4]*dr, vZ[1]*dz, oo[1]], 
@@ -330,8 +331,15 @@ def arrToVTI(arr: np.ndarray,
             patientMeta: PatientMeta, 
             ds: Optional[dicom.Dataset] = None, 
             TRUE_ORIENTATION: bool = False,
+            DIRECTION_VECTORS: bool = False,
             outputPath: Optional[str] = None) -> Dict[float, vtk.vtkImageData]:
     """Convert array (+meta) to VTI dict (keys=times, values=VTI volumes). 
+        Strategy: perform conversion to VTS
+            if TRUE_ORIENTATION:
+                resample to image data
+            else:
+                build raw image data with correct origin and spacing but axis aligned.
+                use field data to set image orientation patient 
 
     Args:
         arr (np.array): Array of pixel data, shape: nR,nC,nSlice,nTime
@@ -339,6 +347,8 @@ def arrToVTI(arr: np.ndarray,
         ds (pydicom dataset [optional]): pydicom dataset to use to add dicom tags as field data
         TRUE_ORIENTATION (bool [False]) : Boolean to force accurate spatial location of image data.
                                 NOTE: this uses resampling from VTS data so output VTI will have different dimensions. 
+        DIRECTION_VECTORS (bool [False]) : Whether to include direction vectors in the VTI data. Defaults to False. Not used if TRUE_ORIENTATION is True.
+                                NOTE: This has variable support in visualisation and markup software. 
         outputPath (str [None]): Save as go, then rename at end - RAM friendly
     
     Returns:
@@ -347,38 +357,48 @@ def arrToVTI(arr: np.ndarray,
     Raises:
         ValueError: If VTK import not available
     """
-    dims = arr.shape
-    if len(dims) == 3:
-        arr = arr[..., np.newaxis]
-        dims = arr.shape
-    vtkDict = {}
-    for k1 in range(dims[-1]):
-        A3 = arr[:,:,:,k1]
-        ###        
-        try:
-            thisTime = patientMeta.Times[k1]
-        except (KeyError, IndexError):
-            thisTime = k1
-        #
-        extra_tags = {"SliceVector": patientMeta.SliceVector,
-                        "Time": thisTime}
+    vtsDict = arrToVTS(arr, patientMeta, ds=ds, outputPath=None)
+    vtiDict = {}
+    for k1, iTime in enumerate(vtsDict.keys()):
+        extra_tags = {"SliceVector": patientMeta.SliceVector, "Time": iTime}
         if TRUE_ORIENTATION:
-            # A3 = np.swapaxes(A3, 0, 1)
-            vts_data = __arr3ToVTS(A3, patientMeta, ds, thisTime=thisTime)
-            newImg = filterResampleToImage(vts_data, np.min(patientMeta.Spacing))
-            vtkfilters.delArraysExcept(newImg, [], pointData=False)
-            vtkfilters.delArraysExcept(newImg, ['PixelData'])
+            newImg = vtkfilters.filterResampleToImage(vtsDict[iTime])
             extra_tags["ImageOrientationPatient"] = [1,0,0,0,1,0]
-        else:
-            # NO ORIENTATION CONSIDERED HERE - VTI IS AXIS ALIGNED. 
-            # FIELD DATA HAS ALL INFORMATION FOR PATIENT MATRIX
-            newImg = _arrToImagedata(A3, patientMeta)
+        else:    
+            vtsObj = vtsDict[iTime]
+            dims0 = [0,0,0]
+            vtsObj.GetDimensions(dims0)
+            res0 = vtkfilters.getVtsResolution(vtsObj)    
+            originI = [0.0,0.0,0.0]
+            vtsObj.GetPoint(0, 0, 0, originI)
+            newImg = vtkfilters.buildRawImageData(dims0, res0, origin=originI)
+            scalarName = vtkfilters.getScalarsArrayName(vtsObj)
+            for iArray in vtkfilters.getArrayNames(vtsObj):
+                aData = vtkfilters.getArrayAsNumpy(vtsObj, iArray)
+                vtkfilters.setArrayFromNumpy(newImg, aData, iArray)
+            vtkfilters.setArrayAsScalars(newImg, scalarName)
+            if ds is not None:
+                if hasattr(ds, 'PerFrameFunctionalGroupsSequence') and ds.PerFrameFunctionalGroupsSequence:
+                    per_frame_seq = ds.PerFrameFunctionalGroupsSequence[0]
+                    if hasattr(per_frame_seq, 'PlaneOrientationSequence') and per_frame_seq.PlaneOrientationSequence:
+                        plane_orient = per_frame_seq.PlaneOrientationSequence[0]
+                        if hasattr(plane_orient, 'ImageOrientationPatient'):
+                            iop = [float(i) for i in plane_orient.ImageOrientationPatient]
+                else:
+                    iop = np.array(ds.get("ImageOrientationPatient", [1,0,0,0,1,0]))
+            else:
+                iop = [1,0,0,0,1,0]
+            extra_tags["ImageOrientationPatient"] = iop
         if ds is not None:
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags=extra_tags)
+        if DIRECTION_VECTORS and (not TRUE_ORIENTATION):
+            patMat = PatientMeta()
+            patMat.initFromVTI(newImg)
+            newImg.SetDirectionMatrix(patMat.getVtkMatrix())
         if outputPath is not None:
             newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vti"))
-        vtkDict[thisTime] = newImg
-    return vtkDict
+        vtiDict[iTime] = newImg
+    return vtiDict
 
 def _arrToImagedata(A3: np.ndarray, patientMeta: PatientMeta) -> vtk.vtkImageData:
     newImg = _buildVTIImage(patientMeta)

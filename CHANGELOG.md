@@ -1,5 +1,10 @@
 # Version History
 
+## [1.2.21] - 2026-03-04
+### Feature
+- Add functionality to include direction vectors in the VTI data.
+- Improve DICOM to VTI orientation (especially for 3D DICOM volumes - extract "slice direction" from PerFrame ImagePositionPatient tags).
+
 ## [1.2.20] - 2026-02-23
 ### Feature
 - Add functionality to split multi-volume series into single-volume series based on slice normal clustering.
