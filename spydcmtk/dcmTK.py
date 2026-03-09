@@ -1477,7 +1477,7 @@ class DicomStudy(list):
     """
     Extends list of DicomSeries objects (creating list of list of pydicom.dataset)
     """
-    def __init__(self, dSeriesList, OVERVIEW=False, HIDE_PROGRESSBAR=False):
+    def __init__(self, dSeriesList=[], OVERVIEW=False, HIDE_PROGRESSBAR=False):
         """
         Set OVERVIEW = False to read pixel data as well (at a cost)
         """

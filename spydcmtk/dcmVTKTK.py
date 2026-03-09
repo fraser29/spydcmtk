@@ -389,12 +389,11 @@ def arrToVTI(arr: np.ndarray,
             else:
                 iop = [1,0,0,0,1,0]
             extra_tags["ImageOrientationPatient"] = iop
+            if DIRECTION_VECTORS:
+                nx, ny, nz = vtkfilters.getVtsDirectionVectors(vtsObj)
+                newImg.SetDirectionMatrix(np.hstack((nx, ny, nz)))
         if ds is not None:
             addFieldDataFromDcmDataSet(newImg, ds, extra_tags=extra_tags)
-        if DIRECTION_VECTORS and (not TRUE_ORIENTATION):
-            patMat = PatientMeta()
-            patMat.initFromVTI(newImg)
-            newImg.SetDirectionMatrix(patMat.getVtkMatrix())
         if outputPath is not None:
             newImg = fIO.writeVTKFile(newImg, os.path.join(outputPath, f"data_{generate_uid()}_{k1:05d}.vti"))
         vtiDict[iTime] = newImg

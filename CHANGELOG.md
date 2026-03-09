@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.22] - 2026-03-09
+### Feature
+- Add functionality to include direction vectors in the VTI data.
+
 ## [1.2.21] - 2026-03-04
 ### Feature
 - Add functionality to include direction vectors in the VTI data.

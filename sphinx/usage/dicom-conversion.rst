@@ -40,9 +40,18 @@ A DICOM to VTK format conversion is provided. See VTK format documentation `here
 Format conversions are:
 
 - A) DICOM to image data (vti format). Suitable for 3D image volumes. This format is axis-aligned (this is data in 3D space with no embedded transformation). But "Field Data" embedded in the file are included as "ImageOrientationPatient" which, along with the Image Origin and Image Spacing methods can be used to construct a transformation matrix allowing conversion from image to real-world coordinate space. *See "WORKING WITH PATIENT COORDINATES" section below for more details.* The slice axis will correspond to the ImageData z-axis (x-y is inplane - irrespective of the acquisition orientation).
+.. code-block:: bash
+    spydcmtk -i input_directory -o output_directory -vti
 - B) DICOM to structured dataset (vts format). This will result in a dataset that is in the true real world (patient) coordinate space. NOTE: Due to VTK format such a file has a much larger (disc) size than a VTI file.  
+.. code-block:: bash
+    spydcmtk -i input_directory -o output_directory -vts
 - C) DICOM to image data format but in the true image coordinates. This will be an axis-aligned image but covering the true image coordinates - image dimensions will be different from the original. This is basically a resample of the VTS output to a VTI dataset. If your DICOM data is axis-aligned then this is a good option.
-- D) DICOM to image data format (as (A)) but with embedded direction axes. **NOTE:** This has variable support in visualisation and markup software. 
+.. code-block:: bash
+    spydcmtk -i input_directory -o output_directory -vti -TRUE_VTI_ORIENTATION
+- D) DICOM to image data format (as (A)) but with embedded direction axes. **NOTE:** This has variable support in visualisation and markup software. In _BETA_ mode.
+.. code-block:: bash
+    spydcmtk -i input_directory -o output_directory -vti -DIRECTION_VECTORS
+
 
 - VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion. Due to the conversion steps the output DICOMS may be sliced along a different axis to the original.
 
