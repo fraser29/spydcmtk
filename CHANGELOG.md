@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.23] - 2026-04-28
+### Feature
+- Fix bug in functionality to build overview image for a series.
+
 ## [1.2.22] - 2026-03-09
 ### Feature
 - Add functionality to include direction vectors in the VTI data.

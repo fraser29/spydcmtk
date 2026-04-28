@@ -98,7 +98,7 @@ class INTERACTIVE():
             outputpath = None
         else:
             outputpath = os.path.join(self.outputPath, outputFilename)
-        self.study.getSeriesByID(seNum).buildOverviewImage(outputpath)
+        self.study.getSeriesByID(seNum).overviewImage(outputpath)
 
     def quit(self):
         print("Exiting the menu.")
