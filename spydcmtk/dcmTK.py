@@ -2289,6 +2289,7 @@ def writeNumpyArrayToDicom(pixelArray, dcmTemplate_or_ds, patientMeta, outputDir
 def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds, 
                             outputDir, tagUpdateDict=None, CONVERT_TO_GREYSCALE=True):
 
+    tagUpdateDict = _convertTagDictToPyDicomFormat(tagUpdateDict)
     combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=CONVERT_TO_GREYSCALE)
     return writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
@@ -2299,6 +2300,27 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
                         SWAP_AXES=False)
 
 
+def _convertTagDictToPyDicomFormat(tagDict):
+    if tagDict is None:
+        return None
+    for iKey in tagDict.keys():
+        if isinstance(tagDict[iKey][0], str):
+            x = tagDict[iKey][0]
+            tagDict[iKey][0] = int(x.replace(",", ""), 16)
+    return tagDict
+
+
+
+def _convertTagDictToPdf2DcmFormat(tagDict):
+    if tagDict is None:
+        return None
+    for iKey in tagDict.keys():
+        if not isinstance(tagDict[iKey][0], str):
+            x = tagDict[iKey][0]
+            tagDict[iKey][0] =  f"{(x >> 16) & 0xffff:04x},{x & 0xffff:04x}"
+    return tagDict
+
+
 def pdf2dcm(pdfFile, dcmTemplateFile_or_ds, outputDir, tagUpdateDict={}):
     """Convert PDF file to DCM using DCMTK (pdf2dcm). Note - deletes all prev DICOMS first
 
@@ -2306,7 +2328,7 @@ def pdf2dcm(pdfFile, dcmTemplateFile_or_ds, outputDir, tagUpdateDict={}):
         pdfFile (str): full path to pdf file
         dcmTemplateFile_or_ds (str): full path to DICOM template file or pydicom dataset
         outputDir (str): full path to output directory
-        tagUpdateDict (dict): dictionary of tags to update
+        tagUpdateDict (dict): dictionary of tags to update. Format: {tag: [CODE, VR, value]}
     """
     if not os.path.isfile(pdfFile):
         raise FileNotFoundError(f"{pdfFile} not found")
@@ -2328,18 +2350,19 @@ def pdf2dcm(pdfFile, dcmTemplateFile_or_ds, outputDir, tagUpdateDict={}):
         raise NotADirectoryError(f"Output directory {outputDir} not found")
     resultsDCM = os.path.join(outputDir, f"{fileRoot}.dcm")
     ##
-    modifyTags = {"StudyDate": ["0008,0020", dcmSeries.getTag("StudyDate")], # CODE, New Value 
-                "AccessionNumber": ["0008,0050", dcmSeries.getTag(0x00080050)],
-                "StudyID": ["0020,0010", dcmSeries.getTag(0x00200010)],
-                "SeriesNumber": ["0020,0011", 999], 
-                "SeriesDescription": ["0008,103e", f"{fileRoot}_ResultsPDF"]}
+    modifyTags = {"StudyDate": ["0008,0020", "DA", dcmSeries.getTag("StudyDate")], # CODE, VR, New Value 
+                "AccessionNumber": ["0008,0050", "SH", dcmSeries.getTag(0x00080050)],
+                "StudyID": ["0020,0010", "SH", dcmSeries.getTag(0x00200010)],
+                "SeriesNumber": ["0020,0011", "IS", 999], 
+                "SeriesDescription": ["0008,103e", "LO", f"{fileRoot}_ResultsPDF"]}
+    tagUpdateDict = _convertTagDictToPdf2DcmFormat(tagUpdateDict)
     modifyTags.update(tagUpdateDict)
     ##
     if dcmTools.is_bash_command_available("pdf2dcm"):
         kOptionList = []
         for iValue in modifyTags.values():
             kOptionList.append("-k")
-            kOptionList.append(f'{iValue[0]}={iValue[1]}')
+            kOptionList.append(f'{iValue[0]}={iValue[2]}')
         full_command = ["pdf2dcm"]+kOptionList+["+st", dcm_template, pdfFile, resultsDCM]
         try:
             print(f"Running: {' '.join(full_command)}")
