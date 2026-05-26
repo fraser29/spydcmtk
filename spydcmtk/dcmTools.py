@@ -13,6 +13,7 @@ import zipfile
 import pydicom as dicom
 from tqdm import tqdm
 from ngawari import fIO
+import subprocess
 
 from spydcmtk.spydcm_config import SpydcmTK_config
 
@@ -93,6 +94,16 @@ def countFilesInDir(dirName):
         for _, _, filenames in os.walk(dirName):  # @UnusedVariable
             N += len(filenames)
     return N
+
+
+
+def is_bash_command_available(command):
+    try:
+        subprocess.run(['which', command], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        # If which command returns non-zero exit status, the command is not available
+        return False
 
 
 

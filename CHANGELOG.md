@@ -1,5 +1,10 @@
 # Version History
 
+## [1.2.24] - 2026-05-26
+### Feature
+- Add functionality to convert PDF file to DICOM series.
+- Add CLI option to convert image files to DICOM series.
+
 ## [1.2.23] - 2026-04-28
 ### Feature
 - Fix bug in functionality to build overview image for a series.

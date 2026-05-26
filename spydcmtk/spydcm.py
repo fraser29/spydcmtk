@@ -12,6 +12,7 @@ import shutil
 import pydicom as dicom
 
 # Local imports 
+from spydcmtk import dcmVTKTK
 import spydcmtk.dcmTools as dcmTools
 import spydcmtk.dcmTK as dcmTK
 from spydcmtk.spydcm_config import SpydcmTK_config
@@ -406,6 +407,49 @@ def vtkToHTML(vtkDataPath, glanceHtml, outputFile):
     return outputFile
 
 
+def image2dcm(imagePath, dcmPath, outputPath):
+    """Convert image to DICOM series
+
+    Args:
+        imagePath (str): full path to image file
+        dcmPath (str): full path to DICOM template file or pydicom dataset
+        outputPath (str): full path to output directory
+    """
+    if os.path.isdir(dcmPath):
+        dcmTemplateFile = returnFirstDicomFound(dcmPath, FILE_NAME_ONLY=True)
+    else:
+        dcmTemplateFile = dcmPath
+    if os.path.isfile(imagePath):
+        imageList = [imagePath]
+    else:
+        imageList = [os.path.join(imagePath, i) for i in os.listdir(imagePath) if i.lower().endswith('.jpg') or i.lower().endswith('.png') or i.lower().endswith('.tif') or i.lower().endswith('.tiff')]
+        imageList = sorted(imageList)
+    fOut = dcmTK.writeImageStackToDicom(imageList, 
+                                        patientMeta=None, 
+                                        dcmTemplateFile_or_ds=dcmTemplateFile, 
+                                        outputDir=outputPath,
+                                        tagUpdateDict=None,
+                                        CONVERT_TO_GREYSCALE=False)
+    print(f"Written {fOut}")
+    return 0
+
+def pdf2dcm(pdfPath, dcmPath, outputPath):
+    """Convert PDF file to DICOM series
+
+    Args:
+        pdfPath (str): full path to pdf file
+        dcmPath (str): full path to DICOM template file or pydicom dataset
+        outputPath (str): full path to output directory
+    """
+    if os.path.isdir(dcmPath):
+        dcmTemplateFile = returnFirstDicomFound(dcmPath, FILE_NAME_ONLY=True)
+    else:
+        dcmTemplateFile = dcmPath
+    fOut = dcmTK.pdf2dcm(pdfPath, dcmTemplateFile_or_ds=dcmTemplateFile, outputDir=outputPath)
+    print(f"Written {fOut}")
+    return 0
+
+
 ### ====================================================================================================================
 ##          RUN VIA MAIN
 ### ====================================================================================================================
@@ -458,7 +502,7 @@ def _runActions(args, ap):
         ## NOW READING DICOMS
         try:
             onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
-            oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter
+            oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter or args.image2dcm or args.pdf2dcm
             # If read one file per dir then will read all dicoms upon write out (or conversion). 
             # Only issue is if dicoms not well organised - TODO - NOTE this somewhere... Maybe bettter ad an option for force read all by user. 
             if not args.QUIET:
@@ -514,6 +558,11 @@ def _runActions(args, ap):
                 print(f'Written {dcmDirOut}')
         # elif args.nii2dcm is not None:
         #     dcmTK.dcmVTKTK.fIO.readNifti(args.nii2dcm)
+        elif args.image2dcm is not None:
+            image2dcm(args.image2dcm, args.inputPath, args.outputFolder)
+        elif args.pdf2dcm is not None:
+            pdf2dcm(args.pdf2dcm, args.inputPath, args.outputFolder)
+        ##
         elif args.INTERACTIVE:
             # TODO - check if multiple studies
             INTER = INTERACTIVE(ListDicomStudies[0], outputPath=args.outputFolder)
@@ -593,6 +642,13 @@ def main():
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
     ap.add_argument('-tag', dest='tagValue',
         help='Get tag value for first dicom found under input', type=str, default=None)
+    ## -- image conversion -- ##
+    ## ***-to-DICOM
+    ap.add_argument('-image2dcm', dest='image2dcm',
+        help='Will convert each image to dicom series. Pass reference dicoms as input.', type=str, default=None)
+    ap.add_argument('-pdf2dcm', dest='pdf2dcm',
+        help='Will convert pdf to dicom series. Pass reference dicoms as input.', type=str, default=None)
+    ## DCM-to-***
     ap.add_argument('-nii', dest='nii',
         help='Will convert each series to nii.gz. Naming: {PName}_{SE#}_{SEDesc}.nii.gz', action='store_true')
     ap.add_argument('-vti', dest='vti',

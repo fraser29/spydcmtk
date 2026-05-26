@@ -11,6 +11,7 @@ import json
 from multiprocessing import Pool
 import numpy as np
 import shutil
+import subprocess
 import matplotlib.pyplot as plt
 # Local imports 
 import spydcmtk.dcmTools as dcmTools
@@ -2289,13 +2290,72 @@ def writeImageStackToDicom(images_sortedList, patientMeta, dcmTemplateFile_or_ds
                             outputDir, tagUpdateDict=None, CONVERT_TO_GREYSCALE=True):
 
     combinedImage = dcmVTKTK.readImageStackToVTI(images_sortedList, patientMeta, CONVERT_TO_GREYSCALE=CONVERT_TO_GREYSCALE)
-    writeVTIToDicoms(combinedImage, 
+    return writeVTIToDicoms(combinedImage, 
                         dcmTemplateFile_or_ds=dcmTemplateFile_or_ds, 
                         outputDir=outputDir,
                         arrayName=None, # Get scalars
                         tagUpdateDict=tagUpdateDict,
                         patientMeta=patientMeta, 
                         SWAP_AXES=False)
+
+
+def pdf2dcm(pdfFile, dcmTemplateFile_or_ds, outputDir, tagUpdateDict={}):
+    """Convert PDF file to DCM using DCMTK (pdf2dcm). Note - deletes all prev DICOMS first
+
+    Args:
+        pdfFile (str): full path to pdf file
+        dcmTemplateFile_or_ds (str): full path to DICOM template file or pydicom dataset
+        outputDir (str): full path to output directory
+        tagUpdateDict (dict): dictionary of tags to update
+    """
+    if not os.path.isfile(pdfFile):
+        raise FileNotFoundError(f"{pdfFile} not found")
+    if type(dcmTemplateFile_or_ds) == str:
+        dsRAW = dicom.dcmread(dcmTemplateFile_or_ds)
+    else:
+        dsRAW = dcmTemplateFile_or_ds
+    if dsRAW is None:
+        raise FileNotFoundError(f"Could not find DICOM template file at {dcmTemplateFile_or_ds}")
+    if not os.path.isfile(pdfFile):
+        raise FileNotFoundError(f"{pdfFile} not found")
+    # Prepare extra tags:
+    dcmSeries = DicomSeries(dsList=[dsRAW], HIDE_PROGRESSBAR=True)
+    dcm_template = dcmSeries.getDicomFullFileName(0)
+    if not os.path.isfile(dcm_template):
+        raise FileNotFoundError(f"Could not find DICOM template file at {dcm_template}")
+    fileRoot = os.path.splitext(os.path.split(pdfFile)[1])[0]
+    if not os.path.isdir(outputDir):
+        raise NotADirectoryError(f"Output directory {outputDir} not found")
+    resultsDCM = os.path.join(outputDir, f"{fileRoot}.dcm")
+    ##
+    modifyTags = {"StudyDate": ["0008,0020", dcmSeries.getTag("StudyDate")], # CODE, New Value 
+                "AccessionNumber": ["0008,0050", dcmSeries.getTag(0x00080050)],
+                "StudyID": ["0020,0010", dcmSeries.getTag(0x00200010)],
+                "SeriesNumber": ["0020,0011", 999], 
+                "SeriesDescription": ["0008,103e", f"{fileRoot}_ResultsPDF"]}
+    modifyTags.update(tagUpdateDict)
+    ##
+    if dcmTools.is_bash_command_available("pdf2dcm"):
+        kOptionList = []
+        for iValue in modifyTags.values():
+            kOptionList.append("-k")
+            kOptionList.append(f'{iValue[0]}={iValue[1]}')
+        full_command = ["pdf2dcm"]+kOptionList+["+st", dcm_template, pdfFile, resultsDCM]
+        try:
+            print(f"Running: {' '.join(full_command)}")
+            result = subprocess.run(full_command, check=True, capture_output=True, text=True)
+            print(f"Command output: {result.stdout}")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Command '{' '.join(full_command)}' failed with exit code {e.returncode}")
+            print(f"Error output: {e.stderr}")
+            raise e
+        except Exception as e:
+            print(f"Unexpected error in pdfToDICOM: {e}")
+            raise e
+    else:
+        raise ValueError("Can not find pdf2dcm command - please install dcmtk")
+
 
 
 def getResolution(dataVts):
