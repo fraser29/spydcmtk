@@ -1,7 +1,9 @@
 DICOM CONVERSION
 ================
 
-Some format conversions are provided by this package:
+Some format conversions are provided by this package.
+
+Conversions **to** DICOM (from PDF or image stacks) are described in the **PDF to DICOM** and **Image stack to DICOM** sections below.
 
 DICOM to Numpy Array
 ^^^^^^^^^^^^^^^^^^^^
@@ -54,6 +56,126 @@ Format conversions are:
 
 
 - VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion. Due to the conversion steps the output DICOMS may be sliced along a different axis to the original.
+
+PDF to DICOM
+^^^^^^^^^^^^
+
+Encapsulate a PDF as a DICOM Encapsulated PDF object, using a reference DICOM file to supply patient and study metadata.
+
+**Requirements:** `DCMTK <https://dcmtk.org/>`_ must be installed and the ``pdf2dcm`` executable must be on your ``PATH``.
+
+Command line
+""""""""""""
+
+Pass the PDF path with ``-pdf2dcm``, a template DICOM (file or directory containing at least one DICOM) with ``-i``, and the output directory with ``-o``:
+
+.. code-block:: bash
+
+    spydcmtk -pdf2dcm /path/to/report.pdf -i /path/to/reference_dicom_or_dir -o /path/to/output_dir
+
+If ``-i`` points to a directory, the first DICOM found in that directory is used as the template. The output file is named ``{pdf_basename}.dcm`` inside the output directory.
+
+Python script
+"""""""""""""
+
+.. code-block:: python
+
+    import spydcmtk
+
+    spydcmtk.dcmTK.pdf2dcm(
+        "/path/to/report.pdf",
+        dcmTemplateFile_or_ds="/path/to/reference.dcm",  # or a pydicom Dataset
+        outputDir="/path/to/output_dir",
+        tagUpdateDict={
+            # Optional: DCMTK-style tags (group,element as hex string)
+            "SeriesDescription": ["0008,103e", "LO", "My PDF report"],
+        },
+    )
+
+Alternatively, use the thin wrapper in ``spydcmtk.spydcm`` (same arguments as the CLI):
+
+.. code-block:: python
+
+    import spydcmtk
+
+    spydcmtk.spydcm.pdf2dcm(
+        "/path/to/report.pdf",
+        "/path/to/reference_dicom_or_dir",
+        "/path/to/output_dir",
+    )
+
+Optional ``tagUpdateDict`` entries use the form ``{name: ["gggg,eeee", "VR", value]}``. Default tags (study date, accession number, series number 999, series description derived from the PDF filename) are applied automatically and can be overridden.
+
+Image stack to DICOM
+^^^^^^^^^^^^^^^^^^^^
+
+Convert one or more raster images (JPEG, PNG, or TIFF) into a multi-slice DICOM series. Each image becomes one slice. Pixel bit depth and colour (greyscale vs RGB) are preserved from the source images where possible.
+
+The Python API is ``writeImageStackToDicom``; the CLI flag is ``-image2dcm``.
+
+Command line
+""""""""""""
+
+Single image file:
+
+.. code-block:: bash
+
+    spydcmtk -image2dcm /path/to/slice.png -i /path/to/reference.dcm -o /path/to/output_dir
+
+Directory of images (``.jpg``, ``.png``, ``.tif``, ``.tiff``; files are sorted by name and stacked along the slice axis):
+
+.. code-block:: bash
+
+    spydcmtk -image2dcm /path/to/image_folder/ -i /path/to/reference_dicom_or_dir -o /path/to/output_dir
+
+As with PDF conversion, ``-i`` may be a single DICOM file or a directory (first DICOM found is used as the template).
+
+Python script
+"""""""""""""
+
+Provide a **sorted** list of image paths, a ``PatientMeta`` object describing geometry (origin, spacing, orientation), and a template DICOM:
+
+.. code-block:: python
+
+    import os
+    import spydcmtk
+
+    image_dir = "/path/to/slices"
+    file_list = sorted(
+        os.path.join(image_dir, f)
+        for f in os.listdir(image_dir)
+        if f.lower().endswith((".jpg", ".png", ".tif", ".tiff"))
+    )
+
+    patient_meta = spydcmtk.dcmVTKTK.PatientMeta()
+    patient_meta.initFromDictionary({
+        "Origin": [0.0, 0.0, 0.0],
+        "Spacing": [0.001, 0.001, 0.02],  # metres: in-plane x, in-plane y, between slices
+        "ImageOrientationPatient": [0.0, 1.0, 0.0, 1.0, 0.0, 0.0],
+    })
+
+    spydcmtk.dcmTK.writeImageStackToDicom(
+        file_list,
+        patientMeta=patient_meta,
+        dcmTemplateFile_or_ds="/path/to/reference.dcm",
+        outputDir="/path/to/output_dir",
+        tagUpdateDict=None,           # optional pydicom-style tag overrides
+        CONVERT_TO_GREYSCALE=True,    # set False to keep RGB (CLI uses False)
+    )
+
+CLI wrapper (directory or single file, default geometry when ``patientMeta`` is not set):
+
+.. code-block:: python
+
+    import spydcmtk
+
+    spydcmtk.spydcm.image2dcm(
+        "/path/to/image_or_folder",
+        "/path/to/reference_dicom_or_dir",
+        "/path/to/output_dir",
+    )
+
+For full control over slice spacing and patient orientation, use ``writeImageStackToDicom`` with ``PatientMeta`` rather than the CLI wrapper. See `WORKING WITH PATIENT COORDINATES`_ for how ``PatientMeta`` relates image and patient space.
 
 WORKING WITH PATIENT COORDINATES
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

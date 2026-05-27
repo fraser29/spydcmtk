@@ -51,6 +51,16 @@
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-nifti">DICOM to Nifti</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-html">DICOM to HTML</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dicom-to-vtk">DICOM to VTK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pdf-to-dicom">PDF to DICOM</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#command-line">Command line</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#python-script">Python script</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#image-stack-to-dicom">Image stack to DICOM</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Command line</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id2">Python script</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#working-with-patient-coordinates">WORKING WITH PATIENT COORDINATES</a></li>
 </ul>
 </li>
@@ -84,7 +94,8 @@
              
   <section id="dicom-conversion">
 <h1>DICOM CONVERSION<a class="headerlink" href="#dicom-conversion" title="Link to this heading"></a></h1>
-<p>Some format conversions are provided by this package:</p>
+<p>Some format conversions are provided by this package.</p>
+<p>Conversions <strong>to</strong> DICOM (from PDF or image stacks) are described in the <strong>PDF to DICOM</strong> and <strong>Image stack to DICOM</strong> sections below.</p>
 <section id="dicom-to-numpy-array">
 <h2>DICOM to Numpy Array<a class="headerlink" href="#dicom-to-numpy-array" title="Link to this heading"></a></h2>
 <p>DicomSeries class has a method getPixelDataAsNumpy() that returns a tuple of a numpy array and a PatientMeta object.</p>
@@ -131,6 +142,105 @@ The PatientMeta object contains metadata about the orientation of the image.</p>
 <ul class="simple">
 <li><p>VTI image data to DICOM is supported. But exact coordinate information may be lost due to the nature of the conversion. Due to the conversion steps the output DICOMS may be sliced along a different axis to the original.</p></li>
 </ul>
+</section>
+<section id="pdf-to-dicom">
+<h2>PDF to DICOM<a class="headerlink" href="#pdf-to-dicom" title="Link to this heading"></a></h2>
+<p>Encapsulate a PDF as a DICOM Encapsulated PDF object, using a reference DICOM file to supply patient and study metadata.</p>
+<p><strong>Requirements:</strong> <a class="reference external" href="https://dcmtk.org/">DCMTK</a> must be installed and the <code class="docutils literal notranslate"><span class="pre">pdf2dcm</span></code> executable must be on your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>.</p>
+<section id="command-line">
+<h3>Command line<a class="headerlink" href="#command-line" title="Link to this heading"></a></h3>
+<p>Pass the PDF path with <code class="docutils literal notranslate"><span class="pre">-pdf2dcm</span></code>, a template DICOM (file or directory containing at least one DICOM) with <code class="docutils literal notranslate"><span class="pre">-i</span></code>, and the output directory with <code class="docutils literal notranslate"><span class="pre">-o</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-pdf2dcm<span class="w"> </span>/path/to/report.pdf<span class="w"> </span>-i<span class="w"> </span>/path/to/reference_dicom_or_dir<span class="w"> </span>-o<span class="w"> </span>/path/to/output_dir
+</pre></div>
+</div>
+<p>If <code class="docutils literal notranslate"><span class="pre">-i</span></code> points to a directory, the first DICOM found in that directory is used as the template. The output file is named <code class="docutils literal notranslate"><span class="pre">{pdf_basename}.dcm</span></code> inside the output directory.</p>
+</section>
+<section id="python-script">
+<h3>Python script<a class="headerlink" href="#python-script" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
+
+<span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">pdf2dcm</span><span class="p">(</span>
+    <span class="s2">&quot;/path/to/report.pdf&quot;</span><span class="p">,</span>
+    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">&quot;/path/to/reference.dcm&quot;</span><span class="p">,</span>  <span class="c1"># or a pydicom Dataset</span>
+    <span class="n">outputDir</span><span class="o">=</span><span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="n">tagUpdateDict</span><span class="o">=</span><span class="p">{</span>
+        <span class="c1"># Optional: DCMTK-style tags (group,element as hex string)</span>
+        <span class="s2">&quot;SeriesDescription&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;0008,103e&quot;</span><span class="p">,</span> <span class="s2">&quot;LO&quot;</span><span class="p">,</span> <span class="s2">&quot;My PDF report&quot;</span><span class="p">],</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Alternatively, use the thin wrapper in <code class="docutils literal notranslate"><span class="pre">spydcmtk.spydcm</span></code> (same arguments as the CLI):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
+
+<span class="n">spydcmtk</span><span class="o">.</span><span class="n">spydcm</span><span class="o">.</span><span class="n">pdf2dcm</span><span class="p">(</span>
+    <span class="s2">&quot;/path/to/report.pdf&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/path/to/reference_dicom_or_dir&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Optional <code class="docutils literal notranslate"><span class="pre">tagUpdateDict</span></code> entries use the form <code class="docutils literal notranslate"><span class="pre">{name:</span> <span class="pre">[&quot;gggg,eeee&quot;,</span> <span class="pre">&quot;VR&quot;,</span> <span class="pre">value]}</span></code>. Default tags (study date, accession number, series number 999, series description derived from the PDF filename) are applied automatically and can be overridden.</p>
+</section>
+</section>
+<section id="image-stack-to-dicom">
+<h2>Image stack to DICOM<a class="headerlink" href="#image-stack-to-dicom" title="Link to this heading"></a></h2>
+<p>Convert one or more raster images (JPEG, PNG, or TIFF) into a multi-slice DICOM series. Each image becomes one slice. Pixel bit depth and colour (greyscale vs RGB) are preserved from the source images where possible.</p>
+<p>The Python API is <code class="docutils literal notranslate"><span class="pre">writeImageStackToDicom</span></code>; the CLI flag is <code class="docutils literal notranslate"><span class="pre">-image2dcm</span></code>.</p>
+<section id="id1">
+<h3>Command line<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p>Single image file:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-image2dcm<span class="w"> </span>/path/to/slice.png<span class="w"> </span>-i<span class="w"> </span>/path/to/reference.dcm<span class="w"> </span>-o<span class="w"> </span>/path/to/output_dir
+</pre></div>
+</div>
+<p>Directory of images (<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>, <code class="docutils literal notranslate"><span class="pre">.png</span></code>, <code class="docutils literal notranslate"><span class="pre">.tif</span></code>, <code class="docutils literal notranslate"><span class="pre">.tiff</span></code>; files are sorted by name and stacked along the slice axis):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-image2dcm<span class="w"> </span>/path/to/image_folder/<span class="w"> </span>-i<span class="w"> </span>/path/to/reference_dicom_or_dir<span class="w"> </span>-o<span class="w"> </span>/path/to/output_dir
+</pre></div>
+</div>
+<p>As with PDF conversion, <code class="docutils literal notranslate"><span class="pre">-i</span></code> may be a single DICOM file or a directory (first DICOM found is used as the template).</p>
+</section>
+<section id="id2">
+<h3>Python script<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p>Provide a <strong>sorted</strong> list of image paths, a <code class="docutils literal notranslate"><span class="pre">PatientMeta</span></code> object describing geometry (origin, spacing, orientation), and a template DICOM:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
+
+<span class="n">image_dir</span> <span class="o">=</span> <span class="s2">&quot;/path/to/slices&quot;</span>
+<span class="n">file_list</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">image_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">image_dir</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;.png&quot;</span><span class="p">,</span> <span class="s2">&quot;.tif&quot;</span><span class="p">,</span> <span class="s2">&quot;.tiff&quot;</span><span class="p">))</span>
+<span class="p">)</span>
+
+<span class="n">patient_meta</span> <span class="o">=</span> <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">PatientMeta</span><span class="p">()</span>
+<span class="n">patient_meta</span><span class="o">.</span><span class="n">initFromDictionary</span><span class="p">({</span>
+    <span class="s2">&quot;Origin&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+    <span class="s2">&quot;Spacing&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">],</span>  <span class="c1"># metres: in-plane x, in-plane y, between slices</span>
+    <span class="s2">&quot;ImageOrientationPatient&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+<span class="p">})</span>
+
+<span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">writeImageStackToDicom</span><span class="p">(</span>
+    <span class="n">file_list</span><span class="p">,</span>
+    <span class="n">patientMeta</span><span class="o">=</span><span class="n">patient_meta</span><span class="p">,</span>
+    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">&quot;/path/to/reference.dcm&quot;</span><span class="p">,</span>
+    <span class="n">outputDir</span><span class="o">=</span><span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="n">tagUpdateDict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>           <span class="c1"># optional pydicom-style tag overrides</span>
+    <span class="n">CONVERT_TO_GREYSCALE</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># set False to keep RGB (CLI uses False)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>CLI wrapper (directory or single file, default geometry when <code class="docutils literal notranslate"><span class="pre">patientMeta</span></code> is not set):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
+
+<span class="n">spydcmtk</span><span class="o">.</span><span class="n">spydcm</span><span class="o">.</span><span class="n">image2dcm</span><span class="p">(</span>
+    <span class="s2">&quot;/path/to/image_or_folder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/path/to/reference_dicom_or_dir&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>For full control over slice spacing and patient orientation, use <code class="docutils literal notranslate"><span class="pre">writeImageStackToDicom</span></code> with <code class="docutils literal notranslate"><span class="pre">PatientMeta</span></code> rather than the CLI wrapper. See <a class="reference internal" href="#working-with-patient-coordinates">WORKING WITH PATIENT COORDINATES</a> for how <code class="docutils literal notranslate"><span class="pre">PatientMeta</span></code> relates image and patient space.</p>
+</section>
 </section>
 <section id="working-with-patient-coordinates">
 <h2>WORKING WITH PATIENT COORDINATES<a class="headerlink" href="#working-with-patient-coordinates" title="Link to this heading"></a></h2>
