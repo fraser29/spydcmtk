@@ -62,6 +62,32 @@ For information on files found and variables used run:
 
 ## Documentation
 
-Clear documentation of basic features can be seen by running the *"spycmtk -h"* command as referenced above. 
+Clear documentation of basic features can be seen by running the *"spydcmtk -h"* command as referenced above. 
 For detailed documentation please see [spydcmtk-documentation](https://fraser29.github.io/spydcmtk/)
+
+### Converting PDF or images to DICOM
+
+**PDF** (requires [DCMTK](https://dcmtk.org/) `pdf2dcm` on `PATH`):
+
+```bash
+spydcmtk -pdf2dcm /path/to/report.pdf -i /path/to/reference_dicom -o /path/to/output_dir
+```
+
+```python
+import spydcmtk
+spydcmtk.dcmTK.pdf2dcm("report.pdf", "reference.dcm", "output_dir")
+```
+
+**Image stack** (one file or a folder of `.jpg`/`.png`/`.tif` slices):
+
+```bash
+spydcmtk -image2dcm /path/to/images/ -i /path/to/reference_dicom -o /path/to/output_dir
+```
+
+```python
+import spydcmtk
+spydcmtk.dcmTK.writeImageStackToDicom(sorted_image_paths, patientMeta, "reference.dcm", "output_dir")
+```
+
+See the [DICOM conversion](https://fraser29.github.io/spydcmtk/usage/dicom-conversion.html) docs for `PatientMeta`, optional tag overrides, and CLI details.
 

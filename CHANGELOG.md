@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.25] - 2026-05-27
+### Feature
+- Helper functions for pdf2dcm and images2dcm. Improved stability. 
+
 ## [1.2.24] - 2026-05-26
 ### Feature
 - Add functionality to convert PDF file to DICOM series.
