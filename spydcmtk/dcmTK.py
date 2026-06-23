@@ -847,6 +847,10 @@ class DicomSeries(list):
             # Check if we have 3D DICOM files (pixel data with more than 2 dimensions)
             firstPixelArray = self[0].pixel_array
             is3DPixelData = len(firstPixelArray.shape) > 2
+            # Track slice-axis geometry so origin/slice-vector stay consistent with the
+            # final (possibly flipped) array ordering - see override below.
+            sliceAxisOrigin_mm = None
+            sliceAxisVector = None
             
             if is3DPixelData:
                 # Handle 3D DICOM files - each file contains a 3D volume
@@ -871,16 +875,24 @@ class DicomSeries(list):
                     A = np.transpose(A, axes=[2,1,0,3])
                 try: # Check if should flip slice axis:
                     iop = self.getImageOrientationPatient_np()
-                    shared_seq = self[0].PerFrameFunctionalGroupsSequence[0]
-                    ipp0 = np.array(shared_seq.PlanePositionSequence[0].ImagePositionPatient)
-                    shared_seq = self[0].PerFrameFunctionalGroupsSequence[1]
-                    ipp1 = np.array(shared_seq.PlanePositionSequence[0].ImagePositionPatient)
+                    per_frame_seq = self[0].PerFrameFunctionalGroupsSequence
+                    ipp0 = np.array(per_frame_seq[0].PlanePositionSequence[0].ImagePositionPatient)
+                    ipp1 = np.array(per_frame_seq[1].PlanePositionSequence[0].ImagePositionPatient)
+                    ippLast = np.array(per_frame_seq[-1].PlanePositionSequence[0].ImagePositionPatient)
                     sliceVec = ipp1 - ipp0
                     sliceVec = sliceVec / np.linalg.norm(sliceVec)
                     iop_cross = np.cross(iop[:3], iop[3:6])
                     dot_res = np.dot(sliceVec, iop_cross)
                     if dot_res < 0.0:
+                        # Frames are stored opposite to +cross(iop): flip so the array
+                        # runs along +slice. Voxel (0,0,0) is now the original LAST frame,
+                        # so the origin must move there and the slice vector must reverse.
                         A = np.flip(A, axis=2)
+                        sliceAxisOrigin_mm = ippLast
+                        sliceAxisVector = -sliceVec
+                    else:
+                        sliceAxisOrigin_mm = ipp0
+                        sliceAxisVector = sliceVec
                 except:
                     pass # Something failed - not dealing with complex DICOM tag nesting. 
             else:
@@ -908,6 +920,14 @@ class DicomSeries(list):
 
         patientMeta = dcmVTKTK.PatientMeta()
         patientMeta.initFromDicomSeries(self, A.shape)
+        # Ensure the patient origin and slice vector match the final array ordering.
+        # For 3D multiframe data the slice axis may have been flipped above; if so the
+        # origin (position of voxel [0,0,0]) and through-plane direction must follow suit.
+        if (sliceAxisOrigin_mm is not None) and (sliceAxisVector is not None):
+            patientMeta.updateFromMeta({
+                'ImagePositionPatient': [float(i) * dcmTools.mm_to_m for i in sliceAxisOrigin_mm],
+                'SliceVector': [float(i) for i in sliceAxisVector],
+            })
         return A, patientMeta
 
 

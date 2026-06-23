@@ -239,8 +239,12 @@ class PatientMeta:
         dr, dc, dz = self.Spacing
         oo = self.ImagePositionPatient
         iop = np.array(self.ImageOrientationPatient)
-        vZ = np.cross(iop[:3], iop[3:6])
-        # vZ = self.SliceVector
+        # Use the true (signed) slice direction so the through-plane axis follows the
+        # real acquisition order. Fall back to the IOP cross product only if no valid
+        # slice vector is available (e.g. single slice).
+        vZ = np.asarray(self.SliceVector, dtype=float)
+        if vZ.shape != (3,) or np.linalg.norm(vZ) < 1e-9:
+            vZ = np.cross(iop[:3], iop[3:6])
         matrix = np.array([
             [iop[0]*dc, iop[3]*dr, vZ[0]*dz, oo[0]], 
             [iop[1]*dc, iop[4]*dr, vZ[1]*dz, oo[1]], 
