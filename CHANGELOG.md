@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.26] - 2026-06-23
+### Fixed
+- Fix bug in DICOM to VTI orientation - edge case when slice dir opposite to IOP cross product.
+
 ## [1.2.25] - 2026-05-27
 ### Feature
 - Helper functions for pdf2dcm and images2dcm. Improved stability. 
