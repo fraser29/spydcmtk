@@ -13,10 +13,28 @@ from typing import Optional, Dict, List, Any
 import pydicom as dicom
 from pydicom.sr.codedict import codes
 from pydicom.uid import generate_uid
-from highdicom.seg.content import SegmentDescription
-from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
-from highdicom.content import AlgorithmIdentificationSequence
-from highdicom.seg.sop import Segmentation
+
+try:
+    from highdicom.seg.content import SegmentDescription
+    from highdicom.seg.enum import SegmentAlgorithmTypeValues, SegmentationTypeValues
+    from highdicom.content import AlgorithmIdentificationSequence
+    from highdicom.seg.sop import Segmentation
+    HAS_HIGHDICOM = True
+except ImportError:
+    HAS_HIGHDICOM = False
+    SegmentDescription = None
+    SegmentAlgorithmTypeValues = None
+    SegmentationTypeValues = None
+    AlgorithmIdentificationSequence = None
+    Segmentation = None
+
+
+def _require_highdicom():
+    if not HAS_HIGHDICOM:
+        raise ImportError(
+            "DICOM-SEG conversion requires the optional 'highdicom' extra. "
+            "Install it with: pip install 'spydcmtk[highdicom]'"
+        )
 
 try:
     import xml.etree.cElementTree as ET
@@ -595,6 +613,7 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, pha
 ## DICOM-SEG
 # ===================================================================================================
 def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+    _require_highdicom()
     imageData = fIO.readVTKFile(vtiFile)
     arr = vtkfilters.getArrayAsNumpy(imageData, labelMapArrayName)
     arr = np.transpose(np.squeeze(arr), axes=[2,0,1])
@@ -612,7 +631,10 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
         
     Returns:
         DICOM-SEG dataset or filename if dcmSegFileOut is provided
+
+    Requires the optional ``highdicom`` extra: ``pip install 'spydcmtk[highdicom]'``.
     """
+    _require_highdicom()
 
     fullLabelMap = arr.astype(np.ushort)
     sSeg = sorted(set(fullLabelMap.flatten('F')))

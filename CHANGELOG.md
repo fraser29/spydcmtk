@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.27] - 2026-08-14
+### Added
+- Set highdicom as optional dependency
+
 ## [1.2.26] - 2026-06-23
 ### Fixed
 - Fix bug in DICOM to VTI orientation - edge case when slice dir opposite to IOP cross product.

@@ -16,6 +16,11 @@ Using [pip](https://pypi.org/project/spydcmtk/):
 pip install spydcmtk
 ```
 
+DICOM-SEG writing (`vti_to_dcm_seg` / `array_to_DcmSeg`) needs the optional [highdicom](https://github.com/ImagingDataCommons/highdicom) extra:
+```
+pip install 'spydcmtk[highdicom]'
+```
+
 ## Quick start
 
 If you installed via pip then *spydcmtk* console script will be exposed in your python environment. 
