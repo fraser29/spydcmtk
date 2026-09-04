@@ -91,10 +91,10 @@
 
 <span class="n">listOfStudies</span> <span class="o">=</span> <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">ListOfDicomStudies</span><span class="o">.</span><span class="n">setFromDirectory</span><span class="p">(</span><span class="n">MY_DICOM_DIRECTORY</span><span class="p">)</span>
 <span class="c1"># Example filtering</span>
-<span class="n">dcmStudy</span> <span class="o">=</span> <span class="n">listOfStudies</span><span class="o">.</span><span class="n">getStudyByDate</span><span class="p">(</span><span class="s1">&#39;20230429&#39;</span><span class="p">)</span> <span class="c1"># Dates in DICOM standard string format: YYYYMMDD</span>
+<span class="n">dcmStudy</span> <span class="o">=</span> <span class="n">listOfStudies</span><span class="o">.</span><span class="n">getStudyByDate</span><span class="p">(</span><span class="s1">'20230429'</span><span class="p">)</span> <span class="c1"># Dates in DICOM standard string format: YYYYMMDD</span>
 <span class="n">dcmSeries</span> <span class="o">=</span> <span class="n">dcmStudy</span><span class="o">.</span><span class="n">getSeriesBySeriesNumber</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="c1"># Example writing new DICOM files with anonymization</span>
-<span class="n">dcmStudy</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="s1">&#39;Not A Name&#39;</span><span class="p">)</span>
+<span class="n">dcmStudy</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="s1">'Not A Name'</span><span class="p">)</span>
 </pre></div>
 </div>
 <section id="configuration">

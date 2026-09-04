@@ -160,12 +160,12 @@ The PatientMeta object contains metadata about the orientation of the image.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
 
 <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">pdf2dcm</span><span class="p">(</span>
-    <span class="s2">&quot;/path/to/report.pdf&quot;</span><span class="p">,</span>
-    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">&quot;/path/to/reference.dcm&quot;</span><span class="p">,</span>  <span class="c1"># or a pydicom Dataset</span>
-    <span class="n">outputDir</span><span class="o">=</span><span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="s2">"/path/to/report.pdf"</span><span class="p">,</span>
+    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">"/path/to/reference.dcm"</span><span class="p">,</span>  <span class="c1"># or a pydicom Dataset</span>
+    <span class="n">outputDir</span><span class="o">=</span><span class="s2">"/path/to/output_dir"</span><span class="p">,</span>
     <span class="n">tagUpdateDict</span><span class="o">=</span><span class="p">{</span>
         <span class="c1"># Optional: DCMTK-style tags (group,element as hex string)</span>
-        <span class="s2">&quot;SeriesDescription&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;0008,103e&quot;</span><span class="p">,</span> <span class="s2">&quot;LO&quot;</span><span class="p">,</span> <span class="s2">&quot;My PDF report&quot;</span><span class="p">],</span>
+        <span class="s2">"SeriesDescription"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"0008,103e"</span><span class="p">,</span> <span class="s2">"LO"</span><span class="p">,</span> <span class="s2">"My PDF report"</span><span class="p">],</span>
     <span class="p">},</span>
 <span class="p">)</span>
 </pre></div>
@@ -174,9 +174,9 @@ The PatientMeta object contains metadata about the orientation of the image.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
 
 <span class="n">spydcmtk</span><span class="o">.</span><span class="n">spydcm</span><span class="o">.</span><span class="n">pdf2dcm</span><span class="p">(</span>
-    <span class="s2">&quot;/path/to/report.pdf&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;/path/to/reference_dicom_or_dir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="s2">"/path/to/report.pdf"</span><span class="p">,</span>
+    <span class="s2">"/path/to/reference_dicom_or_dir"</span><span class="p">,</span>
+    <span class="s2">"/path/to/output_dir"</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -205,25 +205,25 @@ The PatientMeta object contains metadata about the orientation of the image.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
 
-<span class="n">image_dir</span> <span class="o">=</span> <span class="s2">&quot;/path/to/slices&quot;</span>
+<span class="n">image_dir</span> <span class="o">=</span> <span class="s2">"/path/to/slices"</span>
 <span class="n">file_list</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">image_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">image_dir</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;.png&quot;</span><span class="p">,</span> <span class="s2">&quot;.tif&quot;</span><span class="p">,</span> <span class="s2">&quot;.tiff&quot;</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".jpg"</span><span class="p">,</span> <span class="s2">".png"</span><span class="p">,</span> <span class="s2">".tif"</span><span class="p">,</span> <span class="s2">".tiff"</span><span class="p">))</span>
 <span class="p">)</span>
 
 <span class="n">patient_meta</span> <span class="o">=</span> <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmVTKTK</span><span class="o">.</span><span class="n">PatientMeta</span><span class="p">()</span>
 <span class="n">patient_meta</span><span class="o">.</span><span class="n">initFromDictionary</span><span class="p">({</span>
-    <span class="s2">&quot;Origin&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
-    <span class="s2">&quot;Spacing&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">],</span>  <span class="c1"># metres: in-plane x, in-plane y, between slices</span>
-    <span class="s2">&quot;ImageOrientationPatient&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+    <span class="s2">"Origin"</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+    <span class="s2">"Spacing"</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">],</span>  <span class="c1"># metres: in-plane x, in-plane y, between slices</span>
+    <span class="s2">"ImageOrientationPatient"</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
 <span class="p">})</span>
 
 <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">writeImageStackToDicom</span><span class="p">(</span>
     <span class="n">file_list</span><span class="p">,</span>
     <span class="n">patientMeta</span><span class="o">=</span><span class="n">patient_meta</span><span class="p">,</span>
-    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">&quot;/path/to/reference.dcm&quot;</span><span class="p">,</span>
-    <span class="n">outputDir</span><span class="o">=</span><span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="n">dcmTemplateFile_or_ds</span><span class="o">=</span><span class="s2">"/path/to/reference.dcm"</span><span class="p">,</span>
+    <span class="n">outputDir</span><span class="o">=</span><span class="s2">"/path/to/output_dir"</span><span class="p">,</span>
     <span class="n">tagUpdateDict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>           <span class="c1"># optional pydicom-style tag overrides</span>
     <span class="n">CONVERT_TO_GREYSCALE</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># set False to keep RGB (CLI uses False)</span>
 <span class="p">)</span>
@@ -233,9 +233,9 @@ The PatientMeta object contains metadata about the orientation of the image.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
 
 <span class="n">spydcmtk</span><span class="o">.</span><span class="n">spydcm</span><span class="o">.</span><span class="n">image2dcm</span><span class="p">(</span>
-    <span class="s2">&quot;/path/to/image_or_folder&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;/path/to/reference_dicom_or_dir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;/path/to/output_dir&quot;</span><span class="p">,</span>
+    <span class="s2">"/path/to/image_or_folder"</span><span class="p">,</span>
+    <span class="s2">"/path/to/reference_dicom_or_dir"</span><span class="p">,</span>
+    <span class="s2">"/path/to/output_dir"</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
