@@ -250,7 +250,7 @@ def walkdir(folder):
 
 def getDicomDictFromCompressed(compressedFile, QUIET=True, FORCE_READ=False, FIRST_ONLY=False, OVERVIEW_ONLY=False,
                         matchingTagValuePair=None):
-    compressedFileL = compressedFile.lower()
+    compressedFileL = str(compressedFile).lower()
     if compressedFileL.endswith('tar') or compressedFileL.endswith('tar.gz'):
         return getDicomDictFromTar(compressedFile, QUIET=QUIET, FORCE_READ=FORCE_READ, FIRST_ONLY=FIRST_ONLY,
                                    OVERVIEW_ONLY=OVERVIEW_ONLY, matchingTagValuePair=matchingTagValuePair)
@@ -264,7 +264,7 @@ def getDicomDictFromTar(tarFileToRead, QUIET=True, FORCE_READ=False, FIRST_ONLY=
                         matchingTagValuePair=None):
     # for sub dir in tar get first dicom - return list of ds
     dsDict = {}
-    if tarFileToRead.endswith('gz'):
+    if str(tarFileToRead).endswith('gz'):
         tar = tarfile.open(tarFileToRead, "r:gz")
     else:
         tar = tarfile.open(tarFileToRead)

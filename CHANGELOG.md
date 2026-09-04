@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.28] - 2026-09-04
+### Fixed
+- Cast paths to strins in case passed as pathlib.Path where needed. 
+
 ## [1.2.27] - 2026-08-14
 ### Added
 - Set highdicom as optional dependency
