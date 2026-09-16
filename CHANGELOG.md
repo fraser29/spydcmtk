@@ -1,5 +1,9 @@
 # Version History
 
+## [1.2.29] - 2026-09-16
+### Feature
+- Add functionality to convert VTI file to DICOM-SEG format.
+
 ## [1.2.28] - 2026-09-04
 ### Fixed
 - Cast paths to strins in case passed as pathlib.Path where needed. 

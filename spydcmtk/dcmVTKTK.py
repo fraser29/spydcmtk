@@ -1,5 +1,5 @@
 """
-Created on MArch 2023 (rewrite from old module - remove reliance on VTKDICOM)
+Created on March 2023 (rewrite from old module - remove reliance on VTKDICOM)
 
 @author: fraser
 
@@ -10,6 +10,7 @@ Dicom to VTK conversion toolkit
 import os
 import numpy as np
 from typing import Optional, Dict, List, Any
+from pathlib import Path
 import pydicom as dicom
 from pydicom.sr.codedict import codes
 from pydicom.uid import generate_uid
@@ -612,21 +613,37 @@ def mergePhaseSeries4D(magPVD, phasePVD_list, outputFileName, phase_factors, pha
 # ===================================================================================================
 ## DICOM-SEG
 # ===================================================================================================
-def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+def vti_to_dcm_seg(vtiFile, labelMapArrayName, source_dicom_ds_list, dcmSegFileOut=None, segmentation_dictionary=None,algorithm_identification=None):
+    from spydcmtk import dcmTK
     _require_highdicom()
-    imageData = fIO.readVTKFile(vtiFile)
-    arr = vtkfilters.getArrayAsNumpy(imageData, labelMapArrayName)
-    arr = np.transpose(np.squeeze(arr), axes=[2,0,1])
-    return array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=dcmSegFileOut, algorithm_identification=algorithm_identification)
+    if isinstance(vtiFile, str) or isinstance(vtiFile, Path):
+        imageData = fIO.readVTKFile(vtiFile)
+    else:
+        imageData = vtiFile
+    if isinstance(source_dicom_ds_list[0], str) or isinstance(source_dicom_ds_list[0], Path):
+        source_dicom_ds_list = [dicom.dcmread(i) for i in source_dicom_ds_list]
+    arr = vtkfilters.getArrayAsNumpy(imageData, labelMapArrayName, RETURN_3D=True)
+    # print(arr.shape)
+    arr = np.transpose(np.squeeze(arr), axes=[2,1,0])
+    # As VTI array (now transposed) dim-0 will be increasing positive slice direction. 
+    dcmSeries = dcmTK.DicomSeries(source_dicom_ds_list)
+    sliceVec = dcmSeries.getSliceNormalVector()
+    cmp_vec = [0,0,0]
+    cmp_vec[np.argmax(np.abs(sliceVec))] = 1
+    if not ftk.areVecsConsistent(sliceVec, cmp_vec):
+        # print(f"Slice vector {sliceVec} is not consistent with comparison vector {cmp_vec}") # DEBUG
+        arr = np.flip(arr, axis=0)
+    return array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=dcmSegFileOut, segmentation_dictionary=segmentation_dictionary, algorithm_identification=algorithm_identification)
 
 
-def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_identification=None):
+def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, segmentation_dictionary=None, algorithm_identification=None):
     """Convert a numpy array to DICOM-SEG format.
     
     Args:
         arr: Numpy array of segmentation labels
         source_dicom_ds_list: List of source DICOM datasets
         dcmSegFileOut: Output filename (optional)
+        segmentation_dictionary: Dictionary of segmentation names and labels (optional)
         algorithm_identification: Algorithm identification sequence (optional)
         
     Returns:
@@ -639,10 +656,11 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
     fullLabelMap = arr.astype(np.ushort)
     sSeg = sorted(set(fullLabelMap.flatten('F')))
     sSeg.remove(0)
-    sSegDict = {}
-    for k1, segID in enumerate(sSeg):
-        sSegDict[k1+1] = f"Segment{k1+1}"
-        fullLabelMap[fullLabelMap==segID] = k1+1
+    if segmentation_dictionary is None:
+        segmentation_dictionary = {}
+        for k1, segID in enumerate(sSeg):
+            segmentation_dictionary[k1+1] = f"Segment{k1+1}"
+            fullLabelMap[fullLabelMap==segID] = k1+1
 
     # Describe the algorithm that created the segmentation if not given
     if algorithm_identification is None:
@@ -653,7 +671,7 @@ def array_to_DcmSeg(arr, source_dicom_ds_list, dcmSegFileOut=None, algorithm_ide
         )
     segDesc_list = []
     # Describe the segment
-    for segID, segName in sSegDict.items():
+    for segID, segName in segmentation_dictionary.items():
         description_segment = SegmentDescription(
             segment_number=segID,
             segment_label=segName,
