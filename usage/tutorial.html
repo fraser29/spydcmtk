@@ -48,6 +48,8 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="dicom-conversion.html">DICOM CONVERSION</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#inspect-and-set-tags-cli">Inspect and set tags (CLI)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#interactive-mode">Interactive mode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#work-with-pixel-data-and-metadata">Work with pixel data and metadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#convert-image-s-to-dicom">Convert image(s) to DICOM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#anonymise-multiple-data-for-blinded-reading-then-reidentify">Anonymise multiple data for blinded reading - then reidentify</a></li>
@@ -82,12 +84,48 @@
              
   <section id="tutorial">
 <h1>Tutorial<a class="headerlink" href="#tutorial" title="Link to this heading"></a></h1>
-<p>For most users, it is sufficient to use <cite>spydcmtk</cite> is via the command-line interface.</p>
+<p>For most users, it is sufficient to use <cite>spydcmtk</cite> via the command-line interface.</p>
 <p>Access via:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-h
 </pre></div>
 </div>
 <p>to see the command-line usage available to you.</p>
+<section id="inspect-and-set-tags-cli">
+<h2>Inspect and set tags (CLI)<a class="headerlink" href="#inspect-and-set-tags-cli" title="Link to this heading"></a></h2>
+<p>Fast inspection of organised DICOM trees. Reads <strong>one DICOM per series directory</strong>, then prints subject, study, and <strong>series</strong> info for <strong>every study</strong> under the input path:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-i<span class="w"> </span>/path/to/dicoms<span class="w"> </span>-inspectQuick
+</pre></div>
+</div>
+<p>Set a DICOM tag on all instances found under the input and write an organised copy to <code class="docutils literal notranslate"><span class="pre">-o</span></code> (required; must differ from <code class="docutils literal notranslate"><span class="pre">-i</span></code>). If multiple studies are present, each is updated:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-i<span class="w"> </span>/path/to/dicoms<span class="w"> </span>-o<span class="w"> </span>/path/to/output<span class="w"> </span>-setTag<span class="w"> </span>SeriesDescription<span class="w"> </span><span class="s2">"My new description"</span>
+spydcmtk<span class="w"> </span>-i<span class="w"> </span>/path/to/dicoms<span class="w"> </span>-o<span class="w"> </span>/path/to/output<span class="w"> </span>-setTag<span class="w"> </span>StudyDescription<span class="w"> </span><span class="s2">"Updated study"</span>
+</pre></div>
+</div>
+<p>The same operation from a script:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
+
+<span class="c1"># Convenience wrapper (reads all studies under path, writes organised output)</span>
+<span class="n">spydcmtk</span><span class="o">.</span><span class="n">spydcm</span><span class="o">.</span><span class="n">setTag</span><span class="p">(</span>
+    <span class="s2">"/path/to/dicoms"</span><span class="p">,</span>
+    <span class="s2">"SeriesDescription"</span><span class="p">,</span>
+    <span class="s2">"My new description"</span><span class="p">,</span>
+    <span class="s2">"/path/to/output"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Or on an already-loaded study / series</span>
+<span class="n">study</span> <span class="o">=</span> <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">DicomStudy</span><span class="o">.</span><span class="n">setFromDirectory</span><span class="p">(</span><span class="s2">"/path/to/study"</span><span class="p">)</span>
+<span class="n">study</span><span class="o">.</span><span class="n">setTags_all</span><span class="p">(</span><span class="s2">"SeriesDescription"</span><span class="p">,</span> <span class="s2">"My new description"</span><span class="p">)</span>
+<span class="n">study</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="s2">"/path/to/output"</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="interactive-mode">
+<h2>Interactive mode<a class="headerlink" href="#interactive-mode" title="Link to this heading"></a></h2>
+<p>Launch a menu for a study (optionally pass <code class="docutils literal notranslate"><span class="pre">-o</span></code> for a default output directory):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>spydcmtk<span class="w"> </span>-i<span class="w"> </span>/path/to/dicoms<span class="w"> </span>-o<span class="w"> </span>/path/to/output<span class="w"> </span>-I
+</pre></div>
+</div>
+<p>Menu options include data summary, Build VTS, Build FDQ, Build overview image, <strong>Build NII</strong>, and <strong>Set tag</strong>. For Build NII and Set tag you can target a series number or <code class="docutils literal notranslate"><span class="pre">all</span></code>.</p>
 <p>If you would like to incorporate <cite>spydcmtk</cite> into your Python project, then some tutorial snippets showing primary functionality are provided below.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">spydcmtk</span>
 
@@ -99,6 +137,7 @@
 <span class="n">dcmStudy</span><span class="o">.</span><span class="n">writeToOrganisedFileStructure</span><span class="p">(</span><span class="n">tmpDir</span><span class="p">,</span> <span class="n">anonName</span><span class="o">=</span><span class="s1">'Not A Name'</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
 <section id="work-with-pixel-data-and-metadata">
 <h2>Work with pixel data and metadata<a class="headerlink" href="#work-with-pixel-data-and-metadata" title="Link to this heading"></a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">listOfStudies</span> <span class="o">=</span> <span class="n">spydcmtk</span><span class="o">.</span><span class="n">dcmTK</span><span class="o">.</span><span class="n">ListOfDicomStudies</span><span class="o">.</span><span class="n">setFromDirectory</span><span class="p">(</span><span class="n">MY_DICOM_DIRECTORY</span><span class="p">)</span>
