@@ -1,7 +1,7 @@
 Tutorial
 ===========
 
-For most users, it is sufficient to use `spydcmtk` is via the command-line interface.
+For most users, it is sufficient to use `spydcmtk` via the command-line interface.
 
 Access via:
 
@@ -10,6 +10,52 @@ Access via:
     spydcmtk -h
 
 to see the command-line usage available to you.
+
+Inspect and set tags (CLI)
+--------------------------
+
+Fast inspection of organised DICOM trees. Reads **one DICOM per series directory**, then prints subject, study, and **series** info for **every study** under the input path:
+
+.. code-block:: bash
+
+    spydcmtk -i /path/to/dicoms -inspectQuick
+
+Set a DICOM tag on all instances found under the input and write an organised copy to ``-o`` (required; must differ from ``-i``). If multiple studies are present, each is updated:
+
+.. code-block:: bash
+
+    spydcmtk -i /path/to/dicoms -o /path/to/output -setTag SeriesDescription "My new description"
+    spydcmtk -i /path/to/dicoms -o /path/to/output -setTag StudyDescription "Updated study"
+
+The same operation from a script:
+
+.. code-block:: python
+
+    import spydcmtk
+
+    # Convenience wrapper (reads all studies under path, writes organised output)
+    spydcmtk.spydcm.setTag(
+        "/path/to/dicoms",
+        "SeriesDescription",
+        "My new description",
+        "/path/to/output",
+    )
+
+    # Or on an already-loaded study / series
+    study = spydcmtk.dcmTK.DicomStudy.setFromDirectory("/path/to/study")
+    study.setTags_all("SeriesDescription", "My new description")
+    study.writeToOrganisedFileStructure("/path/to/output")
+
+Interactive mode
+----------------
+
+Launch a menu for a study (optionally pass ``-o`` for a default output directory):
+
+.. code-block:: bash
+
+    spydcmtk -i /path/to/dicoms -o /path/to/output -I
+
+Menu options include data summary, Build VTS, Build FDQ, Build overview image, **Build NII**, and **Set tag**. For Build NII and Set tag you can target a series number or ``all``.
 
 If you would like to incorporate `spydcmtk` into your Python project, then some tutorial snippets showing primary functionality are provided below.
 

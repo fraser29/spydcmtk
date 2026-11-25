@@ -70,6 +70,27 @@ For information on files found and variables used run:
 Clear documentation of basic features can be seen by running the *"spydcmtk -h"* command as referenced above. 
 For detailed documentation please see [spydcmtk-documentation](https://fraser29.github.io/spydcmtk/)
 
+### Inspect and set tags
+
+Fast study/series overview (one DICOM per series directory; all studies under `-i`):
+
+```bash
+spydcmtk -i /path/to/dicoms -inspectQuick
+```
+
+Set a tag on every instance under input and write to a new tree (`-o` required):
+
+```bash
+spydcmtk -i /path/to/dicoms -o /path/to/output -setTag SeriesDescription "My new description"
+```
+
+```python
+import spydcmtk
+spydcmtk.spydcm.setTag("/path/to/dicoms", "SeriesDescription", "My new description", "/path/to/output")
+```
+
+Interactive mode (`-I`) includes summary, VTS/FDQ/overview, **Build NII**, and **Set tag**.
+
 ### Converting PDF or images to DICOM
 
 **PDF** (requires [DCMTK](https://dcmtk.org/) `pdf2dcm` on `PATH`):

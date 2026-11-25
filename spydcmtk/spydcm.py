@@ -28,6 +28,8 @@ class INTERACTIVE():
             '2': ("Build VTS", self.buildVTS),
             '3': ("Build FDQ", self.buildFDQ),
             '4': ("Build overview image", self.buildOverviewImage),
+            '5': ("Build NII", self.buildNII),
+            '6': ("Set tag", self.setTag),
             'q': ("Quit", self.quit)
         }
 
@@ -101,9 +103,43 @@ class INTERACTIVE():
             outputpath = os.path.join(self.outputPath, outputFilename)
         self.study.getSeriesByID(seNum).overviewImage(outputpath)
 
+    def buildNII(self):
+        self.dataSummary()
+        self.setOutputPath()
+        seNum = self.getUserInput("series number (or 'all')")
+        try:
+            if seNum.strip().lower() == 'all':
+                seriesList = list(self.study)
+            else:
+                seriesList = [self.study.getSeriesByID(int(seNum))]
+            for dcmSeries in seriesList:
+                fOut = dcmSeries.writeToNII(outputPath=self.outputPath)
+                print(f"Written {fOut}")
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"Invalid option. Please try again ({e})")
+
+    def setTag(self):
+        self.dataSummary()
+        self.setOutputPath()
+        tagName = self.getUserInput("tag name (e.g. SeriesDescription)")
+        tagValue = self.getUserInput(f"new value for {tagName}")
+        seNum = self.getUserInput("series number (or 'all')")
+        try:
+            if seNum.strip().lower() == 'all':
+                seriesList = list(self.study)
+            else:
+                seriesList = [self.study.getSeriesByID(int(seNum))]
+            for dcmSeries in seriesList:
+                dcmSeries.setTags_all(tagName, tagValue)
+            print(f"Writing updated dicoms to {self.outputPath}")
+            self.study.writeToOrganisedFileStructure(self.outputPath)
+            print("Done.")
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"Invalid option. Please try again ({e})")
+
     def quit(self):
         print("Exiting the menu.")
-        exit()  
+        exit() 
 
 
 def writeDirectoryToNII(dcmDir, outputPath, fileName):
@@ -241,6 +277,30 @@ def getTag(pathToDicoms, tagName):
     """
     ds = returnFirstDicomFound(pathToDicoms)
     return ds[tagName].value, ds.filename
+
+def setTag(pathToDicoms, tagName, value, outputPath):
+    """Convienience function to set tag value for all dicoms found under input
+
+    Args:
+        pathToDicoms (str): path to dicoms
+        tagName (str): dicom tag name
+        value (str): value to set tag to
+
+    If tag is missing then a warning is printed - no failure is raised.
+
+    Returns:
+        int: 0 if successful
+    """
+    if outputPath == pathToDicoms:
+        raise ValueError("Output path cannot be the same as input path")
+    allDicomStudies = dcmTK.ListOfDicomStudies.setFromInput(pathToDicoms, HIDE_PROGRESSBAR=False, FORCE_READ=False, OVERVIEW=False)
+    for iStudy in allDicomStudies:
+        for iSeries in iStudy:
+            iSeries.setTags_all(tagName, value)
+        print(f"Set tag {tagName} = {value} for study at {iStudy.getTopDir()}")
+        print(f"Writting new dicoms to {outputPath}")
+        iStudy.writeToOrganisedFileStructure(outputPath)
+    return 0
 
 def directoryToVTI(dcmDirectory, outputFolder, 
                    outputNamingTags=SpydcmTK_config.VTI_NAMING_TAG_LIST, 
@@ -484,6 +544,12 @@ def _runActions(args, ap):
     if args.tagValue is not None:
         val, fileName = getTag(args.inputPath, args.tagValue)
         print(f"{args.tagValue} = {val} (found at {fileName})")
+    elif args.setTag is not None:
+        if args.outputFolder is None:
+            ap.exit(1, 'ERROR: -o outputFolder is required when using -setTag\n')
+        setTag(args.inputPath, args.setTag[0], args.setTag[1], args.outputFolder)
+        print(f"Set tag {args.setTag[0]} = {args.setTag[1]} for all dicoms found under input to {args.outputFolder}")
+        return 0
     elif args.msTable:
         outputCSV = args.outputFolder if args.outputFolder.endswith('.csv') else os.path.join(args.outputFolder, 'ms.csv')
         fOut = buildTableOfDicomParamsForManuscript([args.inputPath], 
@@ -501,7 +567,7 @@ def _runActions(args, ap):
         ##
         ## NOW READING DICOMS
         try:
-            onlyOverview = args.inspect or args.inspectFull or args.INTERACTIVE
+            onlyOverview = args.inspect or args.inspectFull or args.inspectQuick or args.INTERACTIVE
             oneFilePerDir = args.inspectQuick or args.INTERACTIVE or args.seNumber or args.filter or args.image2dcm or args.pdf2dcm
             # If read one file per dir then will read all dicoms upon write out (or conversion). 
             # Only issue is if dicoms not well organised - TODO - NOTE this somewhere... Maybe bettter ad an option for force read all by user. 
@@ -539,9 +605,11 @@ def _runActions(args, ap):
         ##
         ## NOW ACTIONS
         if args.inspect or args.inspectFull or args.inspectQuick:
+            # inspectQuick: one file per series directory, series info included for every study under input
+            writeSeriesInfo = args.inspectFull or args.inspectQuick
             for iStudy in ListDicomStudies:
                 print(iStudy.getTopDir())
-                print(iStudy.getStudySummary(args.inspectFull))
+                print(iStudy.getStudySummary(writeSeriesInfo))
                 print('\n')
 
         elif args.vti2dcm is not None:
@@ -635,13 +703,15 @@ def main():
     ap.add_argument('-inspectFull', dest='inspectFull',
         help='Will output a full summary of dicoms to the terminal', action='store_true')
     ap.add_argument('-inspectQuick', dest='inspectQuick',
-        help='Run inspection - expect organised file structure (read only one file per directory)', action='store_true')
+        help='Fast inspection: read one DICOM per series directory and print subject/study/series info for every study under input', action='store_true')
     ap.add_argument('-msTable', dest='msTable',
         help='Will output a csv to outputFolder with tags info suitable for building manuscript style table', action='store_true')
     ap.add_argument('-dcmdump', dest='dcmdump',
         help='Will output a dump of all dicom tags to the terminal (from first found dicom)', action='store_true')
     ap.add_argument('-tag', dest='tagValue',
         help='Get tag value for first dicom found under input', type=str, default=None)
+    ap.add_argument('-setTag', dest='setTag',
+        help='Set tag value for all dicoms found under input. Pass TAG VALUE (e.g. SeriesDescription "New Desc"). Requires -o. Acts on every study under input.', nargs=2, default=None)
     ## -- image conversion -- ##
     ## ***-to-DICOM
     ap.add_argument('-image2dcm', dest='image2dcm',

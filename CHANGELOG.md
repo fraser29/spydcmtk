@@ -1,5 +1,12 @@
 # Version History
 
+## [1.2.30] - 2026-11-25
+### Feature
+- Add functionality to set tag value for all dicoms found under input.
+- Interactive mode: add Build NII and Set tag options.
+- inspectQuick now prints series info for every study (still one DICOM per series directory).
+- Document -setTag CLI and Python usage.
+
 ## [1.2.29] - 2026-09-16
 ### Feature
 - Add functionality to convert VTI file to DICOM-SEG format.

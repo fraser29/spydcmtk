@@ -225,6 +225,15 @@ class DicomSeries(list):
             return ifNotFound
 
 
+    def setTag(self, tag, value, dsID=0):
+        """Set the value of a tag.
+        """
+        try:
+            self[dsID][tag].value = value
+        except KeyError:
+            print(f"# WARNING: Tag {tag} not found in dataset {dsID}")
+
+
     def setTags_all(self, tag, value):
         """Set the value of a tag for all dicom files in the series.
 
@@ -232,8 +241,12 @@ class DicomSeries(list):
             tag (str): The name of the tag to set.
             value (str): The value to set the tag to.
         """
-        for ds in self:
-            ds[tag].value = value
+        self._loadToMemory()
+        self.OVERVIEW = False  # ensure subsequent write uses in-memory edits, not re-read from disk
+        print(f"# Setting tag {tag} = {value} for {len(self)} dicom files in series")
+        for k1 in range(len(self)):
+            self.setTag(tag, value, k1)
+
 
     def getTagObj(self, tag, dsID=0):
         """Get the tag object for a given tag and dicom file index.
